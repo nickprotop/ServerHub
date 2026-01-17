@@ -114,6 +114,7 @@ public class WidgetRenderer
 
     /// <summary>
     /// Creates an inline progress bar using Unicode blocks
+    /// Color changes based on threshold: green (<70%), yellow (70-89%), red (>=90%)
     /// </summary>
     private string CreateInlineProgressBar(int percentage)
     {
@@ -124,7 +125,15 @@ public class WidgetRenderer
         var filled = new string('█', filledWidth);
         var empty = new string('░', emptyWidth);
 
-        return $"  [cyan1]{filled}[/][grey35]{empty}[/] [grey70]{percentage}%[/]";
+        // Dynamic color based on threshold
+        var color = percentage switch
+        {
+            >= 90 => "red",
+            >= 70 => "yellow",
+            _ => "green"
+        };
+
+        return $"  [{color}]{filled}[/][grey35]{empty}[/] [grey70]{percentage}%[/]";
     }
 
     /// <summary>
