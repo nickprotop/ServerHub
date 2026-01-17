@@ -172,6 +172,9 @@ Desktop.ini
 # Auto-generated files
 src/Config/BundledWidgets.g.cs
 
+# User-specific config (use config.example.yaml as template)
+config.yaml
+
 # Claude Code
 .claude/
 Claude.md
