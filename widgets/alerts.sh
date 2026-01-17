@@ -39,14 +39,14 @@ if command -v systemctl &> /dev/null; then
 
         # Show first 3 failed services
         systemctl list-units --state=failed --no-pager --no-legend 2>/dev/null | head -n 3 | while read -r line; do
-            service_name=$(echo "$line" | awk '{print $1}')
+            service_name=$(echo "$line" | awk '{print $2}')
             echo "row: [grey70]  → $service_name[/]"
         done
     fi
 fi
 
 # 3. Check for zombie processes
-zombie_count=$(ps aux 2>/dev/null | awk '{print $8}' | grep -c '^Z' || echo "0")
+zombie_count=$(ps aux 2>/dev/null | awk '{print $8}' | grep -c '^Z')
 if [ "$zombie_count" -gt 0 ]; then
     echo "row: [status:warn] $zombie_count zombie process(es)"
     ((warning_count++))
@@ -142,7 +142,7 @@ if command -v apt &> /dev/null; then
         cache_age=$(( ($(date +%s) - $(stat -c %Y /var/cache/apt/pkgcache.bin)) / 3600 ))
 
         if [ "$cache_age" -lt 24 ]; then
-            updates=$(apt list --upgradable 2>/dev/null | grep -c upgradable || echo "0")
+            updates=$(apt list --upgradable 2>/dev/null | grep -c upgradable)
 
             if [ "$updates" -gt 50 ]; then
                 echo "row: [status:warn] $updates package updates available"

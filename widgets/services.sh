@@ -76,7 +76,7 @@ if [ $all_failed -gt 0 ]; then
 
     # Show failed service names
     systemctl list-units --state=failed --no-pager --no-legend | head -n 5 | while read -r line; do
-        service_name=$(echo "$line" | awk '{print $1}')
+        service_name=$(echo "$line" | awk '{print $2}')
         echo "row: [grey70]  - $service_name[/]"
     done
 fi
