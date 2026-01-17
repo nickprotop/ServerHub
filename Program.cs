@@ -175,104 +175,8 @@ class Program
         _focusManager.Initialize(_mainWindow, placements);
         _focusManager.FocusFirst(); // Focus first widget on startup
 
-        // Determine column count for this terminal width
-        var columnCount = GetColumnCountFromWidth(terminalWidth);
-
-        // Calculate base column width
-        const int spacingBetweenWidgets = 1;
-        int totalSpacing = Math.Max(0, (columnCount - 1) * spacingBetweenWidgets);
-        int availableWidth = terminalWidth - totalSpacing;
-        int baseColumnWidth = availableWidth / columnCount;
-
-        // Group placements by row
-        var rowGroups = placements.GroupBy(p => p.Row).OrderBy(g => g.Key);
-
-        // Alternating background colors for widgets
-        var widgetColors = new[]
-        {
-            Spectre.Console.Color.Grey15,
-            Spectre.Console.Color.Grey19,
-            Spectre.Console.Color.Grey23,
-        };
-        int widgetColorIndex = 0;
-
-        // Create a vertical container for rows
-        bool firstRow = true;
-        foreach (var rowGroup in rowGroups)
-        {
-            // Add vertical spacing between rows (not before first row)
-            if (!firstRow)
-            {
-                var spacer = Controls
-                    .Markup("")
-                    .WithBackgroundColor(Spectre.Console.Color.Grey11)
-                    .WithMargin(0, 0, 0, 0)
-                    .Build();
-                _mainWindow.AddControl(spacer);
-            }
-            firstRow = false;
-
-            var rowPlacements = rowGroup.OrderBy(p => p.Column).ToList();
-
-            // Create horizontal grid for this row
-            var rowGrid = Controls
-                .HorizontalGrid()
-                .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Stretch)
-                .WithVerticalAlignment(SharpConsoleUI.Layout.VerticalAlignment.Top);
-
-            bool firstWidget = true;
-            var widgetBgColors = new List<Spectre.Console.Color>();
-
-            foreach (var placement in rowPlacements)
-            {
-                // Add spacing between widgets (not before first widget)
-                if (!firstWidget)
-                {
-                    rowGrid.Column(colBuilder => colBuilder.Width(spacingBetweenWidgets));
-                    widgetBgColors.Add(Spectre.Console.Color.Grey11); // Spacer color
-                }
-                firstWidget = false;
-
-                // Calculate widget width based on column span
-                // width = (baseColumnWidth * spanCount) + (spacing * (spanCount - 1))
-                int widgetWidth =
-                    (baseColumnWidth * placement.ColumnSpan)
-                    + (spacingBetweenWidgets * Math.Max(0, placement.ColumnSpan - 1));
-
-                // Initial render with loading spinner
-                var widgetData = CreateLoadingWidget(placement.WidgetId);
-
-                // Get alternating background color
-                var bgColor = widgetColors[widgetColorIndex % widgetColors.Length];
-                widgetColorIndex++;
-                widgetBgColors.Add(bgColor);
-
-                var widgetPanel = _renderer!.CreateWidgetPanel(
-                    placement.WidgetId,
-                    widgetData,
-                    placement.IsPinned,
-                    bgColor
-                );
-
-                // Add widget column with explicit width
-                rowGrid.Column(colBuilder =>
-                {
-                    colBuilder.Width(widgetWidth);
-                    colBuilder.Add(widgetPanel);
-                });
-            }
-
-            // Build and add row grid
-            var builtRowGrid = rowGrid.Build();
-
-            // Set background colors for columns
-            for (int i = 0; i < builtRowGrid.Columns.Count && i < widgetBgColors.Count; i++)
-            {
-                builtRowGrid.Columns[i].BackgroundColor = widgetBgColors[i];
-            }
-
-            _mainWindow.AddControl(builtRowGrid);
-        }
+        // Build widget layout
+        BuildWidgetLayout(placements, terminalWidth, useCache: false);
 
         _windowSystem.AddWindow(_mainWindow);
     }
@@ -317,109 +221,8 @@ class Program
             // RE-INITIALIZE FocusManager with new placements
             _focusManager?.Initialize(_mainWindow, placements);
 
-            // Determine column count for this terminal width
-            var columnCount = GetColumnCountFromWidth(terminalWidth);
-
-            // Calculate base column width
-            const int spacingBetweenWidgets = 1;
-            int totalSpacing = Math.Max(0, (columnCount - 1) * spacingBetweenWidgets);
-            int availableWidth = terminalWidth - totalSpacing;
-            int baseColumnWidth = availableWidth / columnCount;
-
-            // Group placements by row
-            var rowGroups = placements.GroupBy(p => p.Row).OrderBy(g => g.Key);
-
-            // Alternating background colors for widgets
-            var widgetColors = new[]
-            {
-                Spectre.Console.Color.Grey15,
-                Spectre.Console.Color.Grey19,
-                Spectre.Console.Color.Grey23,
-            };
-            int widgetColorIndex = 0;
-
-            // Rebuild rows
-            bool firstRow = true;
-            foreach (var rowGroup in rowGroups)
-            {
-                // Add vertical spacing between rows (not before first row)
-                if (!firstRow)
-                {
-                    var spacer = Controls
-                        .Markup("")
-                        .WithBackgroundColor(Spectre.Console.Color.Grey11)
-                        .WithMargin(0, 0, 0, 0)
-                        .Build();
-                    _mainWindow.AddControl(spacer);
-                }
-                firstRow = false;
-
-                var rowPlacements = rowGroup.OrderBy(p => p.Column).ToList();
-
-                // Create horizontal grid for this row
-                var rowGrid = Controls
-                    .HorizontalGrid()
-                    .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Stretch)
-                    .WithVerticalAlignment(SharpConsoleUI.Layout.VerticalAlignment.Top);
-
-                bool firstWidget = true;
-                var widgetBgColors = new List<Spectre.Console.Color>();
-
-                foreach (var placement in rowPlacements)
-                {
-                    // Add spacing between widgets (not before first widget)
-                    if (!firstWidget)
-                    {
-                        rowGrid.Column(colBuilder => colBuilder.Width(spacingBetweenWidgets));
-                        widgetBgColors.Add(Spectre.Console.Color.Grey11); // Spacer color
-                    }
-                    firstWidget = false;
-
-                    // Calculate widget width based on column span
-                    // width = (baseColumnWidth * spanCount) + (spacing * (spanCount - 1))
-                    int widgetWidth =
-                        (baseColumnWidth * placement.ColumnSpan)
-                        + (spacingBetweenWidgets * Math.Max(0, placement.ColumnSpan - 1));
-
-                    // Get cached widget data or use loading spinner
-                    var widgetData = _widgetDataCache.TryGetValue(
-                        placement.WidgetId,
-                        out var cachedData
-                    )
-                        ? cachedData
-                        : CreateLoadingWidget(placement.WidgetId);
-
-                    // Get alternating background color
-                    var bgColor = widgetColors[widgetColorIndex % widgetColors.Length];
-                    widgetColorIndex++;
-                    widgetBgColors.Add(bgColor);
-
-                    var widgetPanel = _renderer!.CreateWidgetPanel(
-                        placement.WidgetId,
-                        widgetData,
-                        placement.IsPinned,
-                        bgColor
-                    );
-
-                    // Add widget column with explicit width
-                    rowGrid.Column(colBuilder =>
-                    {
-                        colBuilder.Width(widgetWidth);
-                        colBuilder.Add(widgetPanel);
-                    });
-                }
-
-                // Build and add row grid
-                var builtRowGrid = rowGrid.Build();
-
-                // Set background colors for columns
-                for (int i = 0; i < builtRowGrid.Columns.Count && i < widgetBgColors.Count; i++)
-                {
-                    builtRowGrid.Columns[i].BackgroundColor = widgetBgColors[i];
-                }
-
-                _mainWindow.AddControl(builtRowGrid);
-            }
+            // Build widget layout using cache
+            BuildWidgetLayout(placements, terminalWidth, useCache: true);
 
             // RESTORE focus to same widget (by ID) after rebuild completes
             if (currentFocusedId != null)
@@ -442,6 +245,119 @@ class Program
             {
                 _windowSystem.BottomStatus = $"Layout rebuild error: {ex.Message}";
             }
+        }
+    }
+
+    private static void BuildWidgetLayout(
+        List<LayoutEngine.WidgetPlacement> placements,
+        int terminalWidth,
+        bool useCache
+    )
+    {
+        if (_mainWindow == null || _renderer == null)
+            return;
+
+        // Determine column count for this terminal width
+        var columnCount = GetColumnCountFromWidth(terminalWidth);
+
+        // Calculate base column width
+        const int spacingBetweenWidgets = 1;
+        int totalSpacing = Math.Max(0, (columnCount - 1) * spacingBetweenWidgets);
+        int availableWidth = terminalWidth - totalSpacing;
+        int baseColumnWidth = availableWidth / columnCount;
+
+        // Group placements by row
+        var rowGroups = placements.GroupBy(p => p.Row).OrderBy(g => g.Key);
+
+        // Alternating background colors for widgets
+        var widgetColors = new[]
+        {
+            Spectre.Console.Color.Grey15,
+            Spectre.Console.Color.Grey19,
+            Spectre.Console.Color.Grey23,
+        };
+        int widgetColorIndex = 0;
+
+        // Build rows
+        bool firstRow = true;
+        foreach (var rowGroup in rowGroups)
+        {
+            // Add vertical spacing between rows (not before first row)
+            if (!firstRow)
+            {
+                var spacer = Controls
+                    .Markup("")
+                    .WithBackgroundColor(Spectre.Console.Color.Grey11)
+                    .WithMargin(0, 0, 0, 0)
+                    .Build();
+                _mainWindow.AddControl(spacer);
+            }
+            firstRow = false;
+
+            var rowPlacements = rowGroup.OrderBy(p => p.Column).ToList();
+
+            // Create horizontal grid for this row
+            var rowGrid = Controls
+                .HorizontalGrid()
+                .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Stretch)
+                .WithVerticalAlignment(SharpConsoleUI.Layout.VerticalAlignment.Top);
+
+            bool firstWidget = true;
+            var widgetBgColors = new List<Spectre.Console.Color>();
+
+            foreach (var placement in rowPlacements)
+            {
+                // Add spacing between widgets (not before first widget)
+                if (!firstWidget)
+                {
+                    rowGrid.Column(colBuilder => colBuilder.Width(spacingBetweenWidgets));
+                    widgetBgColors.Add(Spectre.Console.Color.Grey11); // Spacer color
+                }
+                firstWidget = false;
+
+                // Calculate widget width based on column span
+                // width = (baseColumnWidth * spanCount) + (spacing * (spanCount - 1))
+                int widgetWidth =
+                    (baseColumnWidth * placement.ColumnSpan)
+                    + (spacingBetweenWidgets * Math.Max(0, placement.ColumnSpan - 1));
+
+                // Get widget data: use cache if rebuilding, otherwise show loading spinner
+                var widgetData =
+                    useCache
+                    && _widgetDataCache.TryGetValue(placement.WidgetId, out var cachedData)
+                        ? cachedData
+                        : CreateLoadingWidget(placement.WidgetId);
+
+                // Get alternating background color
+                var bgColor = widgetColors[widgetColorIndex % widgetColors.Length];
+                widgetColorIndex++;
+                widgetBgColors.Add(bgColor);
+
+                var widgetPanel = _renderer.CreateWidgetPanel(
+                    placement.WidgetId,
+                    widgetData,
+                    placement.IsPinned,
+                    bgColor
+                );
+
+                // Add widget column with explicit width
+                rowGrid.Column(colBuilder =>
+                {
+                    colBuilder.Width(widgetWidth);
+                    colBuilder.Add(widgetPanel);
+                });
+            }
+
+            // Build and add row grid
+            var builtRowGrid = rowGrid.Build();
+
+            // Set background colors for columns
+            for (int i = 0; i < builtRowGrid.Columns.Count && i < widgetBgColors.Count; i++)
+            {
+                builtRowGrid.Columns[i].BackgroundColor = widgetBgColors[i];
+            }
+
+            _mainWindow.AddControl(builtRowGrid);
         }
     }
 
