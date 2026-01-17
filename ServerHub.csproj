@@ -25,4 +25,9 @@
     <Exec Command="bash $(ProjectDir)generate-checksums.sh" />
   </Target>
 
+  <!-- Generate default config from config.yaml before build -->
+  <Target Name="GenerateDefaultConfig" BeforeTargets="BeforeBuild">
+    <Exec Command="bash $(ProjectDir)generate-default-config.sh" />
+  </Target>
+
 </Project>

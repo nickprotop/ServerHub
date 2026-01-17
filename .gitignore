@@ -171,6 +171,7 @@ Desktop.ini
 
 # Auto-generated files
 src/Config/BundledWidgets.g.cs
+src/Config/DefaultConfig.g.cs
 
 # User-specific config (use config.example.yaml as template)
 config.yaml

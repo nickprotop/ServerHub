@@ -5,6 +5,7 @@ using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 using ServerHub.Models;
 using ServerHub.Utils;
+using ServerHub.Config;
 
 namespace ServerHub.Services;
 
@@ -61,45 +62,14 @@ public class ConfigManager
     }
 
     /// <summary>
-    /// Creates a default configuration file
+    /// Creates a default configuration file using the embedded default config
+    /// Generated from config.yaml at build time
     /// </summary>
     /// <param name="configPath">Path where to create the configuration</param>
     public void CreateDefaultConfig(string configPath)
     {
-        var config = new ServerHubConfig
-        {
-            DefaultRefresh = 5,
-            Widgets = new Dictionary<string, WidgetConfig>
-            {
-                ["cpu"] = new WidgetConfig
-                {
-                    Path = "cpu.sh",
-                    Refresh = 2,
-                    Priority = 1,
-                    Pinned = false
-                },
-                ["memory"] = new WidgetConfig
-                {
-                    Path = "memory.sh",
-                    Refresh = 2,
-                    Priority = 1,
-                    Pinned = false
-                },
-                ["disk"] = new WidgetConfig
-                {
-                    Path = "disk.sh",
-                    Refresh = 10,
-                    Priority = 2,
-                    Pinned = false
-                }
-            },
-            Layout = new LayoutConfig
-            {
-                Order = new List<string> { "cpu", "memory", "disk" }
-            }
-        };
-
-        SaveConfig(config, configPath);
+        // Use the auto-generated default config embedded at build time
+        File.WriteAllText(configPath, DefaultConfig.YamlContent);
     }
 
     /// <summary>
