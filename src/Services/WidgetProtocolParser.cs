@@ -16,12 +16,12 @@ namespace ServerHub.Services;
 /// - action: Interactive action (Label:script-path arguments)
 ///
 /// Inline elements in rows:
-/// - [status:STATE] - Status indicator (ok/warn/error)
+/// - [status:STATE] - Status indicator (ok/info/warn/error)
 /// - [progress:NN] or [progress:NN:style] - Progress bar (0-100)
 /// </summary>
 public class WidgetProtocolParser
 {
-    private static readonly Regex StatusRegex = new(@"\[status:(ok|warn|error)\]", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex StatusRegex = new(@"\[status:(ok|info|warn|error)\]", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex ProgressRegex = new(@"\[progress:(\d+)(?::(inline|chart))?\]", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     /// <summary>
@@ -88,6 +88,7 @@ public class WidgetProtocolParser
             var state = statusMatch.Groups[1].Value.ToLowerInvariant() switch
             {
                 "ok" => StatusState.Ok,
+                "info" => StatusState.Info,
                 "warn" => StatusState.Warn,
                 "error" => StatusState.Error,
                 _ => StatusState.Ok

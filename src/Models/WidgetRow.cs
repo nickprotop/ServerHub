@@ -16,7 +16,7 @@ public class WidgetRow
 
     /// <summary>
     /// Parsed status indicator (if present)
-    /// Format: [status:STATE] where STATE is ok|warn|error
+    /// Format: [status:STATE] where STATE is ok|info|warn|error
     /// </summary>
     public WidgetStatus? Status { get; set; }
 
@@ -38,6 +38,7 @@ public class WidgetStatus
 public enum StatusState
 {
     Ok,      // Green indicator
+    Info,    // Blue/Cyan indicator
     Warn,    // Yellow indicator
     Error    // Red indicator
 }

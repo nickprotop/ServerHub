@@ -95,6 +95,7 @@ public class WidgetRenderer
             var statusIndicator = row.Status.State switch
             {
                 StatusState.Ok => "[green]●[/]",
+                StatusState.Info => "[cyan1]●[/]",
                 StatusState.Warn => "[yellow]●[/]",
                 StatusState.Error => "[red]●[/]",
                 _ => "[grey]●[/]"
