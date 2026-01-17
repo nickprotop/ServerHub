@@ -4,6 +4,11 @@
 default_refresh: 5
 
 widgets:
+  alerts:
+    path: alerts.sh
+    refresh: 30
+    priority: 1
+
   cpu:
     path: cpu.sh
     refresh: 2
@@ -35,11 +40,18 @@ widgets:
     priority: 2
     full_row: true  # Option 3: Docker takes full width
 
+  updates:
+    path: updates.sh
+    refresh: 3600
+    priority: 2
+
 layout:
   order:
+    - alerts
     - cpu
     - memory
     - disk
     - network
     - processes
     - docker
+    - updates

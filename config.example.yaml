@@ -7,13 +7,19 @@ default_refresh: 5
 
 # Widget definitions
 widgets:
+  alerts:
+    path: alerts.sh
+    refresh: 30
+    priority: 1  # High priority - shows system health issues
+    pinned: false
+    # Optional: SHA256 checksum for security validation
+    # sha256: abc123...
+
   cpu:
     path: cpu.sh
     refresh: 2
     priority: 1  # 1=critical, 2=normal, 3=low
     pinned: false
-    # Optional: SHA256 checksum for security validation
-    # sha256: abc123...
 
   memory:
     path: memory.sh
@@ -29,19 +35,27 @@ widgets:
     min_height: 5
     max_height: 15
 
+  updates:
+    path: updates.sh
+    refresh: 3600  # Check every hour
+    priority: 2
+    pinned: false
+
 # Layout configuration
 layout:
   # Simple list layout (responsive columns based on terminal width)
   order:
+    - alerts      # System health monitoring (first for visibility)
     - cpu
     - memory
     - disk
+    - updates     # Package updates (lower priority)
 
   # Alternative: Explicit grid layout (advanced)
   # rows:
-  #   - widgets: [cpu, memory]
+  #   - widgets: [alerts, cpu, memory]
   #     height: 10
-  #   - widgets: [disk]
+  #   - widgets: [disk, updates]
   #     height: 8
 
 # Optional: Custom breakpoints for responsive layout
