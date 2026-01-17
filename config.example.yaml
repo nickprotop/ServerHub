@@ -1,0 +1,52 @@
+# ServerHub Configuration Example
+# Copyright (c) Nikolaos Protopapas. All rights reserved.
+# Licensed under the MIT License.
+
+# Default refresh interval (seconds) for all widgets
+default_refresh: 5
+
+# Widget definitions
+widgets:
+  cpu:
+    path: cpu.sh
+    refresh: 2
+    priority: 1  # 1=critical, 2=normal, 3=low
+    pinned: false
+    # Optional: SHA256 checksum for security validation
+    # sha256: abc123...
+
+  memory:
+    path: memory.sh
+    refresh: 2
+    priority: 1
+    pinned: false
+
+  disk:
+    path: disk.sh
+    refresh: 10
+    priority: 2
+    pinned: false
+    min_height: 5
+    max_height: 15
+
+# Layout configuration
+layout:
+  # Simple list layout (responsive columns based on terminal width)
+  order:
+    - cpu
+    - memory
+    - disk
+
+  # Alternative: Explicit grid layout (advanced)
+  # rows:
+  #   - widgets: [cpu, memory]
+  #     height: 10
+  #   - widgets: [disk]
+  #     height: 8
+
+# Optional: Custom breakpoints for responsive layout
+breakpoints:
+  single: 0    # < 100 cols: 1 column
+  double: 100  # 100-160 cols: 2 columns
+  triple: 160  # 160-220 cols: 3 columns
+  quad: 220    # 220+ cols: 4 columns

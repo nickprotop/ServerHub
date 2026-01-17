@@ -1,0 +1,868 @@
+// Copyright (c) Nikolaos Protopapas. All rights reserved.
+// Licensed under the MIT License. See LICENSE file in the project root for full license information.
+
+using SharpConsoleUI;
+using SharpConsoleUI.Builders;
+using SharpConsoleUI.Controls;
+using SharpConsoleUI.Drivers;
+using Spectre.Console;
+using ServerHub.Models;
+using ServerHub.Services;
+using ServerHub.UI;
+using ServerHub.Utils;
+
+namespace ServerHub;
+
+class Program
+{
+    private static ConsoleWindowSystem? _windowSystem;
+    private static Window? _mainWindow;
+    private static ServerHubConfig? _config;
+    private static readonly Dictionary<string, WidgetData> _widgetDataCache = new();
+    private static readonly Dictionary<string, Timer> _widgetTimers = new();
+    private static WidgetRenderer? _renderer;
+    private static LayoutEngine? _layoutEngine;
+    private static ScriptExecutor? _executor;
+    private static WidgetProtocolParser? _parser;
+    private static int _lastTerminalWidth = 0;
+
+    static async Task<int> Main(string[] args)
+    {
+        try
+        {
+            // Parse command-line arguments
+            var options = ParseArguments(args);
+
+            if (options.ShowHelp)
+            {
+                ShowHelp();
+                return 0;
+            }
+
+            if (options.ShowVersion)
+            {
+                Console.WriteLine("ServerHub v0.1.0");
+                return 0;
+            }
+
+            // Set custom widgets path if provided (before other operations)
+            if (!string.IsNullOrEmpty(options.WidgetsPath))
+            {
+                if (!Directory.Exists(options.WidgetsPath))
+                {
+                    Console.Error.WriteLine($"Error: Widgets path does not exist: {options.WidgetsPath}");
+                    return 1;
+                }
+                WidgetPaths.SetCustomWidgetsPath(options.WidgetsPath);
+                Console.WriteLine($"Using custom widgets path: {options.WidgetsPath}");
+            }
+
+            if (options.Discover)
+            {
+                return await DiscoverWidgetsAsync();
+            }
+
+            if (options.ComputeChecksums)
+            {
+                return await ComputeChecksumsAsync(options.ConfigPath);
+            }
+
+            // Ensure directories exist
+            WidgetPaths.EnsureDirectoriesExist();
+
+            // Load configuration
+            var configPath = options.ConfigPath ?? ConfigManager.GetDefaultConfigPath();
+            if (!File.Exists(configPath))
+            {
+                Console.WriteLine($"Configuration file not found: {configPath}");
+                Console.WriteLine("Creating default configuration...");
+
+                var configManager = new ConfigManager();
+                configManager.CreateDefaultConfig(configPath);
+
+                Console.WriteLine($"Default configuration created at: {configPath}");
+                Console.WriteLine("Edit the configuration file and run ServerHub again.");
+                return 0;
+            }
+
+            var configMgr = new ConfigManager();
+            _config = configMgr.LoadConfig(configPath);
+
+            // Initialize services
+            var validator = new ScriptValidator();
+            _executor = new ScriptExecutor(validator);
+            _parser = new WidgetProtocolParser();
+            _renderer = new WidgetRenderer();
+            _layoutEngine = new LayoutEngine();
+
+            // Initialize ConsoleEx window system
+            _windowSystem = new ConsoleWindowSystem(new NetConsoleDriver(RenderMode.Buffer))
+            {
+                TopStatus = "ServerHub - Server Monitoring Dashboard",
+                ShowTaskBar = false,
+                ShowBottomStatus = true,
+                BottomStatus = "Press Ctrl+Q to quit | F5 to refresh"
+            };
+
+            // Setup graceful shutdown
+            Console.CancelKeyPress += (sender, e) =>
+            {
+                e.Cancel = true;
+                _windowSystem?.Shutdown(0);
+            };
+
+            // Create main window
+            CreateMainWindow();
+
+            // Subscribe to terminal resize events
+            _windowSystem.ConsoleDriver.ScreenResized += OnTerminalResized;
+
+            // Start widget refresh timers
+            StartWidgetRefreshTimers();
+
+            // Run the application
+            await Task.Run(() => _windowSystem.Run());
+
+            // Cleanup
+            StopWidgetRefreshTimers();
+
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Console.Clear();
+            AnsiConsole.WriteException(ex);
+            return 1;
+        }
+    }
+
+    private static void CreateMainWindow()
+    {
+        if (_windowSystem == null || _config == null)
+            return;
+
+        _mainWindow = new WindowBuilder(_windowSystem)
+            .WithTitle("ServerHub")
+            .WithName("MainWindow")
+            .WithColors(Spectre.Console.Color.Grey11, Spectre.Console.Color.Grey93)
+            .Borderless()
+            .Maximized()
+            .WithAsyncWindowThread(UpdateDashboardAsync)
+            .OnKeyPressed(HandleKeyPress)
+            .Build();
+
+        // Get terminal dimensions
+        var terminalWidth = Console.WindowWidth;
+        var terminalHeight = Console.WindowHeight;
+
+        // Store initial terminal width
+        _lastTerminalWidth = terminalWidth;
+
+        // Calculate layout
+        var placements = _layoutEngine!.CalculateLayout(_config, terminalWidth, terminalHeight);
+
+        // Determine column count for this terminal width
+        var columnCount = GetColumnCountFromWidth(terminalWidth);
+
+        // Calculate base column width
+        const int spacingBetweenWidgets = 1;
+        int totalSpacing = Math.Max(0, (columnCount - 1) * spacingBetweenWidgets);
+        int availableWidth = terminalWidth - totalSpacing;
+        int baseColumnWidth = availableWidth / columnCount;
+
+        // Group placements by row
+        var rowGroups = placements.GroupBy(p => p.Row).OrderBy(g => g.Key);
+
+        // Alternating background colors for widgets
+        var widgetColors = new[] {
+            Spectre.Console.Color.Grey15,
+            Spectre.Console.Color.Grey19,
+            Spectre.Console.Color.Grey23
+        };
+        int widgetColorIndex = 0;
+
+        // Create a vertical container for rows
+        bool firstRow = true;
+        foreach (var rowGroup in rowGroups)
+        {
+            // Add vertical spacing between rows (not before first row)
+            if (!firstRow)
+            {
+                var spacer = Controls.Markup("")
+                    .WithBackgroundColor(Spectre.Console.Color.Grey11)
+                    .WithMargin(0, 0, 0, 0)
+                    .Build();
+                _mainWindow.AddControl(spacer);
+            }
+            firstRow = false;
+
+            var rowPlacements = rowGroup.OrderBy(p => p.Column).ToList();
+
+            // Create horizontal grid for this row
+            var rowGrid = Controls.HorizontalGrid()
+                .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Stretch)
+                .WithVerticalAlignment(SharpConsoleUI.Layout.VerticalAlignment.Top);
+
+            bool firstWidget = true;
+            var widgetBgColors = new List<Spectre.Console.Color>();
+
+            foreach (var placement in rowPlacements)
+            {
+                // Add spacing between widgets (not before first widget)
+                if (!firstWidget)
+                {
+                    rowGrid.Column(colBuilder => colBuilder.Width(spacingBetweenWidgets));
+                    widgetBgColors.Add(Spectre.Console.Color.Grey11); // Spacer color
+                }
+                firstWidget = false;
+
+                // Calculate widget width based on column span
+                // width = (baseColumnWidth * spanCount) + (spacing * (spanCount - 1))
+                int widgetWidth = (baseColumnWidth * placement.ColumnSpan) +
+                                  (spacingBetweenWidgets * Math.Max(0, placement.ColumnSpan - 1));
+
+                // Initial render with placeholder
+                var widgetData = new WidgetData
+                {
+                    Title = placement.WidgetId,
+                    Rows = new List<WidgetRow>
+                    {
+                        new() { Content = "[grey70]Loading...[/]" }
+                    }
+                };
+
+                // Get alternating background color
+                var bgColor = widgetColors[widgetColorIndex % widgetColors.Length];
+                widgetColorIndex++;
+                widgetBgColors.Add(bgColor);
+
+                var widgetPanel = _renderer!.CreateWidgetPanel(
+                    placement.WidgetId,
+                    widgetData,
+                    placement.IsPinned,
+                    bgColor
+                );
+
+                // Add widget column with explicit width
+                rowGrid.Column(colBuilder =>
+                {
+                    colBuilder.Width(widgetWidth);
+                    colBuilder.Add(widgetPanel);
+                });
+            }
+
+            // Build and add row grid
+            var builtRowGrid = rowGrid.Build();
+
+            // Set background colors for columns
+            for (int i = 0; i < builtRowGrid.Columns.Count && i < widgetBgColors.Count; i++)
+            {
+                builtRowGrid.Columns[i].BackgroundColor = widgetBgColors[i];
+            }
+
+            _mainWindow.AddControl(builtRowGrid);
+        }
+
+        _windowSystem.AddWindow(_mainWindow);
+    }
+
+    private static void OnTerminalResized(object? sender, SharpConsoleUI.Helpers.Size size)
+    {
+        var newWidth = size.Width;
+
+        // Only rebuild if width changed (column count might change)
+        if (newWidth != _lastTerminalWidth)
+        {
+            _lastTerminalWidth = newWidth;
+            RebuildLayout();
+        }
+    }
+
+    private static void RebuildLayout()
+    {
+        if (_mainWindow == null || _windowSystem == null || _config == null || _layoutEngine == null)
+            return;
+
+        try
+        {
+            // Clear all controls from the window
+            _mainWindow.ClearControls();
+
+            // Get terminal dimensions
+            var terminalWidth = Console.WindowWidth;
+            var terminalHeight = Console.WindowHeight;
+
+            // Recalculate layout
+            var placements = _layoutEngine.CalculateLayout(_config, terminalWidth, terminalHeight);
+
+            // Determine column count for this terminal width
+            var columnCount = GetColumnCountFromWidth(terminalWidth);
+
+            // Calculate base column width
+            const int spacingBetweenWidgets = 1;
+            int totalSpacing = Math.Max(0, (columnCount - 1) * spacingBetweenWidgets);
+            int availableWidth = terminalWidth - totalSpacing;
+            int baseColumnWidth = availableWidth / columnCount;
+
+            // Group placements by row
+            var rowGroups = placements.GroupBy(p => p.Row).OrderBy(g => g.Key);
+
+            // Alternating background colors for widgets
+            var widgetColors = new[] {
+                Spectre.Console.Color.Grey15,
+                Spectre.Console.Color.Grey19,
+                Spectre.Console.Color.Grey23
+            };
+            int widgetColorIndex = 0;
+
+            // Rebuild rows
+            bool firstRow = true;
+            foreach (var rowGroup in rowGroups)
+            {
+                // Add vertical spacing between rows (not before first row)
+                if (!firstRow)
+                {
+                    var spacer = Controls.Markup("")
+                        .WithBackgroundColor(Spectre.Console.Color.Grey11)
+                        .WithMargin(0, 0, 0, 0)
+                        .Build();
+                    _mainWindow.AddControl(spacer);
+                }
+                firstRow = false;
+
+                var rowPlacements = rowGroup.OrderBy(p => p.Column).ToList();
+
+                // Create horizontal grid for this row
+                var rowGrid = Controls.HorizontalGrid()
+                    .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Stretch)
+                    .WithVerticalAlignment(SharpConsoleUI.Layout.VerticalAlignment.Top);
+
+                bool firstWidget = true;
+                var widgetBgColors = new List<Spectre.Console.Color>();
+
+                foreach (var placement in rowPlacements)
+                {
+                    // Add spacing between widgets (not before first widget)
+                    if (!firstWidget)
+                    {
+                        rowGrid.Column(colBuilder => colBuilder.Width(spacingBetweenWidgets));
+                        widgetBgColors.Add(Spectre.Console.Color.Grey11); // Spacer color
+                    }
+                    firstWidget = false;
+
+                    // Calculate widget width based on column span
+                    // width = (baseColumnWidth * spanCount) + (spacing * (spanCount - 1))
+                    int widgetWidth = (baseColumnWidth * placement.ColumnSpan) +
+                                      (spacingBetweenWidgets * Math.Max(0, placement.ColumnSpan - 1));
+
+                    // Get cached widget data or use placeholder
+                    var widgetData = _widgetDataCache.TryGetValue(placement.WidgetId, out var cachedData)
+                        ? cachedData
+                        : new WidgetData
+                        {
+                            Title = placement.WidgetId,
+                            Rows = new List<WidgetRow>
+                            {
+                                new() { Content = "[grey70]Loading...[/]" }
+                            }
+                        };
+
+                    // Get alternating background color
+                    var bgColor = widgetColors[widgetColorIndex % widgetColors.Length];
+                    widgetColorIndex++;
+                    widgetBgColors.Add(bgColor);
+
+                    var widgetPanel = _renderer!.CreateWidgetPanel(
+                        placement.WidgetId,
+                        widgetData,
+                        placement.IsPinned,
+                        bgColor
+                    );
+
+                    // Add widget column with explicit width
+                    rowGrid.Column(colBuilder =>
+                    {
+                        colBuilder.Width(widgetWidth);
+                        colBuilder.Add(widgetPanel);
+                    });
+                }
+
+                // Build and add row grid
+                var builtRowGrid = rowGrid.Build();
+
+                // Set background colors for columns
+                for (int i = 0; i < builtRowGrid.Columns.Count && i < widgetBgColors.Count; i++)
+                {
+                    builtRowGrid.Columns[i].BackgroundColor = widgetBgColors[i];
+                }
+
+                _mainWindow.AddControl(builtRowGrid);
+            }
+
+            // Update status
+            _windowSystem.BottomStatus = $"Layout rebuilt for {terminalWidth} cols | Press Ctrl+Q to quit | F5 to refresh";
+        }
+        catch (Exception ex)
+        {
+            // If rebuild fails, just log it - don't crash the app
+            if (_windowSystem != null)
+            {
+                _windowSystem.BottomStatus = $"Layout rebuild error: {ex.Message}";
+            }
+        }
+    }
+
+    private static async Task UpdateDashboardAsync(Window window, CancellationToken ct)
+    {
+        // This async thread updates the status bar with current time
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                // Update bottom status with current time
+                if (_windowSystem != null)
+                {
+                    _windowSystem.BottomStatus = $"Press Ctrl+Q to quit | F5 to refresh | {DateTime.Now:HH:mm:ss}";
+                }
+
+                await Task.Delay(1000, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+        }
+    }
+
+    private static void HandleKeyPress(object? sender, KeyPressedEventArgs e)
+    {
+        if (e.KeyInfo.Key == ConsoleKey.Q && e.KeyInfo.Modifiers.HasFlag(ConsoleModifiers.Control))
+        {
+            _windowSystem?.Shutdown(0);
+            e.Handled = true;
+        }
+        else if (e.KeyInfo.Key == ConsoleKey.F5)
+        {
+            // Refresh all widgets
+            RefreshAllWidgets();
+            e.Handled = true;
+        }
+    }
+
+    private static void StartWidgetRefreshTimers()
+    {
+        if (_config == null)
+            return;
+
+        foreach (var (widgetId, widgetConfig) in _config.Widgets)
+        {
+            // Initial fetch
+            _ = RefreshWidgetAsync(widgetId, widgetConfig);
+
+            // Setup periodic refresh
+            var timer = new Timer(
+                async _ => await RefreshWidgetAsync(widgetId, widgetConfig),
+                null,
+                TimeSpan.FromSeconds(widgetConfig.Refresh),
+                TimeSpan.FromSeconds(widgetConfig.Refresh)
+            );
+
+            _widgetTimers[widgetId] = timer;
+        }
+    }
+
+    private static void StopWidgetRefreshTimers()
+    {
+        foreach (var timer in _widgetTimers.Values)
+        {
+            timer.Dispose();
+        }
+        _widgetTimers.Clear();
+    }
+
+    private static void RefreshAllWidgets()
+    {
+        if (_config == null)
+            return;
+
+        foreach (var (widgetId, widgetConfig) in _config.Widgets)
+        {
+            _ = RefreshWidgetAsync(widgetId, widgetConfig);
+        }
+    }
+
+    private static async Task RefreshWidgetAsync(string widgetId, WidgetConfig widgetConfig)
+    {
+        if (_executor == null || _parser == null || _mainWindow == null)
+            return;
+
+        try
+        {
+            // Resolve widget path
+            var scriptPath = WidgetPaths.ResolveWidgetPath(widgetConfig.Path);
+            if (scriptPath == null)
+            {
+                var errorData = WidgetProtocolParser.CreateErrorWidget(
+                    widgetId,
+                    $"Widget script not found: {widgetConfig.Path}"
+                );
+                _widgetDataCache[widgetId] = errorData;
+                UpdateWidgetUI(widgetId, errorData);
+                return;
+            }
+
+            // Execute script
+            var result = await _executor.ExecuteAsync(scriptPath, null, widgetConfig.Sha256);
+
+            WidgetData widgetData;
+            if (result.IsSuccess)
+            {
+                // Parse output
+                widgetData = _parser.Parse(result.Output ?? "");
+                widgetData.Timestamp = DateTime.Now;
+            }
+            else
+            {
+                // Create error widget
+                widgetData = WidgetProtocolParser.CreateErrorWidget(
+                    widgetId,
+                    result.ErrorMessage ?? "Unknown error"
+                );
+            }
+
+            _widgetDataCache[widgetId] = widgetData;
+            UpdateWidgetUI(widgetId, widgetData);
+        }
+        catch (Exception ex)
+        {
+            var errorData = WidgetProtocolParser.CreateErrorWidget(
+                widgetId,
+                $"Exception: {ex.Message}"
+            );
+            _widgetDataCache[widgetId] = errorData;
+            UpdateWidgetUI(widgetId, errorData);
+        }
+    }
+
+    private static void UpdateWidgetUI(string widgetId, WidgetData widgetData)
+    {
+        if (_mainWindow == null || _renderer == null)
+            return;
+
+        var control = _mainWindow.FindControl<IWindowControl>($"widget_{widgetId}");
+        if (control != null)
+        {
+            _renderer.UpdateWidgetPanel(control, widgetData);
+        }
+    }
+
+    private static int GetColumnCountFromWidth(int terminalWidth)
+    {
+        // Use config breakpoints if available, otherwise use defaults
+        var breakpoints = _config?.Breakpoints ?? new BreakpointConfig
+        {
+            Single = 0,
+            Double = 100,
+            Triple = 160,
+            Quad = 220
+        };
+
+        if (terminalWidth < breakpoints.Double)
+            return 1;
+        else if (terminalWidth < breakpoints.Triple)
+            return 2;
+        else if (terminalWidth < breakpoints.Quad)
+            return 3;
+        else
+            return 4;
+    }
+
+    private static CommandLineOptions ParseArguments(string[] args)
+    {
+        var options = new CommandLineOptions();
+
+        for (int i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--help":
+                case "-h":
+                    options.ShowHelp = true;
+                    break;
+
+                case "--version":
+                case "-v":
+                    options.ShowVersion = true;
+                    break;
+
+                case "--widgets-path":
+                    if (i + 1 < args.Length)
+                    {
+                        options.WidgetsPath = args[++i];
+                    }
+                    break;
+
+                case "--discover":
+                    options.Discover = true;
+                    break;
+
+                case "--compute-checksums":
+                    options.ComputeChecksums = true;
+                    break;
+
+                default:
+                    if (!args[i].StartsWith("--") && options.ConfigPath == null)
+                    {
+                        options.ConfigPath = args[i];
+                    }
+                    break;
+            }
+        }
+
+        return options;
+    }
+
+    private static async Task<int> DiscoverWidgetsAsync()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var customWidgetsPath = Path.Combine(home, ".config", "serverhub", "widgets");
+        var configPath = _config != null ? ConfigManager.GetDefaultConfigPath() : Path.Combine(home, ".config", "serverhub", "config.yaml");
+
+        if (!Directory.Exists(customWidgetsPath))
+        {
+            Console.WriteLine($"No custom widgets directory found: {customWidgetsPath}");
+            Console.WriteLine("Create it and add your widget scripts there.");
+            return 0;
+        }
+
+        // Load existing config to know which widgets are already configured
+        var configuredPaths = new HashSet<string>();
+        if (File.Exists(configPath))
+        {
+            var configManager = new ConfigManager();
+            try
+            {
+                var config = configManager.LoadConfig(configPath);
+                foreach (var widget in config.Widgets.Values)
+                {
+                    var resolved = WidgetPaths.ResolveWidgetPath(widget.Path);
+                    if (resolved != null)
+                    {
+                        configuredPaths.Add(Path.GetFullPath(resolved));
+                    }
+                }
+            }
+            catch { /* Ignore config load errors */ }
+        }
+
+        // Find all executables in custom widgets directory
+        var files = Directory.GetFiles(customWidgetsPath)
+            .Where(f => IsExecutable(f) && !configuredPaths.Contains(Path.GetFullPath(f)))
+            .ToList();
+
+        if (files.Count == 0)
+        {
+            Console.WriteLine("No unconfigured widgets found.");
+            return 0;
+        }
+
+        Console.WriteLine($"Found {files.Count} unconfigured widget(s):\n");
+
+        var approved = new List<string>();
+
+        foreach (var file in files)
+        {
+            var filename = Path.GetFileName(file);
+            var fileInfo = new FileInfo(file);
+            var checksum = ScriptValidator.CalculateChecksum(file);
+
+            Console.WriteLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            Console.WriteLine($"Widget: {filename}");
+            Console.WriteLine($"Path:   {file}");
+            Console.WriteLine($"Size:   {fileInfo.Length} bytes");
+            Console.WriteLine($"SHA256: {checksum}");
+            Console.WriteLine();
+
+            // Show preview (first 50 lines for text files)
+            if (IsTextFile(file))
+            {
+                Console.WriteLine("Preview:");
+                var lines = File.ReadLines(file).Take(50).ToArray();
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    Console.WriteLine($"    {i + 1,3}  {lines[i]}");
+                }
+                if (File.ReadLines(file).Count() > 50)
+                    Console.WriteLine("    ... (truncated)");
+            }
+            else
+            {
+                Console.WriteLine("[Binary file - no preview]");
+            }
+
+            Console.WriteLine();
+            Console.Write($"Add '{filename}' to config? [y/N] ");
+            var response = Console.ReadLine();
+
+            if (response?.ToLower() == "y")
+            {
+                approved.Add(file);
+            }
+        }
+
+        if (approved.Count == 0)
+        {
+            Console.WriteLine("\nNo widgets added.");
+            return 0;
+        }
+
+        // Generate YAML snippets
+        Console.WriteLine("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        Console.WriteLine("Add to config.yaml:");
+        Console.WriteLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+
+        foreach (var file in approved)
+        {
+            var id = Path.GetFileNameWithoutExtension(file);
+            var checksum = ScriptValidator.CalculateChecksum(file);
+            var filename = Path.GetFileName(file);
+
+            Console.WriteLine($"  {id}:");
+            Console.WriteLine($"    path: {filename}");
+            Console.WriteLine($"    sha256: {checksum}");
+            Console.WriteLine($"    refresh: 5");
+            Console.WriteLine();
+        }
+
+        Console.WriteLine("Don't forget to add widget IDs to your layout!");
+
+        return 0;
+    }
+
+    private static async Task<int> ComputeChecksumsAsync(string? configPath)
+    {
+        configPath ??= ConfigManager.GetDefaultConfigPath();
+
+        if (!File.Exists(configPath))
+        {
+            Console.Error.WriteLine($"Config file not found: {configPath}");
+            return 1;
+        }
+
+        var configManager = new ConfigManager();
+        ServerHubConfig config;
+        try
+        {
+            config = configManager.LoadConfig(configPath);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Config error: {ex.Message}");
+            return 1;
+        }
+
+        Console.WriteLine("Widget Checksums:");
+        Console.WriteLine("─────────────────────────────────────");
+
+        foreach (var (id, widget) in config.Widgets)
+        {
+            var resolved = WidgetPaths.ResolveWidgetPath(widget.Path);
+            if (resolved != null && File.Exists(resolved))
+            {
+                var checksum = ScriptValidator.CalculateChecksum(resolved);
+                Console.WriteLine($"{id,-15} {checksum}");
+                Console.WriteLine($"                {resolved}");
+            }
+            else
+            {
+                Console.WriteLine($"{id,-15} [NOT FOUND]");
+            }
+        }
+
+        return 0;
+    }
+
+    private static bool IsExecutable(string path)
+    {
+#if WINDOWS
+        var ext = Path.GetExtension(path).ToLowerInvariant();
+        return ext is ".exe" or ".cmd" or ".bat" or ".sh";
+#else
+        try
+        {
+            var file = new FileInfo(path);
+            if (!file.Exists || (file.Attributes & FileAttributes.Directory) != 0)
+                return false;
+
+            // Check if file has execute permission
+            if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+            {
+                return (file.UnixFileMode & UnixFileMode.UserExecute) != 0;
+            }
+
+            return true;
+        }
+        catch { return false; }
+#endif
+    }
+
+    private static bool IsTextFile(string path)
+    {
+        try
+        {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (ext is ".sh" or ".bash" or ".py" or ".rb" or ".pl" or ".js" or ".txt")
+                return true;
+
+            // Read first 1KB and check for null bytes
+            var buffer = new byte[1024];
+            using var fs = File.OpenRead(path);
+            var read = fs.Read(buffer, 0, buffer.Length);
+            return !buffer.Take(read).Contains((byte)0);
+        }
+        catch { return false; }
+    }
+
+    private static void ShowHelp()
+    {
+        Console.WriteLine("ServerHub - Server Monitoring Dashboard");
+        Console.WriteLine();
+        Console.WriteLine("Usage:");
+        Console.WriteLine("  serverhub [options] [config.yaml]");
+        Console.WriteLine();
+        Console.WriteLine("Options:");
+        Console.WriteLine("  -h, --help                       Show this help message");
+        Console.WriteLine("  -v, --version                    Show version information");
+        Console.WriteLine("  --widgets-path <path>            Load widgets from custom directory");
+        Console.WriteLine("                                   Searches this path first, before default paths");
+        Console.WriteLine("  --discover                       Find and add new custom widgets");
+        Console.WriteLine("  --compute-checksums              Print checksums for configured widgets");
+        Console.WriteLine();
+        Console.WriteLine("Examples:");
+        Console.WriteLine("  serverhub                                    Use default config (~/.config/serverhub/config.yaml)");
+        Console.WriteLine("  serverhub myconfig.yaml                      Use custom config file");
+        Console.WriteLine("  serverhub --widgets-path ./dev-widgets       Load widgets from ./dev-widgets");
+        Console.WriteLine("  serverhub --widgets-path ~/widgets myconf.yaml");
+        Console.WriteLine("  serverhub --discover                         Discover new widgets in ~/.config/serverhub/widgets/");
+        Console.WriteLine("  serverhub --compute-checksums                Show checksums for all configured widgets");
+        Console.WriteLine();
+        Console.WriteLine("Widget Search Paths (in priority order):");
+        Console.WriteLine("  1. Custom path (if --widgets-path specified)");
+        Console.WriteLine("  2. ~/.config/serverhub/widgets/              User custom widgets");
+        Console.WriteLine("  3. ~/.local/share/serverhub/widgets/         Bundled widgets");
+        Console.WriteLine();
+        Console.WriteLine("Keyboard Shortcuts:");
+        Console.WriteLine("  Ctrl+Q    Quit");
+        Console.WriteLine("  F5        Refresh all widgets");
+    }
+
+    private class CommandLineOptions
+    {
+        public bool ShowHelp { get; set; }
+        public bool ShowVersion { get; set; }
+        public string? WidgetsPath { get; set; }
+        public string? ConfigPath { get; set; }
+        public bool Discover { get; set; }
+        public bool ComputeChecksums { get; set; }
+    }
+}

@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>ServerHub</RootNamespace>
+
+    <!-- NativeAOT settings (for future) -->
+    <!-- <PublishAot>true</PublishAot> -->
+    <!-- <InvariantGlobalization>true</InvariantGlobalization> -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Local ConsoleEx reference for development -->
+    <ProjectReference Include="../ConsoleEx/SharpConsoleUI/SharpConsoleUI.csproj" />
+
+    <!-- YAML configuration -->
+    <PackageReference Include="YamlDotNet" Version="16.2.0" />
+  </ItemGroup>
+
+  <!-- Generate bundled widget checksums before build -->
+  <Target Name="GenerateChecksums" BeforeTargets="BeforeBuild">
+    <Exec Command="bash $(ProjectDir)generate-checksums.sh" />
+  </Target>
+
+</Project>

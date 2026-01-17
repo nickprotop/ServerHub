@@ -1,0 +1,59 @@
+# Explicit Row Layout Example (Option 4)
+# Complete control over widget placement in rows
+
+default_refresh: 5
+
+widgets:
+  cpu:
+    path: cpu.sh
+    refresh: 2
+
+  memory:
+    path: memory.sh
+    refresh: 2
+
+  disk:
+    path: disk.sh
+    refresh: 10
+
+  sysinfo:
+    path: sysinfo.sh
+    refresh: 30
+
+  network:
+    path: network.sh
+    refresh: 2
+
+  processes:
+    path: processes.sh
+    refresh: 3
+
+  docker:
+    path: docker.sh
+    refresh: 5
+
+  services:
+    path: services.sh
+    refresh: 5
+
+  logs:
+    path: logs.sh
+    refresh: 10
+
+# Option 4: Explicit row-based layout
+layout:
+  rows:
+    # Row 1: Three equal columns (critical metrics)
+    - widgets: [cpu, memory, disk]
+
+    # Row 2: Two equal columns
+    - widgets: [sysinfo, network]
+
+    # Row 3: Full-width widget (processes)
+    - widgets: [processes]
+
+    # Row 4: Full-width widget (docker - shows all container names)
+    - widgets: [docker]
+
+    # Row 5: Two columns
+    - widgets: [services, logs]

@@ -1,0 +1,50 @@
+# Mixed Layout Example
+# Combining Options 2, 3, and 4 together!
+
+default_refresh: 5
+
+widgets:
+  cpu:
+    path: cpu.sh
+    refresh: 2
+
+  memory:
+    path: memory.sh
+    refresh: 2
+
+  disk:
+    path: disk.sh
+    refresh: 10
+
+  docker:
+    path: docker.sh
+    refresh: 5
+    column_span: 2  # Option 2: Spans 2 columns
+
+  processes:
+    path: processes.sh
+    refresh: 3
+    full_row: true  # Option 3: Takes full row
+
+  services:
+    path: services.sh
+    refresh: 5
+
+  logs:
+    path: logs.sh
+    refresh: 10
+
+# Option 4: Explicit rows with column spanning
+layout:
+  rows:
+    # Row 1: Three single columns
+    - widgets: [cpu, memory, disk]
+
+    # Row 2: docker spans 2 cols, leaving room for 1 widget
+    - widgets: [docker, services]
+
+    # Row 3: processes takes full row (due to full_row: true)
+    - widgets: [processes]
+
+    # Row 4: Single widget takes full row by default
+    - widgets: [logs]
