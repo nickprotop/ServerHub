@@ -25,6 +25,12 @@ class Program
     private static ScriptExecutor? _executor;
     private static WidgetProtocolParser? _parser;
     private static int _lastTerminalWidth = 0;
+    private static bool _isPaused = false;
+    private static readonly Dictionary<string, DateTime> _lastSuccessfulUpdate = new();
+    private static readonly Dictionary<string, int> _consecutiveErrors = new();
+    private static readonly string[] _spinnerFrames = { "◐", "◓", "◑", "◒" };
+    private static int _spinnerFrame = 0;
+    private static readonly Dictionary<string, bool> _isRefreshing = new();
 
     static async Task<int> Main(string[] args)
     {
@@ -101,7 +107,7 @@ class Program
                 TopStatus = "ServerHub - Server Monitoring Dashboard",
                 ShowTaskBar = false,
                 ShowBottomStatus = true,
-                BottomStatus = "Press Ctrl+Q to quit | F5 to refresh"
+                BottomStatus = "Press Ctrl+Q to quit | F5 to refresh | ? for help"
             };
 
             // Setup graceful shutdown
@@ -221,15 +227,8 @@ class Program
                 int widgetWidth = (baseColumnWidth * placement.ColumnSpan) +
                                   (spacingBetweenWidgets * Math.Max(0, placement.ColumnSpan - 1));
 
-                // Initial render with placeholder
-                var widgetData = new WidgetData
-                {
-                    Title = placement.WidgetId,
-                    Rows = new List<WidgetRow>
-                    {
-                        new() { Content = "[grey70]Loading...[/]" }
-                    }
-                };
+                // Initial render with loading spinner
+                var widgetData = CreateLoadingWidget(placement.WidgetId);
 
                 // Get alternating background color
                 var bgColor = widgetColors[widgetColorIndex % widgetColors.Length];
@@ -355,17 +354,10 @@ class Program
                     int widgetWidth = (baseColumnWidth * placement.ColumnSpan) +
                                       (spacingBetweenWidgets * Math.Max(0, placement.ColumnSpan - 1));
 
-                    // Get cached widget data or use placeholder
+                    // Get cached widget data or use loading spinner
                     var widgetData = _widgetDataCache.TryGetValue(placement.WidgetId, out var cachedData)
                         ? cachedData
-                        : new WidgetData
-                        {
-                            Title = placement.WidgetId,
-                            Rows = new List<WidgetRow>
-                            {
-                                new() { Content = "[grey70]Loading...[/]" }
-                            }
-                        };
+                        : CreateLoadingWidget(placement.WidgetId);
 
                     // Get alternating background color
                     var bgColor = widgetColors[widgetColorIndex % widgetColors.Length];
@@ -400,7 +392,7 @@ class Program
             }
 
             // Update status
-            _windowSystem.BottomStatus = $"Layout rebuilt for {terminalWidth} cols | Press Ctrl+Q to quit | F5 to refresh";
+            _windowSystem.BottomStatus = $"Layout rebuilt for {terminalWidth} cols | Ctrl+Q to quit | F5 to refresh | ? for help";
         }
         catch (Exception ex)
         {
@@ -414,16 +406,25 @@ class Program
 
     private static async Task UpdateDashboardAsync(Window window, CancellationToken ct)
     {
-        // This async thread updates the status bar with current time
+        // This async thread updates the status bar with current time and system stats
         while (!ct.IsCancellationRequested)
         {
             try
             {
-                // Update bottom status with current time
-                if (_windowSystem != null)
+                // Rotate spinner frame
+                _spinnerFrame++;
+
+                // Update widgets that are currently refreshing to animate spinner
+                foreach (var widgetId in _isRefreshing.Where(kvp => kvp.Value).Select(kvp => kvp.Key).ToList())
                 {
-                    _windowSystem.BottomStatus = $"Press Ctrl+Q to quit | F5 to refresh | {DateTime.Now:HH:mm:ss}";
+                    if (_widgetDataCache.TryGetValue(widgetId, out var widgetData))
+                    {
+                        UpdateWidgetUI(widgetId, widgetData);
+                    }
                 }
+
+                // Update status bar with widget counts and system stats
+                UpdateStatusBar();
 
                 await Task.Delay(1000, ct);
             }
@@ -432,6 +433,115 @@ class Program
                 break;
             }
         }
+    }
+
+    private static WidgetData CreateLoadingWidget(string widgetId)
+    {
+        return new WidgetData
+        {
+            Title = widgetId,
+            Timestamp = DateTime.Now,
+            Rows = new List<WidgetRow>
+            {
+                new() { Content = "" },
+                new() { Content = $"          [cyan1]Loading... {_spinnerFrames[_spinnerFrame % 4]}[/]" },
+                new() { Content = "" }
+            }
+        };
+    }
+
+    private static void TogglePause()
+    {
+        _isPaused = !_isPaused;
+
+        if (_windowSystem != null)
+        {
+            var status = _isPaused
+                ? "[yellow]PAUSED[/] - Press Space to resume | Ctrl+Q to quit | ? for help"
+                : $"Press Ctrl+Q to quit | F5 to refresh | Space to pause | ? for help | {DateTime.Now:HH:mm:ss}";
+
+            _windowSystem.BottomStatus = status;
+        }
+    }
+
+    private static void ShowHelpOverlay()
+    {
+        if (_windowSystem == null)
+            return;
+
+        // Calculate centered position and size based on terminal dimensions
+        var terminalWidth = Console.WindowWidth;
+        var terminalHeight = Console.WindowHeight;
+
+        // Dialog size: larger for better readability
+        var dialogWidth = Math.Min(80, terminalWidth - 10);
+        var dialogHeight = Math.Min(22, terminalHeight - 6);
+
+        // Center the dialog
+        var dialogX = (terminalWidth - dialogWidth) / 2;
+        var dialogY = (terminalHeight - dialogHeight) / 2;
+
+        // Create help window without borders, centered with explicit bounds
+        var helpWindow = new WindowBuilder(_windowSystem)
+            .WithName("HelpOverlay")
+            .WithBounds(dialogX, dialogY, dialogWidth, dialogHeight)
+            .Borderless()
+            .WithColors(Color.Grey11, Color.Grey93)
+            .OnKeyPressed((sender, e) =>
+            {
+                // Close on ESC, Enter, or ? key
+                if (e.KeyInfo.Key == ConsoleKey.Escape ||
+                    e.KeyInfo.Key == ConsoleKey.Enter ||
+                    e.KeyInfo.KeyChar == '?' ||
+                    e.KeyInfo.Key == ConsoleKey.F1)
+                {
+                    _windowSystem.CloseWindow((Window)sender!);
+                    e.Handled = true;
+                }
+            })
+            .Build();
+
+        var helpContent = @"
+  [bold cyan1]╔══════════════════════════════════════════════════════════════════╗[/]
+  [bold cyan1]║[/]  [bold yellow]ServerHub - Server Monitoring Dashboard[/]                    [bold cyan1]║[/]
+  [bold cyan1]╚══════════════════════════════════════════════════════════════════╝[/]
+
+  [bold white]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/]
+
+  [bold cyan1]Navigation[/]
+  [grey]─────────────────────────────────────────────────────────────────────[/]
+    [cyan1]Tab / Shift+Tab[/]      [white]Move between widgets[/]
+    [cyan1]Arrow keys[/]           [white]Scroll within widget[/]
+
+  [bold cyan1]Actions[/]
+  [grey]─────────────────────────────────────────────────────────────────────[/]
+    [cyan1]F5[/]                   [white]Refresh all widgets[/]
+    [cyan1]Space[/]                [white]Pause / resume widget refresh[/]
+    [cyan1]? or F1[/]              [white]Show this help dialog[/]
+
+  [bold cyan1]Exit[/]
+  [grey]─────────────────────────────────────────────────────────────────────[/]
+    [cyan1]Ctrl+Q[/]               [white]Exit ServerHub[/]
+
+  [bold white]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/]
+  [grey]Press ESC, Enter, ?, or F1 to close[/]
+";
+
+        var helpBuilder = Controls.Markup()
+            .WithBackgroundColor(Color.Grey11)
+            .WithMargin(2, 1, 2, 1);
+
+        // Split content into lines and add them
+        var lines = helpContent.Split('\n');
+        foreach (var line in lines)
+        {
+            helpBuilder.AddLine(line);
+        }
+
+        var helpControl = helpBuilder.Build();
+
+        helpWindow.AddControl(helpControl);
+        _windowSystem.AddWindow(helpWindow);
     }
 
     private static void HandleKeyPress(object? sender, KeyPressedEventArgs e)
@@ -445,6 +555,18 @@ class Program
         {
             // Refresh all widgets
             RefreshAllWidgets();
+            e.Handled = true;
+        }
+        else if (e.KeyInfo.Key == ConsoleKey.Spacebar)
+        {
+            // Toggle pause mode
+            TogglePause();
+            e.Handled = true;
+        }
+        else if (e.KeyInfo.Key == ConsoleKey.F1 || e.KeyInfo.KeyChar == '?')
+        {
+            // Show help overlay
+            ShowHelpOverlay();
             e.Handled = true;
         }
     }
@@ -496,17 +618,47 @@ class Program
         if (_executor == null || _parser == null || _mainWindow == null)
             return;
 
+        // Skip refresh when paused
+        if (_isPaused)
+            return;
+
+        // Mark as refreshing
+        _isRefreshing[widgetId] = true;
+
         try
         {
             // Resolve widget path
             var scriptPath = WidgetPaths.ResolveWidgetPath(widgetConfig.Path);
             if (scriptPath == null)
             {
-                var errorData = WidgetProtocolParser.CreateErrorWidget(
-                    widgetId,
-                    $"Widget script not found: {widgetConfig.Path}"
-                );
+                _consecutiveErrors.TryGetValue(widgetId, out var errorCount);
+                _consecutiveErrors[widgetId] = errorCount + 1;
+
+                var lastUpdate = _lastSuccessfulUpdate.TryGetValue(widgetId, out var lastTime)
+                    ? $"Last update: {FormatRelativeTime(lastTime)}"
+                    : "Never updated successfully";
+
+                var errorData = new WidgetData
+                {
+                    Title = widgetId,
+                    Error = $"Widget script not found: {widgetConfig.Path}",
+                    Timestamp = DateTime.Now,
+                    Rows = new List<WidgetRow>
+                    {
+                        new() { Content = $"[red]Error:[/] Widget script not found", Status = new() { State = StatusState.Error } },
+                        new() { Content = $"[grey70]Path: {widgetConfig.Path}[/]" },
+                        new() { Content = "" },
+                        new() { Content = $"[grey70]{lastUpdate}[/]" },
+                        new() { Content = $"[grey70]Next retry: {widgetConfig.Refresh}s[/]" },
+                        new() { Content = $"[grey70]Consecutive errors: {errorCount + 1}[/]" }
+                    }
+                };
+
                 _widgetDataCache[widgetId] = errorData;
+
+                // Clear refreshing state BEFORE updating UI
+                _isRefreshing[widgetId] = false;
+
                 UpdateWidgetUI(widgetId, errorData);
                 return;
             }
@@ -520,26 +672,79 @@ class Program
                 // Parse output
                 widgetData = _parser.Parse(result.Output ?? "");
                 widgetData.Timestamp = DateTime.Now;
+
+                // Track successful update
+                _lastSuccessfulUpdate[widgetId] = DateTime.Now;
+                _consecutiveErrors[widgetId] = 0;
             }
             else
             {
-                // Create error widget
-                widgetData = WidgetProtocolParser.CreateErrorWidget(
-                    widgetId,
-                    result.ErrorMessage ?? "Unknown error"
-                );
+                // Track error
+                _consecutiveErrors.TryGetValue(widgetId, out var errorCount);
+                _consecutiveErrors[widgetId] = errorCount + 1;
+
+                var lastUpdate = _lastSuccessfulUpdate.TryGetValue(widgetId, out var lastTime)
+                    ? $"Last update: {FormatRelativeTime(lastTime)}"
+                    : "Never updated successfully";
+
+                // Create enhanced error widget
+                widgetData = new WidgetData
+                {
+                    Title = widgetId,
+                    Error = result.ErrorMessage ?? "Unknown error",
+                    Timestamp = DateTime.Now,
+                    Rows = new List<WidgetRow>
+                    {
+                        new() { Content = $"[red]Widget Error[/]", Status = new() { State = StatusState.Error } },
+                        new() { Content = "" },
+                        new() { Content = $"[grey70]{result.ErrorMessage ?? "Unknown error"}[/]" },
+                        new() { Content = "" },
+                        new() { Content = $"[grey70]{lastUpdate}[/]" },
+                        new() { Content = $"[grey70]Next retry: {widgetConfig.Refresh}s[/]" },
+                        new() { Content = $"[grey70]Consecutive errors: {errorCount + 1}[/]" }
+                    }
+                };
             }
 
             _widgetDataCache[widgetId] = widgetData;
+
+            // Clear refreshing state BEFORE updating UI
+            _isRefreshing[widgetId] = false;
+
             UpdateWidgetUI(widgetId, widgetData);
         }
         catch (Exception ex)
         {
-            var errorData = WidgetProtocolParser.CreateErrorWidget(
-                widgetId,
-                $"Exception: {ex.Message}"
-            );
+            // Track exception error
+            _consecutiveErrors.TryGetValue(widgetId, out var errorCount);
+            _consecutiveErrors[widgetId] = errorCount + 1;
+
+            var lastUpdate = _lastSuccessfulUpdate.TryGetValue(widgetId, out var lastTime)
+                ? $"Last update: {FormatRelativeTime(lastTime)}"
+                : "Never updated successfully";
+
+            var errorData = new WidgetData
+            {
+                Title = widgetId,
+                Error = $"Exception: {ex.Message}",
+                Timestamp = DateTime.Now,
+                Rows = new List<WidgetRow>
+                {
+                    new() { Content = $"[red]Exception[/]", Status = new() { State = StatusState.Error } },
+                    new() { Content = "" },
+                    new() { Content = $"[grey70]{ex.Message}[/]" },
+                    new() { Content = "" },
+                    new() { Content = $"[grey70]{lastUpdate}[/]" },
+                    new() { Content = $"[grey70]Next retry: {widgetConfig.Refresh}s[/]" },
+                    new() { Content = $"[grey70]Consecutive errors: {errorCount + 1}[/]" }
+                }
+            };
+
             _widgetDataCache[widgetId] = errorData;
+
+            // Clear refreshing state BEFORE updating UI
+            _isRefreshing[widgetId] = false;
+
             UpdateWidgetUI(widgetId, errorData);
         }
     }
@@ -549,11 +754,107 @@ class Program
         if (_mainWindow == null || _renderer == null)
             return;
 
+        // Create a display copy with spinner if currently refreshing
+        var displayData = widgetData;
+        if (_isRefreshing.TryGetValue(widgetId, out var isRefreshing) && isRefreshing)
+        {
+            // Create a temporary copy for display only (HasError is computed from Error)
+            displayData = new WidgetData
+            {
+                Title = $"{widgetData.Title} {_spinnerFrames[_spinnerFrame % 4]}",
+                Rows = widgetData.Rows,
+                Error = widgetData.Error,
+                Timestamp = widgetData.Timestamp
+            };
+        }
+
         var control = _mainWindow.FindControl<IWindowControl>($"widget_{widgetId}");
         if (control != null)
         {
-            _renderer.UpdateWidgetPanel(control, widgetData);
+            _renderer.UpdateWidgetPanel(control, displayData);
         }
+    }
+
+    private static string FormatRelativeTime(DateTime dateTime)
+    {
+        var elapsed = DateTime.Now - dateTime;
+
+        if (elapsed.TotalSeconds < 60)
+            return $"{(int)elapsed.TotalSeconds}s ago";
+        else if (elapsed.TotalMinutes < 60)
+            return $"{(int)elapsed.TotalMinutes}m ago";
+        else if (elapsed.TotalHours < 24)
+            return $"{(int)elapsed.TotalHours}h ago";
+        else
+            return $"{(int)elapsed.TotalDays}d ago";
+    }
+
+    private static int GetSystemCPU()
+    {
+        try
+        {
+            if (!File.Exists("/proc/loadavg"))
+                return 0;
+
+            var loadAvg = File.ReadAllText("/proc/loadavg").Split(' ')[0];
+            var load = double.Parse(loadAvg);
+            var cpuCores = Environment.ProcessorCount;
+            return (int)((load / cpuCores) * 100);
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private static int GetSystemMemory()
+    {
+        try
+        {
+            if (!File.Exists("/proc/meminfo"))
+                return 0;
+
+            var memInfo = File.ReadAllLines("/proc/meminfo");
+            long memTotal = 0;
+            long memAvailable = 0;
+
+            foreach (var line in memInfo)
+            {
+                if (line.StartsWith("MemTotal:"))
+                    memTotal = long.Parse(line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)[1]);
+                else if (line.StartsWith("MemAvailable:"))
+                    memAvailable = long.Parse(line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)[1]);
+            }
+
+            if (memTotal == 0)
+                return 0;
+
+            var memUsed = memTotal - memAvailable;
+            return (int)((memUsed * 100) / memTotal);
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private static void UpdateStatusBar()
+    {
+        if (_windowSystem == null)
+            return;
+
+        var totalWidgets = _widgetDataCache.Count;
+        var errorWidgets = _widgetDataCache.Values.Count(w => w.HasError);
+        var okWidgets = totalWidgets - errorWidgets;
+
+        var cpuUsage = GetSystemCPU();
+        var memUsage = GetSystemMemory();
+
+        var status = _isPaused
+            ? $"[yellow]PAUSED[/] | {totalWidgets} widgets | Press Space to resume"
+            : $"ServerHub | {totalWidgets} widgets ({okWidgets} ok, {errorWidgets} error) | CPU {cpuUsage}% MEM {memUsage}% | {DateTime.Now:HH:mm:ss}";
+
+        _windowSystem.BottomStatus = status;
     }
 
     private static int GetColumnCountFromWidth(int terminalWidth)
