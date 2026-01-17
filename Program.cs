@@ -31,6 +31,7 @@ class Program
     private static readonly string[] _spinnerFrames = { "◐", "◓", "◑", "◒" };
     private static int _spinnerFrame = 0;
     private static readonly Dictionary<string, bool> _isRefreshing = new();
+    private static FocusManager? _focusManager;
 
     static async Task<int> Main(string[] args)
     {
@@ -169,6 +170,11 @@ class Program
         // Calculate layout
         var placements = _layoutEngine!.CalculateLayout(_config, terminalWidth, terminalHeight);
 
+        // Initialize FocusManager
+        _focusManager = new FocusManager();
+        _focusManager.Initialize(_mainWindow, placements);
+        _focusManager.FocusFirst(); // Focus first widget on startup
+
         // Determine column count for this terminal width
         var columnCount = GetColumnCountFromWidth(terminalWidth);
 
@@ -295,6 +301,9 @@ class Program
 
         try
         {
+            // SAVE current focus BEFORE clearing controls
+            var currentFocusedId = _focusManager?.GetFocusedWidgetId();
+
             // Clear all controls from the window
             _mainWindow.ClearControls();
 
@@ -304,6 +313,9 @@ class Program
 
             // Recalculate layout
             var placements = _layoutEngine.CalculateLayout(_config, terminalWidth, terminalHeight);
+
+            // RE-INITIALIZE FocusManager with new placements
+            _focusManager?.Initialize(_mainWindow, placements);
 
             // Determine column count for this terminal width
             var columnCount = GetColumnCountFromWidth(terminalWidth);
@@ -407,6 +419,16 @@ class Program
                 }
 
                 _mainWindow.AddControl(builtRowGrid);
+            }
+
+            // RESTORE focus to same widget (by ID) after rebuild completes
+            if (currentFocusedId != null)
+            {
+                _focusManager?.FocusWidget(currentFocusedId);
+            }
+            else
+            {
+                _focusManager?.FocusFirst();
             }
 
             // Update status
@@ -579,6 +601,39 @@ class Program
 
     private static void HandleKeyPress(object? sender, KeyPressedEventArgs e)
     {
+        // ===== PRIORITY 1: Widget Focus Navigation =====
+        // CRITICAL: Handle Tab BEFORE Window.HandleKeyPress() processes it
+        if (e.KeyInfo.Key == ConsoleKey.Tab)
+        {
+            if (e.KeyInfo.Modifiers.HasFlag(ConsoleModifiers.Shift))
+            {
+                _focusManager?.FocusPrevious();
+            }
+            else
+            {
+                _focusManager?.FocusNext();
+            }
+            e.Handled = true; // Prevent Window.SwitchFocus() from processing
+            return;
+        }
+
+        // ===== PRIORITY 2: Reserved for Future Features =====
+        // Ctrl+Arrow keys reserved for widget reordering
+        if (e.KeyInfo.Modifiers.HasFlag(ConsoleModifiers.Control))
+        {
+            switch (e.KeyInfo.Key)
+            {
+                case ConsoleKey.UpArrow:
+                case ConsoleKey.DownArrow:
+                case ConsoleKey.LeftArrow:
+                case ConsoleKey.RightArrow:
+                    // Future: _focusManager?.ReorderWidget(direction);
+                    e.Handled = true; // Reserve keybinding
+                    return;
+            }
+        }
+
+        // ===== PRIORITY 3: Existing Application Shortcuts =====
         if (e.KeyInfo.Key == ConsoleKey.Q && e.KeyInfo.Modifiers.HasFlag(ConsoleModifiers.Control))
         {
             _windowSystem?.Shutdown(0);
