@@ -20,8 +20,8 @@ if command -v apt &> /dev/null; then
             echo "row: [grey70]  Run 'apt update' to refresh[/]"
         else
             # Count upgradable packages
-            updates=$(apt list --upgradable 2>/dev/null | grep -c upgradable || echo "0")
-            security=$(apt list --upgradable 2>/dev/null | grep -c security || echo "0")
+            updates=$(apt list --upgradable 2>/dev/null | grep -c upgradable)
+            security=$(apt list --upgradable 2>/dev/null | grep -c security)
 
             if [ "$security" -gt 0 ]; then
                 echo "row: [status:error] $security security update(s) available"
