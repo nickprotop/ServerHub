@@ -1,15 +1,15 @@
 // Copyright (c) Nikolaos Protopapas. All rights reserved.
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
+using ServerHub.Models;
+using ServerHub.Services;
+using ServerHub.UI;
+using ServerHub.Utils;
 using SharpConsoleUI;
 using SharpConsoleUI.Builders;
 using SharpConsoleUI.Controls;
 using SharpConsoleUI.Drivers;
 using Spectre.Console;
-using ServerHub.Models;
-using ServerHub.Services;
-using ServerHub.UI;
-using ServerHub.Utils;
 
 namespace ServerHub;
 
@@ -56,7 +56,9 @@ class Program
             {
                 if (!Directory.Exists(options.WidgetsPath))
                 {
-                    Console.Error.WriteLine($"Error: Widgets path does not exist: {options.WidgetsPath}");
+                    Console.Error.WriteLine(
+                        $"Error: Widgets path does not exist: {options.WidgetsPath}"
+                    );
                     return 1;
                 }
                 WidgetPaths.SetCustomWidgetsPath(options.WidgetsPath);
@@ -107,7 +109,7 @@ class Program
                 TopStatus = "ServerHub - Server Monitoring Dashboard",
                 ShowTaskBar = false,
                 ShowBottomStatus = true,
-                BottomStatus = "Press Ctrl+Q to quit | F5 to refresh | ? for help"
+                BottomStatus = "Press Ctrl+Q to quit | F5 to refresh | ? for help",
             };
 
             // Setup graceful shutdown
@@ -180,10 +182,11 @@ class Program
         var rowGroups = placements.GroupBy(p => p.Row).OrderBy(g => g.Key);
 
         // Alternating background colors for widgets
-        var widgetColors = new[] {
+        var widgetColors = new[]
+        {
             Spectre.Console.Color.Grey15,
             Spectre.Console.Color.Grey19,
-            Spectre.Console.Color.Grey23
+            Spectre.Console.Color.Grey23,
         };
         int widgetColorIndex = 0;
 
@@ -194,7 +197,8 @@ class Program
             // Add vertical spacing between rows (not before first row)
             if (!firstRow)
             {
-                var spacer = Controls.Markup("")
+                var spacer = Controls
+                    .Markup("")
                     .WithBackgroundColor(Spectre.Console.Color.Grey11)
                     .WithMargin(0, 0, 0, 0)
                     .Build();
@@ -205,7 +209,8 @@ class Program
             var rowPlacements = rowGroup.OrderBy(p => p.Column).ToList();
 
             // Create horizontal grid for this row
-            var rowGrid = Controls.HorizontalGrid()
+            var rowGrid = Controls
+                .HorizontalGrid()
                 .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Stretch)
                 .WithVerticalAlignment(SharpConsoleUI.Layout.VerticalAlignment.Top);
 
@@ -224,8 +229,9 @@ class Program
 
                 // Calculate widget width based on column span
                 // width = (baseColumnWidth * spanCount) + (spacing * (spanCount - 1))
-                int widgetWidth = (baseColumnWidth * placement.ColumnSpan) +
-                                  (spacingBetweenWidgets * Math.Max(0, placement.ColumnSpan - 1));
+                int widgetWidth =
+                    (baseColumnWidth * placement.ColumnSpan)
+                    + (spacingBetweenWidgets * Math.Max(0, placement.ColumnSpan - 1));
 
                 // Initial render with loading spinner
                 var widgetData = CreateLoadingWidget(placement.WidgetId);
@@ -279,7 +285,12 @@ class Program
 
     private static void RebuildLayout()
     {
-        if (_mainWindow == null || _windowSystem == null || _config == null || _layoutEngine == null)
+        if (
+            _mainWindow == null
+            || _windowSystem == null
+            || _config == null
+            || _layoutEngine == null
+        )
             return;
 
         try
@@ -307,10 +318,11 @@ class Program
             var rowGroups = placements.GroupBy(p => p.Row).OrderBy(g => g.Key);
 
             // Alternating background colors for widgets
-            var widgetColors = new[] {
+            var widgetColors = new[]
+            {
                 Spectre.Console.Color.Grey15,
                 Spectre.Console.Color.Grey19,
-                Spectre.Console.Color.Grey23
+                Spectre.Console.Color.Grey23,
             };
             int widgetColorIndex = 0;
 
@@ -321,7 +333,8 @@ class Program
                 // Add vertical spacing between rows (not before first row)
                 if (!firstRow)
                 {
-                    var spacer = Controls.Markup("")
+                    var spacer = Controls
+                        .Markup("")
                         .WithBackgroundColor(Spectre.Console.Color.Grey11)
                         .WithMargin(0, 0, 0, 0)
                         .Build();
@@ -332,7 +345,8 @@ class Program
                 var rowPlacements = rowGroup.OrderBy(p => p.Column).ToList();
 
                 // Create horizontal grid for this row
-                var rowGrid = Controls.HorizontalGrid()
+                var rowGrid = Controls
+                    .HorizontalGrid()
                     .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Stretch)
                     .WithVerticalAlignment(SharpConsoleUI.Layout.VerticalAlignment.Top);
 
@@ -351,11 +365,15 @@ class Program
 
                     // Calculate widget width based on column span
                     // width = (baseColumnWidth * spanCount) + (spacing * (spanCount - 1))
-                    int widgetWidth = (baseColumnWidth * placement.ColumnSpan) +
-                                      (spacingBetweenWidgets * Math.Max(0, placement.ColumnSpan - 1));
+                    int widgetWidth =
+                        (baseColumnWidth * placement.ColumnSpan)
+                        + (spacingBetweenWidgets * Math.Max(0, placement.ColumnSpan - 1));
 
                     // Get cached widget data or use loading spinner
-                    var widgetData = _widgetDataCache.TryGetValue(placement.WidgetId, out var cachedData)
+                    var widgetData = _widgetDataCache.TryGetValue(
+                        placement.WidgetId,
+                        out var cachedData
+                    )
                         ? cachedData
                         : CreateLoadingWidget(placement.WidgetId);
 
@@ -392,7 +410,8 @@ class Program
             }
 
             // Update status
-            _windowSystem.BottomStatus = $"Layout rebuilt for {terminalWidth} cols | Ctrl+Q to quit | F5 to refresh | ? for help";
+            _windowSystem.BottomStatus =
+                $"Layout rebuilt for {terminalWidth} cols | Ctrl+Q to quit | F5 to refresh | ? for help";
         }
         catch (Exception ex)
         {
@@ -415,7 +434,12 @@ class Program
                 _spinnerFrame++;
 
                 // Update widgets that are currently refreshing to animate spinner
-                foreach (var widgetId in _isRefreshing.Where(kvp => kvp.Value).Select(kvp => kvp.Key).ToList())
+                foreach (
+                    var widgetId in _isRefreshing
+                        .Where(kvp => kvp.Value)
+                        .Select(kvp => kvp.Key)
+                        .ToList()
+                )
                 {
                     if (_widgetDataCache.TryGetValue(widgetId, out var widgetData))
                     {
@@ -444,9 +468,12 @@ class Program
             Rows = new List<WidgetRow>
             {
                 new() { Content = "" },
-                new() { Content = $"          [cyan1]Loading... {_spinnerFrames[_spinnerFrame % 4]}[/]" },
-                new() { Content = "" }
-            }
+                new()
+                {
+                    Content = $"          [cyan1]Loading... {_spinnerFrames[_spinnerFrame % 4]}[/]",
+                },
+                new() { Content = "" },
+            },
         };
     }
 
@@ -487,23 +514,28 @@ class Program
             .WithBounds(dialogX, dialogY, dialogWidth, dialogHeight)
             .Borderless()
             .WithColors(Color.Grey11, Color.Grey93)
-            .OnKeyPressed((sender, e) =>
-            {
-                // Close on ESC, Enter, or ? key
-                if (e.KeyInfo.Key == ConsoleKey.Escape ||
-                    e.KeyInfo.Key == ConsoleKey.Enter ||
-                    e.KeyInfo.KeyChar == '?' ||
-                    e.KeyInfo.Key == ConsoleKey.F1)
+            .OnKeyPressed(
+                (sender, e) =>
                 {
-                    _windowSystem.CloseWindow((Window)sender!);
-                    e.Handled = true;
+                    // Close on ESC, Enter, or ? key
+                    if (
+                        e.KeyInfo.Key == ConsoleKey.Escape
+                        || e.KeyInfo.Key == ConsoleKey.Enter
+                        || e.KeyInfo.KeyChar == '?'
+                        || e.KeyInfo.Key == ConsoleKey.F1
+                    )
+                    {
+                        _windowSystem.CloseWindow((Window)sender!);
+                        e.Handled = true;
+                    }
                 }
-            })
+            )
             .Build();
 
-        var helpContent = @"
+        var helpContent =
+            @"
   [bold cyan1]╔══════════════════════════════════════════════════════════════════╗[/]
-  [bold cyan1]║[/]  [bold yellow]ServerHub - Server Monitoring Dashboard[/]                    [bold cyan1]║[/]
+  [bold cyan1]║[/]  [bold yellow]ServerHub - Server Monitoring Dashboard[/]                         [bold cyan1]║[/]
   [bold cyan1]╚══════════════════════════════════════════════════════════════════╝[/]
 
   [bold white]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/]
@@ -527,7 +559,8 @@ class Program
   [grey]Press ESC, Enter, ?, or F1 to close[/]
 ";
 
-        var helpBuilder = Controls.Markup()
+        var helpBuilder = Controls
+            .Markup()
             .WithBackgroundColor(Color.Grey11)
             .WithMargin(2, 1, 2, 1);
 
@@ -645,13 +678,17 @@ class Program
                     Timestamp = DateTime.Now,
                     Rows = new List<WidgetRow>
                     {
-                        new() { Content = $"[red]Error:[/] Widget script not found", Status = new() { State = StatusState.Error } },
+                        new()
+                        {
+                            Content = $"[red]Error:[/] Widget script not found",
+                            Status = new() { State = StatusState.Error },
+                        },
                         new() { Content = $"[grey70]Path: {widgetConfig.Path}[/]" },
                         new() { Content = "" },
                         new() { Content = $"[grey70]{lastUpdate}[/]" },
                         new() { Content = $"[grey70]Next retry: {widgetConfig.Refresh}s[/]" },
-                        new() { Content = $"[grey70]Consecutive errors: {errorCount + 1}[/]" }
-                    }
+                        new() { Content = $"[grey70]Consecutive errors: {errorCount + 1}[/]" },
+                    },
                 };
 
                 _widgetDataCache[widgetId] = errorData;
@@ -695,14 +732,18 @@ class Program
                     Timestamp = DateTime.Now,
                     Rows = new List<WidgetRow>
                     {
-                        new() { Content = $"[red]Widget Error[/]", Status = new() { State = StatusState.Error } },
+                        new()
+                        {
+                            Content = $"[red]Widget Error[/]",
+                            Status = new() { State = StatusState.Error },
+                        },
                         new() { Content = "" },
                         new() { Content = $"[grey70]{result.ErrorMessage ?? "Unknown error"}[/]" },
                         new() { Content = "" },
                         new() { Content = $"[grey70]{lastUpdate}[/]" },
                         new() { Content = $"[grey70]Next retry: {widgetConfig.Refresh}s[/]" },
-                        new() { Content = $"[grey70]Consecutive errors: {errorCount + 1}[/]" }
-                    }
+                        new() { Content = $"[grey70]Consecutive errors: {errorCount + 1}[/]" },
+                    },
                 };
             }
 
@@ -730,14 +771,18 @@ class Program
                 Timestamp = DateTime.Now,
                 Rows = new List<WidgetRow>
                 {
-                    new() { Content = $"[red]Exception[/]", Status = new() { State = StatusState.Error } },
+                    new()
+                    {
+                        Content = $"[red]Exception[/]",
+                        Status = new() { State = StatusState.Error },
+                    },
                     new() { Content = "" },
                     new() { Content = $"[grey70]{ex.Message}[/]" },
                     new() { Content = "" },
                     new() { Content = $"[grey70]{lastUpdate}[/]" },
                     new() { Content = $"[grey70]Next retry: {widgetConfig.Refresh}s[/]" },
-                    new() { Content = $"[grey70]Consecutive errors: {errorCount + 1}[/]" }
-                }
+                    new() { Content = $"[grey70]Consecutive errors: {errorCount + 1}[/]" },
+                },
             };
 
             _widgetDataCache[widgetId] = errorData;
@@ -764,7 +809,7 @@ class Program
                 Title = $"{widgetData.Title} {_spinnerFrames[_spinnerFrame % 4]}",
                 Rows = widgetData.Rows,
                 Error = widgetData.Error,
-                Timestamp = widgetData.Timestamp
+                Timestamp = widgetData.Timestamp,
             };
         }
 
@@ -821,9 +866,13 @@ class Program
             foreach (var line in memInfo)
             {
                 if (line.StartsWith("MemTotal:"))
-                    memTotal = long.Parse(line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)[1]);
+                    memTotal = long.Parse(
+                        line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)[1]
+                    );
                 else if (line.StartsWith("MemAvailable:"))
-                    memAvailable = long.Parse(line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)[1]);
+                    memAvailable = long.Parse(
+                        line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)[1]
+                    );
             }
 
             if (memTotal == 0)
@@ -860,13 +909,15 @@ class Program
     private static int GetColumnCountFromWidth(int terminalWidth)
     {
         // Use config breakpoints if available, otherwise use defaults
-        var breakpoints = _config?.Breakpoints ?? new BreakpointConfig
-        {
-            Single = 0,
-            Double = 100,
-            Triple = 160,
-            Quad = 220
-        };
+        var breakpoints =
+            _config?.Breakpoints
+            ?? new BreakpointConfig
+            {
+                Single = 0,
+                Double = 100,
+                Triple = 160,
+                Quad = 220,
+            };
 
         if (terminalWidth < breakpoints.Double)
             return 1;
@@ -927,7 +978,10 @@ class Program
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var customWidgetsPath = Path.Combine(home, ".config", "serverhub", "widgets");
-        var configPath = _config != null ? ConfigManager.GetDefaultConfigPath() : Path.Combine(home, ".config", "serverhub", "config.yaml");
+        var configPath =
+            _config != null
+                ? ConfigManager.GetDefaultConfigPath()
+                : Path.Combine(home, ".config", "serverhub", "config.yaml");
 
         if (!Directory.Exists(customWidgetsPath))
         {
@@ -953,11 +1007,14 @@ class Program
                     }
                 }
             }
-            catch { /* Ignore config load errors */ }
+            catch
+            { /* Ignore config load errors */
+            }
         }
 
         // Find all executables in custom widgets directory
-        var files = Directory.GetFiles(customWidgetsPath)
+        var files = Directory
+            .GetFiles(customWidgetsPath)
             .Where(f => IsExecutable(f) && !configuredPaths.Contains(Path.GetFullPath(f)))
             .ToList();
 
@@ -991,7 +1048,7 @@ class Program
                 var lines = File.ReadLines(file).Take(50).ToArray();
                 for (int i = 0; i < lines.Length; i++)
                 {
-                    Console.WriteLine($"    {i + 1,3}  {lines[i]}");
+                    Console.WriteLine($"    {i + 1, 3}  {lines[i]}");
                 }
                 if (File.ReadLines(file).Count() > 50)
                     Console.WriteLine("    ... (truncated)");
@@ -1071,12 +1128,12 @@ class Program
             if (resolved != null && File.Exists(resolved))
             {
                 var checksum = ScriptValidator.CalculateChecksum(resolved);
-                Console.WriteLine($"{id,-15} {checksum}");
+                Console.WriteLine($"{id, -15} {checksum}");
                 Console.WriteLine($"                {resolved}");
             }
             else
             {
-                Console.WriteLine($"{id,-15} [NOT FOUND]");
+                Console.WriteLine($"{id, -15} [NOT FOUND]");
             }
         }
 
@@ -1103,7 +1160,10 @@ class Program
 
             return true;
         }
-        catch { return false; }
+        catch
+        {
+            return false;
+        }
 #endif
     }
 
@@ -1121,7 +1181,10 @@ class Program
             var read = fs.Read(buffer, 0, buffer.Length);
             return !buffer.Take(read).Contains((byte)0);
         }
-        catch { return false; }
+        catch
+        {
+            return false;
+        }
     }
 
     private static void ShowHelp()
@@ -1135,17 +1198,29 @@ class Program
         Console.WriteLine("  -h, --help                       Show this help message");
         Console.WriteLine("  -v, --version                    Show version information");
         Console.WriteLine("  --widgets-path <path>            Load widgets from custom directory");
-        Console.WriteLine("                                   Searches this path first, before default paths");
+        Console.WriteLine(
+            "                                   Searches this path first, before default paths"
+        );
         Console.WriteLine("  --discover                       Find and add new custom widgets");
-        Console.WriteLine("  --compute-checksums              Print checksums for configured widgets");
+        Console.WriteLine(
+            "  --compute-checksums              Print checksums for configured widgets"
+        );
         Console.WriteLine();
         Console.WriteLine("Examples:");
-        Console.WriteLine("  serverhub                                    Use default config (~/.config/serverhub/config.yaml)");
+        Console.WriteLine(
+            "  serverhub                                    Use default config (~/.config/serverhub/config.yaml)"
+        );
         Console.WriteLine("  serverhub myconfig.yaml                      Use custom config file");
-        Console.WriteLine("  serverhub --widgets-path ./dev-widgets       Load widgets from ./dev-widgets");
+        Console.WriteLine(
+            "  serverhub --widgets-path ./dev-widgets       Load widgets from ./dev-widgets"
+        );
         Console.WriteLine("  serverhub --widgets-path ~/widgets myconf.yaml");
-        Console.WriteLine("  serverhub --discover                         Discover new widgets in ~/.config/serverhub/widgets/");
-        Console.WriteLine("  serverhub --compute-checksums                Show checksums for all configured widgets");
+        Console.WriteLine(
+            "  serverhub --discover                         Discover new widgets in ~/.config/serverhub/widgets/"
+        );
+        Console.WriteLine(
+            "  serverhub --compute-checksums                Show checksums for all configured widgets"
+        );
         Console.WriteLine();
         Console.WriteLine("Widget Search Paths (in priority order):");
         Console.WriteLine("  1. Custom path (if --widgets-path specified)");
