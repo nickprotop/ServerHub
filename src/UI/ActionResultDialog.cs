@@ -76,8 +76,9 @@ public static class ActionResultDialog
             .WithMargin(1, 0, 1, 0)
             .Build());
 
-        // Output section
-        if (result.HasOutput || !result.IsSuccess)
+        // Combined Output section - shows both stdout and stderr
+        // Always show if there's any output OR if command failed
+        if (result.HasOutput || result.HasErrors || !result.IsSuccess)
         {
             modal.AddControl(Controls.Markup()
                 .AddLine("")
@@ -86,7 +87,42 @@ public static class ActionResultDialog
                 .WithMargin(1, 0, 1, 0)
                 .Build());
 
-            var outputText = result.HasOutput ? result.Stdout : "[grey70](no output)[/]";
+            // Build combined output text
+            var outputLines = new List<string>();
+
+            // Add stdout if present
+            if (result.HasOutput)
+            {
+                outputLines.Add(result.Stdout);
+            }
+
+            // Add stderr if present (with clear separation and red color)
+            if (result.HasErrors)
+            {
+                if (result.HasOutput)
+                {
+                    outputLines.Add(""); // Empty line separator
+                    outputLines.Add("[red bold]━━━ Errors ━━━[/]");
+                }
+                outputLines.Add($"[red]{result.Stderr}[/]");
+            }
+
+            // If neither stdout nor stderr, show helpful message
+            if (outputLines.Count == 0)
+            {
+                outputLines.Add($"[grey70](command failed with no output, exit code: {result.ExitCode})[/]");
+            }
+
+            // Build markup control with all output lines
+            var markupBuilder = Controls.Markup();
+            foreach (var line in outputLines)
+            {
+                markupBuilder.AddLine(line);
+            }
+            var outputMarkup = markupBuilder
+                .WithMargin(1, 0, 1, 0)
+                .Build();
+
             var outputPanel = Controls.ScrollablePanel()
                 .WithName("output_scroll")
                 .WithVerticalScroll(ScrollMode.Scroll)
@@ -95,40 +131,10 @@ public static class ActionResultDialog
                 .WithMouseWheel(true)
                 .WithBackgroundColor(Color.Grey19)
                 .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Stretch)
-                .AddControl(Controls.Markup()
-                    .AddLine(outputText)
-                    .WithMargin(1, 0, 1, 0)
-                    .Build())
+                .AddControl(outputMarkup)
                 .Build();
 
             modal.AddControl(outputPanel);
-        }
-
-        // Errors section (only if there are errors)
-        if (result.HasErrors)
-        {
-            modal.AddControl(Controls.Markup()
-                .AddLine("")
-                .AddLine("[red]Errors:[/]")
-                .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Left)
-                .WithMargin(1, 0, 1, 0)
-                .Build());
-
-            var errorPanel = Controls.ScrollablePanel()
-                .WithName("error_scroll")
-                .WithVerticalScroll(ScrollMode.Scroll)
-                .WithScrollbar(true)
-                .WithScrollbarPosition(ScrollbarPosition.Right)
-                .WithMouseWheel(true)
-                .WithBackgroundColor(Color.Grey19)
-                .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Stretch)
-                .AddControl(Controls.Markup()
-                    .AddLine($"[red]{result.Stderr}[/]")
-                    .WithMargin(1, 0, 1, 0)
-                    .Build())
-                .Build();
-
-            modal.AddControl(errorPanel);
         }
 
         // Spacing before button
