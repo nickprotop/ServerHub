@@ -304,6 +304,7 @@ class Program
 
             bool firstWidget = true;
             var widgetBgColors = new List<Spectre.Console.Color>();
+            var widgetIdByColumnIndex = new List<string?>(); // Track which widget owns each column
 
             foreach (var placement in rowPlacements)
             {
@@ -312,6 +313,7 @@ class Program
                 {
                     rowGrid.Column(colBuilder => colBuilder.Width(spacingBetweenWidgets));
                     widgetBgColors.Add(Spectre.Console.Color.Grey11); // Spacer color
+                    widgetIdByColumnIndex.Add(null); // Spacer column has no widget
                 }
                 firstWidget = false;
 
@@ -332,12 +334,14 @@ class Program
                 var bgColor = widgetColors[widgetColorIndex % widgetColors.Length];
                 widgetColorIndex++;
                 widgetBgColors.Add(bgColor);
+                widgetIdByColumnIndex.Add(placement.WidgetId); // Track widget for this column
 
                 var widgetPanel = _renderer.CreateWidgetPanel(
                     placement.WidgetId,
                     widgetData,
                     placement.IsPinned,
-                    bgColor
+                    bgColor,
+                    widgetId => _focusManager?.FocusWidget(widgetId)
                 );
 
                 // Add widget column with explicit width
@@ -351,10 +355,20 @@ class Program
             // Build and add row grid
             var builtRowGrid = rowGrid.Build();
 
-            // Set background colors for columns
+            // Set background colors for columns and wire up click events
             for (int i = 0; i < builtRowGrid.Columns.Count && i < widgetBgColors.Count; i++)
             {
                 builtRowGrid.Columns[i].BackgroundColor = widgetBgColors[i];
+
+                // Wire up click event for widget columns (skip spacer columns)
+                if (i < widgetIdByColumnIndex.Count && widgetIdByColumnIndex[i] != null)
+                {
+                    var widgetId = widgetIdByColumnIndex[i]!;
+                    builtRowGrid.Columns[i].MouseClick += (sender, e) =>
+                    {
+                        _focusManager?.FocusWidget(widgetId);
+                    };
+                }
             }
 
             _mainWindow.AddControl(builtRowGrid);

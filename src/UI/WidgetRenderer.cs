@@ -21,8 +21,9 @@ public class WidgetRenderer
     /// <param name="widgetData">Widget data to render</param>
     /// <param name="isPinned">Whether this is a pinned widget (compact tile)</param>
     /// <param name="backgroundColor">Background color for the widget</param>
+    /// <param name="onClickCallback">Optional callback when widget is clicked</param>
     /// <returns>Control to display the widget</returns>
-    public IWindowControl CreateWidgetPanel(string widgetId, WidgetData widgetData, bool isPinned, Color? backgroundColor = null)
+    public IWindowControl CreateWidgetPanel(string widgetId, WidgetData widgetData, bool isPinned, Color? backgroundColor = null, Action<string>? onClickCallback = null)
     {
         var lines = BuildWidgetContent(widgetData, isPinned);
 
@@ -38,7 +39,15 @@ public class WidgetRenderer
             builder.AddLine(line);
         }
 
-        return builder.Build();
+        var markupControl = builder.Build();
+
+        // Wire up click callback if provided
+        if (onClickCallback != null && markupControl is SharpConsoleUI.Controls.IMouseAwareControl mouseAware)
+        {
+            mouseAware.MouseClick += (sender, e) => onClickCallback(widgetId);
+        }
+
+        return markupControl;
     }
 
     /// <summary>
