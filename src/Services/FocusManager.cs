@@ -4,7 +4,6 @@
 using Spectre.Console;
 using SharpConsoleUI;
 using SharpConsoleUI.Controls;
-using ServerHub.Models;
 
 namespace ServerHub.Services;
 
@@ -30,7 +29,7 @@ public class FocusManager
     private Dictionary<string, Color> _originalBackgroundColors = new();
 
     // Focus color configuration
-    private readonly Color _focusedBackgroundColor = Color.DarkBlue;
+    private readonly Color _focusedBackgroundColor = Color.Grey30;
     private readonly Color[] _unfocusedColors = {
         Color.Grey15, Color.Grey19, Color.Grey23
     };
@@ -56,6 +55,8 @@ public class FocusManager
         {
             _focusedIndex = -1;
         }
+
+        // DEBUG logging removed - focus system operational
     }
 
     /// <summary>
@@ -168,19 +169,39 @@ public class FocusManager
         var control = _mainWindow?.FindControl<IWindowControl>($"widget_{widgetId}");
         if (control == null) return;
 
-        // Get the actual MarkupControl (might be wrapped)
-        var markupControl = GetMarkupControl(control);
-        if (markupControl == null) return;
-
-        // Save original color on first focus
+        // Save original colors on first focus
         if (!_originalBackgroundColors.ContainsKey(widgetId))
         {
-            _originalBackgroundColors[widgetId] = markupControl.BackgroundColor ?? Color.Grey15;
+            // Save the MarkupControl's background color
+            if (control is MarkupControl markup)
+            {
+                _originalBackgroundColors[widgetId] = markup.BackgroundColor ?? Color.Grey15;
+            }
+            else
+            {
+                _originalBackgroundColors[widgetId] = Color.Grey15;
+            }
         }
 
-        // Apply focus color
-        markupControl.BackgroundColor = _focusedBackgroundColor;
-        markupControl.Invalidate(); // Trigger re-render
+        // Apply focus color to BOTH the control AND its container for consistent coloring
+
+        // 1. Set on the MarkupControl itself (for the markup content area)
+        if (control is MarkupControl markupControl)
+        {
+            markupControl.BackgroundColor = _focusedBackgroundColor;
+            markupControl.Invalidate();
+        }
+
+        // 2. Set on the container (HorizontalGrid column) for full height coverage
+        var container = control.Container;
+        if (container != null)
+        {
+            container.BackgroundColor = _focusedBackgroundColor;
+            container.Invalidate(true);
+        }
+
+        // Also try to scroll the focused widget into view
+        ScrollToWidget(control);
     }
 
     /// <summary>
@@ -191,14 +212,132 @@ public class FocusManager
         var control = _mainWindow?.FindControl<IWindowControl>($"widget_{widgetId}");
         if (control == null) return;
 
-        var markupControl = GetMarkupControl(control);
-        if (markupControl == null) return;
-
-        // Restore original color
+        // Restore original color to BOTH control and container
         if (_originalBackgroundColors.TryGetValue(widgetId, out var originalColor))
         {
-            markupControl.BackgroundColor = originalColor;
-            markupControl.Invalidate();
+            // 1. Restore on the MarkupControl itself
+            if (control is MarkupControl markupControl)
+            {
+                markupControl.BackgroundColor = originalColor;
+                markupControl.Invalidate();
+            }
+
+            // 2. Restore on the container (HorizontalGrid column)
+            var container = control.Container;
+            if (container != null)
+            {
+                container.BackgroundColor = originalColor;
+                container.Invalidate(true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Scroll the window to make the focused widget visible.
+    /// </summary>
+    private void ScrollToWidget(IWindowControl control)
+    {
+        if (_mainWindow == null) return;
+
+        try
+        {
+            // CRITICAL: Force layout update to get fresh widget positions
+            // Without this, we get stale cached bounds from before the previous scroll
+            _mainWindow.Invalidate(true);
+
+            // Allow the layout to update (process pending invalidations)
+            System.Threading.Thread.Sleep(1);
+
+            // Get control's position using the layout manager
+            var layoutManager = _mainWindow.GetType()
+                .GetField("_layoutManager", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                ?.GetValue(_mainWindow);
+
+            if (layoutManager == null) return;
+
+            var getOrCreateMethod = layoutManager.GetType().GetMethod("GetOrCreateControlBounds");
+            if (getOrCreateMethod == null) return;
+
+            var bounds = getOrCreateMethod.Invoke(layoutManager, new object[] { control });
+            if (bounds == null) return;
+
+            // Get the control's content bounds
+            var controlBoundsProperty = bounds.GetType().GetProperty("ControlContentBounds");
+            if (controlBoundsProperty == null) return;
+
+            var controlBounds = controlBoundsProperty.GetValue(bounds);
+            if (controlBounds == null) return;
+
+            // Extract Y position and height
+            var yProperty = controlBounds.GetType().GetProperty("Y");
+            var heightProperty = controlBounds.GetType().GetProperty("Height");
+            if (yProperty == null || heightProperty == null) return;
+
+            int contentTop = (int)(yProperty.GetValue(controlBounds) ?? 0);
+            int contentHeight = (int)(heightProperty.GetValue(controlBounds) ?? 0);
+            int contentBottom = contentTop + contentHeight;
+
+            // Get window dimensions
+            int windowHeight = _mainWindow.Height;
+            int currentScrollOffset = _mainWindow.ScrollOffset;
+
+            // Calculate visible region
+            // IMPORTANT: Control bounds Y values are RELATIVE to scrollOffset, not absolute!
+            // When scrollOffset=0, widget at absolute Y=50 has relative Y=50
+            // When scrollOffset=50, same widget has relative Y=0
+            // Visible region in relative coordinates is always [0, windowHeight-2]
+            int visibleTop = 0;
+            int visibleBottom = windowHeight - 2;  // -2 for window borders
+
+            // Scroll if widget is not fully visible
+            // Check if widget is cut off at top or bottom
+            bool topCutOff = contentTop < visibleTop;
+            bool bottomCutOff = contentBottom > visibleBottom;
+
+            if (topCutOff)
+            {
+                // Widget top is cut off - scroll up to align top with viewport top
+                int absoluteY = currentScrollOffset + contentTop;
+                int newOffset = Math.Max(0, absoluteY);
+                _mainWindow.ScrollOffset = newOffset;
+                _mainWindow.Invalidate(true);
+            }
+            else if (bottomCutOff)
+            {
+                // Widget bottom is cut off - scroll to show widget fully
+                int absoluteTopY = currentScrollOffset + contentTop;
+
+                // Prefer showing widget at top of viewport for consistency
+                int newOffset = absoluteTopY;
+
+                // Clamp to maxOffset to prevent scrolling past content end
+                int maxOffset = int.MaxValue;
+                var windowContentLayoutField = _mainWindow.GetType()
+                    .GetField("_windowContentLayout", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+                if (windowContentLayoutField != null)
+                {
+                    var windowContentLayout = windowContentLayoutField.GetValue(_mainWindow);
+                    if (windowContentLayout != null)
+                    {
+                        var maxScrollOffsetProperty = windowContentLayout.GetType().GetProperty("MaxScrollOffset");
+                        if (maxScrollOffsetProperty != null)
+                        {
+                            maxOffset = (int)(maxScrollOffsetProperty.GetValue(windowContentLayout) ?? 0);
+                            newOffset = Math.Min(newOffset, maxOffset);
+                        }
+                    }
+                }
+
+                _mainWindow.ScrollOffset = Math.Max(0, newOffset);
+                _mainWindow.Invalidate(true);
+            }
+
+            // Widget is already visible - no scroll needed
+        }
+        catch
+        {
+            // If reflection fails, widget may be off-screen but won't crash
         }
     }
 
