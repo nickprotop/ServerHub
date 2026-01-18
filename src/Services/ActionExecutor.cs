@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using ServerHub.Models;
 
 namespace ServerHub.Services;
@@ -12,22 +13,30 @@ namespace ServerHub.Services;
 public class ActionExecutor
 {
     private const int DefaultTimeoutSeconds = 60;
+    private const int GracePeriodSeconds = 5;
 
     /// <summary>
     /// Executes an action and captures output
     /// </summary>
     /// <param name="action">Action to execute</param>
-    /// <param name="cancellationToken">Cancellation token</param>
+    /// <param name="cancellationToken">Cancellation token for termination</param>
+    /// <param name="onProgressUpdate">Callback for progress updates (elapsed seconds)</param>
+    /// <param name="onGracefulTerminate">Callback when SIGTERM is sent (graceful shutdown)</param>
+    /// <param name="onForceKill">Callback when SIGKILL is sent (force kill)</param>
     /// <returns>Execution result with stdout, stderr, exit code, and duration</returns>
     public async Task<ActionResult> ExecuteAsync(
         WidgetAction action,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Action<int>? onProgressUpdate = null,
+        Action? onGracefulTerminate = null,
+        Action? onForceKill = null)
     {
         var stopwatch = Stopwatch.StartNew();
+        Process? process = null;
 
         try
         {
-            using var process = new Process();
+            process = new Process();
 
             // Cross-platform shell execution
             if (Environment.OSVersion.Platform == PlatformID.Win32NT)
@@ -46,48 +55,62 @@ public class ActionExecutor
             process.StartInfo.UseShellExecute = false;
             process.StartInfo.CreateNoWindow = true;
 
-            // Start and read output concurrently
+            // Start process
             process.Start();
 
-            var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-            var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
-            var processTask = process.WaitForExitAsync(cancellationToken);
-            var timeoutTask = Task.Delay(TimeSpan.FromSeconds(DefaultTimeoutSeconds), cancellationToken);
-
-            var completedTask = await Task.WhenAny(processTask, timeoutTask);
-
-            // Check for cancellation first
-            if (cancellationToken.IsCancellationRequested)
+            // Background timer for progress updates
+            var progressTimer = new System.Timers.Timer(1000); // 1 second interval
+            var elapsedSeconds = 0;
+            progressTimer.Elapsed += (s, e) =>
             {
-                try
+                elapsedSeconds++;
+                onProgressUpdate?.Invoke(elapsedSeconds);
+            };
+            progressTimer.Start();
+
+            // Start reading output concurrently
+            var outputTask = process.StandardOutput.ReadToEndAsync();
+            var errorTask = process.StandardError.ReadToEndAsync();
+
+            // Wait for process completion with timeout and cancellation support
+            var processExited = false;
+            while (!processExited && elapsedSeconds < DefaultTimeoutSeconds)
+            {
+                // Check if process has exited
+                if (process.HasExited)
                 {
-                    process.Kill(entireProcessTree: true);
+                    processExited = true;
+                    break;
                 }
-                catch
+
+                // Check for cancellation request
+                if (cancellationToken.IsCancellationRequested)
                 {
-                    // Ignore kill errors
+                    progressTimer.Stop();
+                    await TerminateProcessGracefully(process, onGracefulTerminate, onForceKill);
+                    stopwatch.Stop();
+
+                    return new ActionResult
+                    {
+                        ExitCode = -1,
+                        Stdout = "",
+                        Stderr = "Execution terminated by user",
+                        Duration = stopwatch.Elapsed
+                    };
                 }
-                stopwatch.Stop();
-                return new ActionResult
-                {
-                    ExitCode = -1,
-                    Stdout = "",
-                    Stderr = "Execution cancelled by user",
-                    Duration = stopwatch.Elapsed
-                };
+
+                // Wait a bit before checking again
+                await Task.Delay(100);
             }
 
-            if (completedTask == timeoutTask)
+            progressTimer.Stop();
+
+            // Timeout handling
+            if (!processExited)
             {
-                try
-                {
-                    process.Kill(entireProcessTree: true);
-                }
-                catch
-                {
-                    // Ignore kill errors
-                }
+                await TerminateProcessGracefully(process, onGracefulTerminate, onForceKill);
                 stopwatch.Stop();
+
                 return new ActionResult
                 {
                     ExitCode = -1,
@@ -97,6 +120,7 @@ public class ActionExecutor
                 };
             }
 
+            // Process completed normally
             var stdout = await outputTask;
             var stderr = await errorTask;
             stopwatch.Stop();
@@ -111,17 +135,34 @@ public class ActionExecutor
         }
         catch (OperationCanceledException)
         {
+            if (process != null && !process.HasExited)
+            {
+                await TerminateProcessGracefully(process, onGracefulTerminate, onForceKill);
+            }
+
             stopwatch.Stop();
             return new ActionResult
             {
                 ExitCode = -1,
                 Stdout = "",
-                Stderr = "Execution cancelled by user",
+                Stderr = "Execution terminated by user",
                 Duration = stopwatch.Elapsed
             };
         }
         catch (Exception ex)
         {
+            if (process != null && !process.HasExited)
+            {
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+                catch
+                {
+                    // Ignore kill errors
+                }
+            }
+
             stopwatch.Stop();
             return new ActionResult
             {
@@ -130,6 +171,72 @@ public class ActionExecutor
                 Stderr = $"Execution failed: {ex.Message}",
                 Duration = stopwatch.Elapsed
             };
+        }
+        finally
+        {
+            process?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Terminates a process gracefully (SIGTERM) with automatic escalation to force kill (SIGKILL)
+    /// </summary>
+    private async Task TerminateProcessGracefully(
+        Process process,
+        Action? onGracefulTerminate,
+        Action? onForceKill)
+    {
+        if (process.HasExited)
+            return;
+
+        try
+        {
+            // Step 1: Send SIGTERM (graceful shutdown)
+            onGracefulTerminate?.Invoke();
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
+                RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                // Linux/macOS: Kill without tree kills just the parent (SIGTERM)
+                process.Kill(entireProcessTree: false);
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                // Windows: Try to close gracefully first
+                process.CloseMainWindow();
+            }
+
+            // Step 2: Wait grace period (5 seconds)
+            var gracePeriodTask = Task.Delay(TimeSpan.FromSeconds(GracePeriodSeconds));
+            var processExitTask = Task.Run(async () =>
+            {
+                while (!process.HasExited)
+                {
+                    await Task.Delay(100);
+                }
+            });
+
+            var completedTask = await Task.WhenAny(gracePeriodTask, processExitTask);
+
+            // Step 3: If still running after grace period, force kill (SIGKILL)
+            if (!process.HasExited)
+            {
+                onForceKill?.Invoke();
+                process.Kill(entireProcessTree: true); // Force kill entire tree
+            }
+        }
+        catch
+        {
+            // If graceful termination fails, force kill immediately
+            try
+            {
+                onForceKill?.Invoke();
+                process.Kill(entireProcessTree: true);
+            }
+            catch
+            {
+                // Ignore errors during force kill
+            }
         }
     }
 }

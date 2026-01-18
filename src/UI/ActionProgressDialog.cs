@@ -20,17 +20,19 @@ public static class ActionProgressDialog
     /// <param name="action">Action being executed</param>
     /// <param name="windowSystem">Console window system</param>
     /// <param name="parentWindow">Parent window (typically the expansion dialog)</param>
-    /// <param name="onCancel">Callback when user cancels</param>
+    /// <param name="onTerminate">Callback when user terminates execution</param>
+    /// <param name="maxTimeout">Maximum execution timeout in seconds</param>
     /// <returns>The modal window instance</returns>
     public static Window Show(
         WidgetAction action,
         ConsoleWindowSystem windowSystem,
         Window? parentWindow = null,
-        Action? onCancel = null)
+        Action? onTerminate = null,
+        int maxTimeout = 60)
     {
-        // Calculate modal size - compact progress dialog
+        // Calculate modal size - slightly taller for timer and progress bar
         int modalWidth = Math.Min(80, Console.WindowWidth - 10);
-        int modalHeight = 12;
+        int modalHeight = 15;
 
         // Create borderless modal (AgentStudio style)
         var builder = new WindowBuilder(windowSystem)
@@ -75,6 +77,22 @@ public static class ActionProgressDialog
             .WithMargin(1, 0, 1, 0)
             .Build());
 
+        // Timer display
+        modal.AddControl(Controls.Markup()
+            .WithName("progress_timer")
+            .AddLine($"[grey70]Elapsed: [cyan1]0s[/] / {maxTimeout}s[/]")
+            .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Left)
+            .WithMargin(1, 0, 1, 0)
+            .Build());
+
+        // Progress bar (text-based)
+        modal.AddControl(Controls.Markup()
+            .WithName("progress_bar")
+            .AddLine("[grey23]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/]")
+            .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Left)
+            .WithMargin(1, 0, 1, 0)
+            .Build());
+
         // Command display
         modal.AddControl(Controls.Markup()
             .AddLine("[grey70]Command:[/]")
@@ -85,21 +103,27 @@ public static class ActionProgressDialog
         modal.AddControl(Controls.Markup()
             .AddLine($"[cyan1]{action.Command}[/]")
             .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Left)
-            .WithMargin(1, 0, 1, 1)
+            .WithMargin(1, 0, 1, 0)
             .Build());
 
-        // Cancel button
-        var cancelButton = Controls.Button(" Cancel ")
-            .WithName("cancel_button")
+        // Spacing before button
+        modal.AddControl(Controls.Markup()
+            .AddLine("")
+            .Build());
+
+        // Terminate button (NOT cancel - actually terminates the process)
+        var terminateButton = Controls.Button(" Terminate Action ")
+            .WithName("terminate_button")
             .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Center)
             .OnClick((s, e) =>
             {
-                onCancel?.Invoke();
-                modal.Close();
+                // Disable button to prevent multiple clicks
+                ((ButtonControl)s!).IsEnabled = false;
+                onTerminate?.Invoke();
             })
             .Build();
 
-        modal.AddControl(cancelButton);
+        modal.AddControl(terminateButton);
 
         // Footer separator
         modal.AddControl(Controls.RuleBuilder()
@@ -107,21 +131,26 @@ public static class ActionProgressDialog
             .StickyBottom()
             .Build());
 
-        // Footer instructions
+        // Footer instructions (non-closable - only terminate button works)
         modal.AddControl(Controls.Markup()
-            .AddLine("[grey70]Click Cancel or press Esc to abort execution[/]")
+            .AddLine("[grey70]Click Terminate or press Enter to abort execution[/]")
             .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Center)
             .WithMargin(0, 0, 0, 0)
             .StickyBottom()
             .Build());
 
-        // Keyboard shortcuts
+        // Keyboard shortcut - Enter to terminate (NO Esc - non-closable)
         modal.KeyPressed += (s, e) =>
         {
-            if (e.KeyInfo.Key == ConsoleKey.Escape)
+            if (e.KeyInfo.Key == ConsoleKey.Enter)
             {
-                onCancel?.Invoke();
-                modal.Close();
+                // Trigger terminate button click
+                var button = modal.FindControl<ButtonControl>("terminate_button");
+                if (button != null && button.IsEnabled)
+                {
+                    button.IsEnabled = false;
+                    onTerminate?.Invoke();
+                }
                 e.Handled = true;
             }
         };
@@ -129,7 +158,7 @@ public static class ActionProgressDialog
         // Show modal
         windowSystem.AddWindow(modal);
         windowSystem.SetActiveWindow(modal);
-        cancelButton.SetFocus(true, FocusReason.Programmatic);
+        terminateButton.SetFocus(true, FocusReason.Programmatic);
 
         return modal;
     }
@@ -142,11 +171,81 @@ public static class ActionProgressDialog
         var statusControl = modal.FindControl<MarkupControl>("progress_status");
         if (statusControl != null)
         {
-            var colorName = statusColor == Color.Green ? "green" : statusColor == Color.Red ? "red" : "cyan1";
+            var colorName = statusColor == Color.Green ? "green" :
+                           statusColor == Color.Red ? "red" :
+                           statusColor == Color.Yellow ? "yellow" : "cyan1";
             statusControl.SetContent(new List<string>
             {
                 $"[{colorName}]●[/] [grey70]{status}[/]"
             });
         }
+    }
+
+    /// <summary>
+    /// Updates the timer display
+    /// </summary>
+    public static void UpdateTimer(Window modal, int elapsedSeconds, int maxTimeout)
+    {
+        var timerControl = modal.FindControl<MarkupControl>("progress_timer");
+        if (timerControl != null)
+        {
+            var remaining = maxTimeout - elapsedSeconds;
+            var color = remaining <= 10 ? "red" : remaining <= 30 ? "yellow" : "cyan1";
+            timerControl.SetContent(new List<string>
+            {
+                $"[grey70]Elapsed: [{color}]{elapsedSeconds}s[/] / {maxTimeout}s[/]"
+            });
+        }
+    }
+
+    /// <summary>
+    /// Updates the progress bar value (text-based progress bar)
+    /// </summary>
+    public static void UpdateProgress(Window modal, int elapsedSeconds, int maxTimeout)
+    {
+        var progressBar = modal.FindControl<MarkupControl>("progress_bar");
+        if (progressBar != null)
+        {
+            // Calculate progress percentage
+            var percentage = (double)elapsedSeconds / maxTimeout;
+            var barWidth = 50; // Total bar width in characters
+            var filledWidth = (int)(barWidth * percentage);
+
+            // Build progress bar with filled and empty sections
+            var filled = new string('━', Math.Max(0, filledWidth));
+            var empty = new string('━', Math.Max(0, barWidth - filledWidth));
+
+            // Color based on time remaining
+            var remaining = maxTimeout - elapsedSeconds;
+            var color = remaining <= 10 ? "red" : remaining <= 30 ? "yellow" : "cyan1";
+
+            progressBar.SetContent(new List<string>
+            {
+                $"[{color}]{filled}[/][grey23]{empty}[/]"
+            });
+        }
+    }
+
+    /// <summary>
+    /// Shows terminating status (SIGTERM sent, waiting for graceful shutdown)
+    /// </summary>
+    public static void ShowTerminating(Window modal)
+    {
+        UpdateStatus(modal, "Terminating gracefully (SIGTERM)...", Color.Yellow);
+
+        // Disable terminate button
+        var button = modal.FindControl<ButtonControl>("terminate_button");
+        if (button != null)
+        {
+            button.IsEnabled = false;
+        }
+    }
+
+    /// <summary>
+    /// Shows force killing status (SIGKILL sent after grace period)
+    /// </summary>
+    public static void ShowForceKilling(Window modal)
+    {
+        UpdateStatus(modal, "Force killing (SIGKILL)...", Color.Red);
     }
 }

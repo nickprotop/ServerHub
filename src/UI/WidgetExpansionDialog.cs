@@ -362,25 +362,44 @@ public static class WidgetExpansionDialog
                 // Create cancellation token source
                 var cts = new CancellationTokenSource();
 
-                // Show progress dialog (child of expansion dialog)
+                // Show progress dialog (child of expansion dialog, non-closable)
                 var progressModal = ActionProgressDialog.Show(
                     action,
                     windowSystem,
                     parentModal,
-                    onCancel: () =>
+                    onTerminate: () =>
                     {
-                        // Cancel execution
+                        // Terminate execution (SIGTERM → SIGKILL)
                         cts.Cancel();
+                    },
+                    maxTimeout: 60);
+
+                // Execute the action with progress updates and termination callbacks
+                var executor = new Services.ActionExecutor();
+                var result = await executor.ExecuteAsync(
+                    action,
+                    cts.Token,
+                    onProgressUpdate: (elapsedSeconds) =>
+                    {
+                        // Update timer and progress bar every second
+                        ActionProgressDialog.UpdateTimer(progressModal, elapsedSeconds, 60);
+                        ActionProgressDialog.UpdateProgress(progressModal, elapsedSeconds, 60);
+                    },
+                    onGracefulTerminate: () =>
+                    {
+                        // Show terminating status (SIGTERM sent)
+                        ActionProgressDialog.ShowTerminating(progressModal);
+                    },
+                    onForceKill: () =>
+                    {
+                        // Show force killing status (SIGKILL sent)
+                        ActionProgressDialog.ShowForceKilling(progressModal);
                     });
 
-                // Execute the action with cancellation support
-                var executor = new Services.ActionExecutor();
-                var result = await executor.ExecuteAsync(action, cts.Token);
-
                 // Update final status
-                if (result.Stderr.Contains("cancelled", StringComparison.OrdinalIgnoreCase))
+                if (result.Stderr.Contains("terminated", StringComparison.OrdinalIgnoreCase))
                 {
-                    ActionProgressDialog.UpdateStatus(progressModal, "Cancelled", Color.Red);
+                    ActionProgressDialog.UpdateStatus(progressModal, "Terminated", Color.Red);
                     await Task.Delay(500); // Brief pause to show status
                 }
                 else if (result.IsSuccess)
@@ -397,8 +416,8 @@ public static class WidgetExpansionDialog
                 // Close progress dialog
                 progressModal.Close();
 
-                // Show result dialog (only if not cancelled)
-                if (!result.Stderr.Contains("cancelled", StringComparison.OrdinalIgnoreCase))
+                // Show result dialog (only if not terminated)
+                if (!result.Stderr.Contains("terminated", StringComparison.OrdinalIgnoreCase))
                 {
                     ActionResultDialog.Show(
                         action,
