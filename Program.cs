@@ -32,6 +32,9 @@ class Program
     private static int _spinnerFrame = 0;
     private static readonly Dictionary<string, bool> _isRefreshing = new();
     private static FocusManager? _focusManager;
+    private static readonly Dictionary<string, WidgetData> _fullWidgetData = new();
+    private static string? _openModalWidgetId = null;
+    private static Action<WidgetData>? _modalUpdateCallback = null;
 
     static async Task<int> Main(string[] args)
     {
@@ -336,13 +339,24 @@ class Program
                 widgetBgColors.Add(bgColor);
                 widgetIdByColumnIndex.Add(placement.WidgetId); // Track widget for this column
 
+                // Get max lines: widget-specific > global > default 20
+                var widgetConfig = _config?.Widgets.GetValueOrDefault(placement.WidgetId);
+                int maxLines = widgetConfig?.MaxLines ?? _config?.MaxLinesPerWidget ?? 20;
+                bool showIndicator = _config?.ShowTruncationIndicator ?? true;
+
                 var widgetPanel = _renderer.CreateWidgetPanel(
                     placement.WidgetId,
                     widgetData,
                     placement.IsPinned,
                     bgColor,
-                    widgetId => _focusManager?.FocusWidget(widgetId)
+                    widgetId => _focusManager?.FocusWidget(widgetId),
+                    widgetId => ShowWidgetDialog(widgetId),  // Double-click opens dialog
+                    maxLines,
+                    showIndicator
                 );
+
+                // Store full widget data for expansion dialog
+                _fullWidgetData[placement.WidgetId] = widgetData;
 
                 // Add widget column with explicit width
                 rowGrid.Column(colBuilder =>
@@ -360,13 +374,21 @@ class Program
             {
                 builtRowGrid.Columns[i].BackgroundColor = widgetBgColors[i];
 
-                // Wire up click event for widget columns (skip spacer columns)
+                // Wire up click and double-click events for widget columns (skip spacer columns)
                 if (i < widgetIdByColumnIndex.Count && widgetIdByColumnIndex[i] != null)
                 {
                     var widgetId = widgetIdByColumnIndex[i]!;
+
+                    // Single click: focus widget
                     builtRowGrid.Columns[i].MouseClick += (sender, e) =>
                     {
                         _focusManager?.FocusWidget(widgetId);
+                    };
+
+                    // Double-click: open expansion dialog
+                    builtRowGrid.Columns[i].MouseDoubleClick += (sender, e) =>
+                    {
+                        ShowWidgetDialog(widgetId);
                     };
                 }
             }
@@ -531,6 +553,19 @@ class Program
 
     private static void HandleKeyPress(object? sender, KeyPressedEventArgs e)
     {
+        // ===== PRIORITY 0: Widget Expansion =====
+        // Handle Enter key on focused widget to show expansion dialog
+        if (e.KeyInfo.Key == ConsoleKey.Enter)
+        {
+            string? focusedWidgetId = _focusManager?.GetFocusedWidgetId();
+            if (focusedWidgetId != null)
+            {
+                ShowWidgetDialog(focusedWidgetId);
+                e.Handled = true;
+                return;
+            }
+        }
+
         // ===== PRIORITY 1: Widget Focus Navigation =====
         // CRITICAL: Handle Tab BEFORE Window.HandleKeyPress() processes it
         if (e.KeyInfo.Key == ConsoleKey.Tab)
@@ -801,8 +836,51 @@ class Program
         var control = _mainWindow.FindControl<IWindowControl>($"widget_{widgetId}");
         if (control != null)
         {
-            _renderer.UpdateWidgetPanel(control, displayData);
+            // Get max lines: widget-specific > global > default 20
+            var widgetConfig = _config?.Widgets.GetValueOrDefault(widgetId);
+            int maxLines = widgetConfig?.MaxLines ?? _config?.MaxLinesPerWidget ?? 20;
+            bool showIndicator = _config?.ShowTruncationIndicator ?? true;
+
+            _renderer.UpdateWidgetPanel(control, displayData, maxLines, showIndicator);
+
+            // Update full widget data for expansion dialog (use original data, not spinner version)
+            _fullWidgetData[widgetId] = widgetData;
+
+            // If there's an open modal for this widget, update it too
+            if (_openModalWidgetId == widgetId && _modalUpdateCallback != null)
+            {
+                _modalUpdateCallback(widgetData);
+            }
         }
+    }
+
+    /// <summary>
+    /// Shows a modal dialog with the full widget content
+    /// </summary>
+    private static void ShowWidgetDialog(string widgetId)
+    {
+        if (!_fullWidgetData.TryGetValue(widgetId, out var widgetData))
+            return;
+
+        if (_windowSystem == null || _mainWindow == null || _renderer == null)
+            return;
+
+        // Set the modal tracking variables
+        _openModalWidgetId = widgetId;
+
+        WidgetExpansionDialog.Show(
+            widgetId,
+            widgetData,
+            _windowSystem,
+            _renderer,
+            _config,
+            onUpdate: (callback) => _modalUpdateCallback = callback,
+            onClose: () =>
+            {
+                _openModalWidgetId = null;
+                _modalUpdateCallback = null;
+            }
+        );
     }
 
     private static string FormatRelativeTime(DateTime dateTime)

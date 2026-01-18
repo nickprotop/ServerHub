@@ -32,6 +32,19 @@ public class ServerHubConfig
     public int DefaultRefresh { get; set; } = 5;
 
     /// <summary>
+    /// Global maximum lines per widget (default: 20)
+    /// Individual widgets can override with max_lines
+    /// </summary>
+    [YamlMember(Alias = "max_lines_per_widget")]
+    public int MaxLinesPerWidget { get; set; } = 20;
+
+    /// <summary>
+    /// Whether to show truncation indicator when content is clipped
+    /// </summary>
+    [YamlMember(Alias = "show_truncation_indicator")]
+    public bool ShowTruncationIndicator { get; set; } = true;
+
+    /// <summary>
     /// Terminal width breakpoints for responsive layout
     /// </summary>
     [YamlMember(Alias = "breakpoints")]
@@ -87,6 +100,18 @@ public class WidgetConfig
     /// </summary>
     [YamlMember(Alias = "max_height")]
     public int? MaxHeight { get; set; }
+
+    /// <summary>
+    /// Maximum lines for this specific widget (overrides global max_lines_per_widget)
+    /// </summary>
+    [YamlMember(Alias = "max_lines")]
+    public int? MaxLines { get; set; }
+
+    /// <summary>
+    /// Whether this widget can be expanded via Enter key or double-click
+    /// </summary>
+    [YamlMember(Alias = "expandable")]
+    public bool Expandable { get; set; } = true;
 
     /// <summary>
     /// Whether this widget should take the full row width

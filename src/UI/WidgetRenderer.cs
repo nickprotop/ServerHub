@@ -22,10 +22,13 @@ public class WidgetRenderer
     /// <param name="isPinned">Whether this is a pinned widget (compact tile)</param>
     /// <param name="backgroundColor">Background color for the widget</param>
     /// <param name="onClickCallback">Optional callback when widget is clicked</param>
+    /// <param name="onDoubleClickCallback">Optional callback when widget is double-clicked</param>
+    /// <param name="maxLines">Maximum lines to display (null = no limit)</param>
+    /// <param name="showTruncationIndicator">Whether to show indicator when truncated</param>
     /// <returns>Control to display the widget</returns>
-    public IWindowControl CreateWidgetPanel(string widgetId, WidgetData widgetData, bool isPinned, Color? backgroundColor = null, Action<string>? onClickCallback = null)
+    public IWindowControl CreateWidgetPanel(string widgetId, WidgetData widgetData, bool isPinned, Color? backgroundColor = null, Action<string>? onClickCallback = null, Action<string>? onDoubleClickCallback = null, int? maxLines = null, bool showTruncationIndicator = true)
     {
-        var lines = BuildWidgetContent(widgetData, isPinned);
+        var lines = BuildWidgetContent(widgetData, isPinned, maxLines, showTruncationIndicator);
 
         var bgColor = backgroundColor ?? Color.Grey15;
 
@@ -41,10 +44,18 @@ public class WidgetRenderer
 
         var markupControl = builder.Build();
 
-        // Wire up click callback if provided
-        if (onClickCallback != null && markupControl is SharpConsoleUI.Controls.IMouseAwareControl mouseAware)
+        // Wire up click and double-click callbacks if provided
+        if (markupControl is SharpConsoleUI.Controls.IMouseAwareControl mouseAware)
         {
-            mouseAware.MouseClick += (sender, e) => onClickCallback(widgetId);
+            if (onClickCallback != null)
+            {
+                mouseAware.MouseClick += (sender, e) => onClickCallback(widgetId);
+            }
+
+            if (onDoubleClickCallback != null)
+            {
+                mouseAware.MouseDoubleClick += (sender, e) => onDoubleClickCallback(widgetId);
+            }
         }
 
         return markupControl;
@@ -53,13 +64,13 @@ public class WidgetRenderer
     /// <summary>
     /// Builds the content lines for a widget
     /// </summary>
-    private List<string> BuildWidgetContent(WidgetData widgetData, bool isPinned)
+    private List<string> BuildWidgetContent(WidgetData widgetData, bool isPinned, int? maxLines = null, bool showTruncationIndicator = true)
     {
         var lines = new List<string>();
 
         if (isPinned)
         {
-            // Pinned widget: single line with title and first row
+            // Pinned widget: single line with title and first row (no truncation)
             var content = widgetData.Rows.Count > 0
                 ? $"[bold cyan1]{widgetData.Title}[/] {FormatRow(widgetData.Rows[0])}"
                 : $"[bold cyan1]{widgetData.Title}[/]";
@@ -83,9 +94,46 @@ public class WidgetRenderer
                 }
             }
 
-            // Add timestamp
+            // Apply truncation if maxLines specified
+            bool wasTruncated = false;
+            if (maxLines.HasValue)
+            {
+                // Split lines containing \n (from progress bars) into separate elements
+                var expandedLines = new List<string>();
+                foreach (var line in lines)
+                {
+                    if (line.Contains('\n'))
+                    {
+                        expandedLines.AddRange(line.Split('\n'));
+                    }
+                    else
+                    {
+                        expandedLines.Add(line);
+                    }
+                }
+
+                // Now check if we need to truncate based on actual line count
+                if (expandedLines.Count > maxLines.Value)
+                {
+                    wasTruncated = true;
+                    // Truncate to maxLines
+                    lines = expandedLines.Take(maxLines.Value).ToList();
+                }
+                else
+                {
+                    // No truncation needed, but use expanded lines for consistency
+                    lines = expandedLines;
+                }
+            }
+
+            // Always add blank + info line at the bottom
             lines.Add("");
-            lines.Add($"[grey70]Updated: {widgetData.Timestamp:HH:mm:ss}[/]");
+            var infoLine = $"[grey70]Updated: {widgetData.Timestamp:HH:mm:ss}[/]";
+            if (wasTruncated && showTruncationIndicator)
+            {
+                infoLine += "  [grey70]•[/]  [cyan1]⏎ Press Enter[/] [grey70]or[/] [cyan1]Double-Click[/] [grey70]to expand[/]";
+            }
+            lines.Add(infoLine);
         }
 
         return lines;
@@ -149,13 +197,13 @@ public class WidgetRenderer
     /// <summary>
     /// Updates an existing widget control with new data
     /// </summary>
-    public void UpdateWidgetPanel(IWindowControl control, WidgetData widgetData)
+    public void UpdateWidgetPanel(IWindowControl control, WidgetData widgetData, int? maxLines = null, bool showTruncationIndicator = true)
     {
         if (control is MarkupControl markup)
         {
             // Determine if pinned based on control name
             var isPinned = control.Name?.Contains("_pinned") ?? false;
-            var lines = BuildWidgetContent(widgetData, isPinned);
+            var lines = BuildWidgetContent(widgetData, isPinned, maxLines, showTruncationIndicator);
 
             markup.SetContent(lines);
         }

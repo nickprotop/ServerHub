@@ -3,6 +3,10 @@
 
 default_refresh: 5
 
+# Widget line limits (optional)
+max_lines_per_widget: 20        # Global default max lines per widget
+show_truncation_indicator: true # Show "Press Enter to expand..." when truncated
+
 widgets:
   # Critical widgets (priority 1 - always visible)
   alerts:
