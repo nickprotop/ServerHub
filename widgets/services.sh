@@ -86,5 +86,6 @@ echo "row: "
 echo "row: [grey70]Active: $active_count | Inactive: $inactive_count | Failed: $failed_count[/]"
 
 # Actions
-echo "action: Restart nginx:systemctl restart nginx"
-echo "action: Restart docker:systemctl restart docker"
+echo "action: [danger,refresh] Restart nginx:systemctl restart nginx"
+echo "action: [danger,refresh] Restart docker:systemctl restart docker"
+echo "action: View nginx logs:journalctl -u nginx -n 50 --no-pager"

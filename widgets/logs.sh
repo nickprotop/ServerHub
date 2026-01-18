@@ -68,4 +68,5 @@ if [ $kernel_msgs -gt 0 ]; then
 fi
 
 # Actions
-echo "action: View full log:journalctl -f"
+echo "action: View live log:journalctl -f -n 100"
+echo "action: [danger] Clear old logs:journalctl --vacuum-time=7d"

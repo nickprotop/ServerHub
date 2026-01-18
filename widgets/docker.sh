@@ -71,5 +71,15 @@ if [ $running -gt 0 ]; then
     done
 fi
 
-# Docker actions
-echo "action: Prune unused:docker system prune -f"
+# Docker actions (dynamic based on state)
+echo "action: Prune unused images:docker system prune -f"
+
+# Show different actions based on container state
+if [ $running -gt 0 ]; then
+    echo "action: [danger,refresh] Restart all containers:docker restart \$(docker ps -q)"
+    echo "action: [danger,refresh] Stop all containers:docker stop \$(docker ps -q)"
+else
+    echo "action: [refresh] Start all containers:docker start \$(docker ps -aq)"
+fi
+
+echo "action: [refresh] Pull latest images:docker-compose pull 2>/dev/null || echo 'docker-compose not available'"
