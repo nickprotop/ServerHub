@@ -129,6 +129,15 @@ public class WidgetRenderer
             // Always add blank + info line at the bottom
             lines.Add("");
             var infoLine = $"[grey70]Updated: {widgetData.Timestamp:HH:mm:ss}[/]";
+
+            // Show action count if available
+            if (widgetData.HasActions)
+            {
+                var actionCount = widgetData.Actions.Count;
+                var actionText = actionCount == 1 ? "action" : "actions";
+                infoLine += $"  [grey70]•[/]  [cyan1]{actionCount} {actionText}[/]";
+            }
+
             if (wasTruncated && showTruncationIndicator)
             {
                 infoLine += "  [grey70]•[/]  [cyan1]⏎ Press Enter[/] [grey70]or[/] [cyan1]Double-Click[/] [grey70]to expand[/]";

@@ -129,25 +129,42 @@ public class WidgetProtocolParser
 
     /// <summary>
     /// Parses an action definition
-    /// Format: Label:script-path arguments
+    /// Format: [flags] Label:command
+    /// Flags: danger, refresh (comma-separated)
+    /// Example: [danger,refresh] Restart all:docker restart $(docker ps -q)
     /// </summary>
     private WidgetAction? ParseAction(string content)
     {
-        var colonIndex = content.IndexOf(':');
+        var flags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var workingContent = content.Trim();
+
+        // Parse flags: [flag1,flag2]
+        var flagMatch = Regex.Match(workingContent, @"^\[([^\]]+)\]\s*");
+        if (flagMatch.Success)
+        {
+            var flagString = flagMatch.Groups[1].Value;
+            foreach (var flag in flagString.Split(','))
+            {
+                var trimmedFlag = flag.Trim();
+                if (!string.IsNullOrEmpty(trimmedFlag))
+                {
+                    flags.Add(trimmedFlag);
+                }
+            }
+            workingContent = workingContent.Substring(flagMatch.Length).Trim();
+        }
+
+        // Parse label:command
+        var colonIndex = workingContent.IndexOf(':');
         if (colonIndex < 0)
         {
             return null;
         }
 
-        var label = content.Substring(0, colonIndex).Trim();
-        var scriptPart = content.Substring(colonIndex + 1).Trim();
+        var label = workingContent.Substring(0, colonIndex).Trim();
+        var command = workingContent.Substring(colonIndex + 1).Trim();
 
-        // Split script path and arguments
-        var parts = scriptPart.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
-        var scriptPath = parts.Length > 0 ? parts[0] : "";
-        var arguments = parts.Length > 1 ? parts[1] : "";
-
-        if (string.IsNullOrEmpty(label) || string.IsNullOrEmpty(scriptPath))
+        if (string.IsNullOrEmpty(label) || string.IsNullOrEmpty(command))
         {
             return null;
         }
@@ -155,8 +172,8 @@ public class WidgetProtocolParser
         return new WidgetAction
         {
             Label = label,
-            ScriptPath = scriptPath,
-            Arguments = arguments
+            Command = command,
+            Flags = flags
         };
     }
 

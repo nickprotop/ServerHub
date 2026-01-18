@@ -42,4 +42,9 @@ public class WidgetData
     /// Whether this widget data represents an error state
     /// </summary>
     public bool HasError => !string.IsNullOrEmpty(Error);
+
+    /// <summary>
+    /// Whether this widget has any actions
+    /// </summary>
+    public bool HasActions => Actions.Count > 0;
 }

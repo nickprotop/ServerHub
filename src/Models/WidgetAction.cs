@@ -5,27 +5,32 @@ namespace ServerHub.Models;
 
 /// <summary>
 /// Represents an interactive action that a widget can expose
-/// Actions are triggered when a user selects a row and presses Enter
+/// Actions are shell commands that can be executed from the widget expansion dialog
 /// </summary>
 public class WidgetAction
 {
     /// <summary>
-    /// Display label for the action (shown in action menu)
+    /// Display label for the action (shown in action list)
     /// </summary>
     public string Label { get; set; } = "";
 
     /// <summary>
-    /// Path to the script that implements this action
+    /// Shell command to execute
     /// </summary>
-    public string ScriptPath { get; set; } = "";
+    public string Command { get; set; } = "";
 
     /// <summary>
-    /// Arguments to pass to the script
+    /// Action flags (danger, refresh, etc.)
     /// </summary>
-    public string Arguments { get; set; } = "";
+    public HashSet<string> Flags { get; set; } = new();
 
     /// <summary>
-    /// Whether this action should be validated for security
+    /// Whether this action is marked as dangerous
     /// </summary>
-    public bool RequiresValidation { get; set; } = true;
+    public bool IsDanger => Flags.Contains("danger", StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether to refresh widget after successful execution
+    /// </summary>
+    public bool RefreshAfterSuccess => Flags.Contains("refresh", StringComparer.OrdinalIgnoreCase);
 }

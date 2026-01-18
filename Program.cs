@@ -875,6 +875,15 @@ class Program
             _renderer,
             _config,
             onUpdate: (callback) => _modalUpdateCallback = callback,
+            onRefreshRequested: () =>
+            {
+                // Trigger widget refresh after action execution
+                var widgetConfig = _config?.Widgets.GetValueOrDefault(widgetId);
+                if (widgetConfig != null)
+                {
+                    _ = RefreshWidgetAsync(widgetId, widgetConfig);
+                }
+            },
             onClose: () =>
             {
                 _openModalWidgetId = null;

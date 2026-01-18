@@ -23,6 +23,7 @@ public static class WidgetExpansionDialog
     /// <param name="renderer">Widget renderer for creating content</param>
     /// <param name="config">Configuration for getting refresh interval</param>
     /// <param name="onUpdate">Callback to register the update function</param>
+    /// <param name="onRefreshRequested">Callback to request widget refresh</param>
     /// <param name="onClose">Callback when modal closes</param>
     public static void Show(
         string widgetId,
@@ -31,6 +32,7 @@ public static class WidgetExpansionDialog
         WidgetRenderer renderer,
         ServerHubConfig? config,
         Action<Action<WidgetData>>? onUpdate = null,
+        Action? onRefreshRequested = null,
         Action? onClose = null)
     {
         // Calculate modal size: 90% of screen with reasonable max constraints
@@ -54,10 +56,19 @@ public static class WidgetExpansionDialog
 
         // Header section (AgentStudio pattern)
         int refreshInterval = GetRefreshInterval(widgetId, config);
+        var headerLine2 = $"[grey50]Last updated: {widgetData.Timestamp:yyyy-MM-dd HH:mm:ss}  •  Refresh: {refreshInterval}s";
+        if (widgetData.HasActions)
+        {
+            var actionCount = widgetData.Actions.Count;
+            var actionText = actionCount == 1 ? "action" : "actions";
+            headerLine2 += $"  •  {actionCount} {actionText}";
+        }
+        headerLine2 += "[/]";
+
         modal.AddControl(Controls.Markup()
             .WithName("modal_header")
             .AddLine($"[cyan1 bold]{widgetData.Title}[/]")
-            .AddLine($"[grey50]Last updated: {widgetData.Timestamp:yyyy-MM-dd HH:mm:ss}  •  Refresh interval: {refreshInterval}s[/]")
+            .AddLine(headerLine2)
             .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Left)
             .WithMargin(1, 0, 1, 0)
             .Build());
@@ -78,7 +89,19 @@ public static class WidgetExpansionDialog
             showTruncationIndicator: false
         );
 
-        // Wrap the widget panel in a scrollable panel
+        // Create side-by-side layout: Content (left 65%) + Actions (right 35%)
+        var mainGrid = Controls.HorizontalGrid()
+            .WithVerticalAlignment(SharpConsoleUI.Layout.VerticalAlignment.Fill)
+            .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Stretch)
+            .Build();
+
+        // LEFT COLUMN - Content (65%)
+        var contentColumn = new ColumnContainer(mainGrid)
+        {
+            VerticalAlignment = SharpConsoleUI.Layout.VerticalAlignment.Fill
+        };
+
+        // Wrap widget panel in scrollable panel
         var scrollPanel = Controls.ScrollablePanel()
             .WithName("modal_scroll_panel")
             .WithVerticalScroll(ScrollMode.Scroll)
@@ -91,7 +114,89 @@ public static class WidgetExpansionDialog
             .AddControl(widgetPanel)
             .Build();
 
-        modal.AddControl(scrollPanel);
+        contentColumn.AddContent(scrollPanel);
+        // No width or flex set - fills remaining space
+        mainGrid.AddColumn(contentColumn);
+
+        // MIDDLE - Vertical separator
+        var separatorColumn = new ColumnContainer(mainGrid)
+        {
+            Width = 1,
+            VerticalAlignment = SharpConsoleUI.Layout.VerticalAlignment.Fill,
+            Visible = widgetData.HasActions
+        };
+        var actionsSeparator = new SeparatorControl
+        {
+            ForegroundColor = Color.Grey23,
+            VerticalAlignment = SharpConsoleUI.Layout.VerticalAlignment.Fill,
+            Visible = widgetData.HasActions
+        };
+        separatorColumn.AddContent(actionsSeparator);
+        mainGrid.AddColumn(separatorColumn);
+
+        // RIGHT COLUMN - Actions (fixed 40 width)
+        var actionsColumn = new ColumnContainer(mainGrid)
+        {
+            Width = 40,  // Fixed width
+            VerticalAlignment = SharpConsoleUI.Layout.VerticalAlignment.Fill,
+            Visible = widgetData.HasActions
+        };
+
+        // Actions header
+        var actionsHeader = Controls.Markup()
+            .WithName("actions_header")
+            .AddLine("[cyan1 bold]Actions[/]")
+            .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Left)
+            .WithMargin(1, 1, 1, 0)
+            .Build();
+        actionsHeader.BackgroundColor = Color.Grey19;
+        actionsHeader.ForegroundColor = Color.Grey93;
+        actionsColumn.AddContent(actionsHeader);
+
+        // Actions list
+        var actionsList = Controls.List()
+            .WithName("actions_list")
+            .WithTitle("")  // Remove default "List" title - we have markup header above
+            .SimpleMode()
+            .WithColors(Color.Grey19, Color.Grey93)
+            .WithFocusedColors(Color.Grey19, Color.Grey93)  // AgentStudio pattern
+            .WithHighlightColors(Color.Grey35, Color.White)  // Subtle gray highlight
+            .WithDoubleClickActivation(true)
+            .WithMargin(1, 0, 1, 0)
+            .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Stretch)  // Stretch horizontally
+            .WithVerticalAlignment(SharpConsoleUI.Layout.VerticalAlignment.Fill)
+            .Build();
+
+        // Populate initial actions
+        foreach (var action in widgetData.Actions)
+        {
+            var label = action.Label;
+            if (action.IsDanger)
+            {
+                // Pad with spaces and add warning symbol
+                var padding = new string(' ', Math.Max(0, 30 - action.Label.Length));
+                label = $"[yellow]{action.Label}[/]{padding}⚠";
+            }
+            var item = new ListItem(label) { Tag = action };
+            actionsList.AddItem(item);
+        }
+
+        // Handle action activation (Enter or double-click)
+        actionsList.ItemActivated += (s, item) =>
+        {
+            if (item?.Tag is WidgetAction selectedAction)
+            {
+                ExecuteAction(selectedAction, windowSystem, modal, onRefreshRequested);
+            }
+        };
+
+        actionsColumn.AddContent(actionsList);
+        actionsColumn.BackgroundColor = Color.Grey19;  // Subtle visual distinction
+        actionsColumn.ForegroundColor = Color.Grey93;
+        mainGrid.AddColumn(actionsColumn);
+
+        // Add main grid to modal
+        modal.AddControl(mainGrid);
 
         // Footer separator (sticky bottom)
         modal.AddControl(Controls.RuleBuilder()
@@ -100,8 +205,12 @@ public static class WidgetExpansionDialog
             .Build());
 
         // Footer with instructions (AgentStudio pattern)
+        var footerInstructions = widgetData.HasActions
+            ? "[grey70]↑↓/Click: Select  •  Enter/Dbl-click: Execute  •  Esc: Close[/]"
+            : "[grey70]Escape/Enter: Close  •  Arrows/Mouse Wheel: Scroll[/]";
+
         modal.AddControl(Controls.Markup()
-            .AddLine("[grey70]Escape/Enter: Close  •  Arrows/Mouse Wheel: Scroll[/]")
+            .AddLine(footerInstructions)
             .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Center)
             .WithMargin(0, 0, 0, 0)
             .StickyBottom()
@@ -110,10 +219,27 @@ public static class WidgetExpansionDialog
         // Handle keyboard shortcuts (AgentStudio pattern)
         modal.KeyPressed += (s, e) =>
         {
-            if (e.KeyInfo.Key == ConsoleKey.Escape || e.KeyInfo.Key == ConsoleKey.Enter)
+            if (e.KeyInfo.Key == ConsoleKey.Escape)
             {
                 modal.Close();
                 e.Handled = true;
+            }
+            // Only close on Enter if there are NO actions (content-only mode)
+            else if (e.KeyInfo.Key == ConsoleKey.Enter && !widgetData.HasActions)
+            {
+                modal.Close();
+                e.Handled = true;
+            }
+            // Quick action execution via number keys (1-9)
+            else if (widgetData.HasActions && e.KeyInfo.Key >= ConsoleKey.D1 && e.KeyInfo.Key <= ConsoleKey.D9)
+            {
+                var index = e.KeyInfo.Key - ConsoleKey.D1;
+                if (index < widgetData.Actions.Count)
+                {
+                    var selectedAction = widgetData.Actions[index];
+                    ExecuteAction(selectedAction, windowSystem, modal, onRefreshRequested);
+                    e.Handled = true;
+                }
             }
         };
 
@@ -125,15 +251,75 @@ public static class WidgetExpansionDialog
             // Update header with new timestamp
             if (headerControl != null)
             {
+                var updatedHeaderLine2 = $"[grey50]Last updated: {newData.Timestamp:yyyy-MM-dd HH:mm:ss}  •  Refresh: {refreshInterval}s";
+                if (newData.HasActions)
+                {
+                    var actionCount = newData.Actions.Count;
+                    var actionText = actionCount == 1 ? "action" : "actions";
+                    updatedHeaderLine2 += $"  •  {actionCount} {actionText}";
+                }
+                updatedHeaderLine2 += "[/]";
+
                 headerControl.SetContent(new List<string>
                 {
                     $"[cyan1 bold]{newData.Title}[/]",
-                    $"[grey50]Last updated: {newData.Timestamp:yyyy-MM-dd HH:mm:ss}  •  Refresh interval: {refreshInterval}s[/]"
+                    updatedHeaderLine2
                 });
             }
 
             // Update widget content (use captured reference to widgetPanel)
             renderer.UpdateWidgetPanel(widgetPanel, newData, maxLines: null, showTruncationIndicator: false);
+
+            // Update actions list only if actions changed (better UX - avoid flicker)
+            var actionsChanged = false;
+
+            // Quick check: count different
+            if (actionsList.Items.Count != newData.Actions.Count)
+            {
+                actionsChanged = true;
+            }
+            else
+            {
+                // Deep check: compare each action
+                for (int i = 0; i < newData.Actions.Count; i++)
+                {
+                    var currentAction = actionsList.Items[i].Tag as WidgetAction;
+                    var newAction = newData.Actions[i];
+
+                    if (currentAction == null ||
+                        currentAction.Label != newAction.Label ||
+                        currentAction.Command != newAction.Command ||
+                        currentAction.IsDanger != newAction.IsDanger)
+                    {
+                        actionsChanged = true;
+                        break;
+                    }
+                }
+            }
+
+            if (actionsChanged)
+            {
+                actionsList.ClearItems();
+                foreach (var action in newData.Actions)
+                {
+                    var label = action.Label;
+                    if (action.IsDanger)
+                    {
+                        var padding = new string(' ', Math.Max(0, 50 - action.Label.Length));
+                        label = $"[yellow]{action.Label}[/]{padding}⚠";
+                    }
+                    var item = new ListItem(label) { Tag = action };
+                    actionsList.AddItem(item);
+                }
+
+                // Update visibility of actions section
+                separatorColumn.Visible = newData.HasActions;
+                actionsSeparator.Visible = newData.HasActions;
+                actionsColumn.Visible = newData.HasActions;
+                actionsHeader.Visible = newData.HasActions;
+                actionsList.Visible = newData.HasActions;
+                // Content column automatically stretches to fill remaining space
+            }
         });
 
         // Handle modal close
@@ -155,5 +341,83 @@ public static class WidgetExpansionDialog
     {
         var widgetConfig = config?.Widgets.GetValueOrDefault(widgetId);
         return widgetConfig?.Refresh ?? config?.DefaultRefresh ?? 5;
+    }
+
+    /// <summary>
+    /// Executes a widget action with confirmation and result display
+    /// </summary>
+    private static async void ExecuteAction(
+        WidgetAction action,
+        ConsoleWindowSystem windowSystem,
+        Window parentModal,
+        Action? onRefreshRequested)
+    {
+        // Show confirmation dialog
+        ActionConfirmationDialog.Show(
+            action,
+            windowSystem,
+            parentModal,
+            onConfirm: async () =>
+            {
+                // Create cancellation token source
+                var cts = new CancellationTokenSource();
+
+                // Show progress dialog (child of expansion dialog)
+                var progressModal = ActionProgressDialog.Show(
+                    action,
+                    windowSystem,
+                    parentModal,
+                    onCancel: () =>
+                    {
+                        // Cancel execution
+                        cts.Cancel();
+                    });
+
+                // Execute the action with cancellation support
+                var executor = new Services.ActionExecutor();
+                var result = await executor.ExecuteAsync(action, cts.Token);
+
+                // Update final status
+                if (result.Stderr.Contains("cancelled", StringComparison.OrdinalIgnoreCase))
+                {
+                    ActionProgressDialog.UpdateStatus(progressModal, "Cancelled", Color.Red);
+                    await Task.Delay(500); // Brief pause to show status
+                }
+                else if (result.IsSuccess)
+                {
+                    ActionProgressDialog.UpdateStatus(progressModal, "Completed", Color.Green);
+                    await Task.Delay(300); // Brief pause to show status
+                }
+                else
+                {
+                    ActionProgressDialog.UpdateStatus(progressModal, "Failed", Color.Red);
+                    await Task.Delay(500); // Brief pause to show status
+                }
+
+                // Close progress dialog
+                progressModal.Close();
+
+                // Show result dialog (only if not cancelled)
+                if (!result.Stderr.Contains("cancelled", StringComparison.OrdinalIgnoreCase))
+                {
+                    ActionResultDialog.Show(
+                        action,
+                        result,
+                        windowSystem,
+                        parentModal,
+                        onClose: () =>
+                        {
+                            // If action succeeded and refresh flag is set, trigger widget refresh
+                            if (result.IsSuccess && action.RefreshAfterSuccess)
+                            {
+                                onRefreshRequested?.Invoke();
+                            }
+                        });
+                }
+            },
+            onCancel: () =>
+            {
+                // User cancelled, do nothing
+            });
     }
 }
