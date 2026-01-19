@@ -98,7 +98,7 @@ public static class ActionExecutionDialog
             .WithMargin(1, 0, 1, 0)
             .Build());
 
-        // Progress area - hidden in confirm state, shown in running state
+        // Status line - universal across all states
         modal.AddControl(Controls.Markup()
             .WithName("dialog_timer")
             .AddLine("")
@@ -106,10 +106,10 @@ public static class ActionExecutionDialog
             .WithMargin(1, 0, 1, 0)
             .Build());
 
-        var emptyBar = new string('\u2501', 50);
+        // Progress/status bar - shows hint in confirm, progress in running, result in finished
         modal.AddControl(Controls.Markup()
             .WithName("dialog_progress")
-            .AddLine("")
+            .AddLine("[grey50]Press Enter to execute[/]")
             .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Left)
             .WithMargin(1, 0, 1, 0)
             .Build());
@@ -124,6 +124,17 @@ public static class ActionExecutionDialog
             .Build();
         dangerWarning.Visible = action.IsDanger;
         modal.AddControl(dangerWarning);
+
+        // Sudo hint if applicable (shown in confirm state)
+        var sudoHint = Controls.Markup()
+            .WithName("dialog_sudo")
+            .AddLine("")
+            .AddLine(action.RequiresSudo ? "[grey70]! This action requires elevated privileges (sudo)[/]" : "")
+            .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Center)
+            .WithMargin(0, 0, 0, 0)
+            .Build();
+        sudoHint.Visible = action.RequiresSudo;
+        modal.AddControl(sudoHint);
 
         // Output section header
         modal.AddControl(Controls.Markup()
@@ -375,6 +386,13 @@ public static class ActionExecutionDialog
             danger.Visible = false;
         }
 
+        // Hide sudo hint
+        var sudo = modal.FindControl<MarkupControl>("dialog_sudo");
+        if (sudo != null)
+        {
+            sudo.Visible = false;
+        }
+
         // Update output placeholder
         var outputContent = modal.FindControl<MarkupControl>("dialog_output_content");
         if (outputContent != null)
@@ -511,27 +529,11 @@ public static class ActionExecutionDialog
     /// </summary>
     private static void TransitionToFinished(Window modal, ActionResult result)
     {
-        // Update header based on result
+        // Update header to show "Finished"
         var header = modal.FindControl<MarkupControl>("dialog_header");
         if (header != null)
         {
-            var duration = result.Duration.TotalSeconds;
-            string headerText;
-
-            if (result.Stderr.Contains("terminated", StringComparison.OrdinalIgnoreCase))
-            {
-                headerText = $"[yellow]\u2717[/] [bold]Terminated after {duration:F1}s[/]";
-            }
-            else if (result.IsSuccess)
-            {
-                headerText = $"[green]\u2713[/] [bold]Completed in {duration:F1}s[/]";
-            }
-            else
-            {
-                headerText = $"[red]\u2717[/] [bold]Failed after {duration:F1}s[/]";
-            }
-
-            header.SetContent(new List<string> { headerText });
+            header.SetContent(new List<string> { "[bold]Finished[/]" });
         }
 
         // Update status to show exit code
@@ -546,17 +548,33 @@ public static class ActionExecutionDialog
             });
         }
 
-        // Hide timer and progress bar
+        // Update timer and progress to show final status
         var timer = modal.FindControl<MarkupControl>("dialog_timer");
         if (timer != null)
         {
-            timer.Visible = false;
+            timer.SetContent(new List<string> { "" });
         }
 
         var progress = modal.FindControl<MarkupControl>("dialog_progress");
         if (progress != null)
         {
-            progress.Visible = false;
+            var duration = result.Duration.TotalSeconds;
+            string statusText;
+
+            if (result.Stderr.Contains("terminated", StringComparison.OrdinalIgnoreCase))
+            {
+                statusText = $"[yellow]\u2717 Terminated after {duration:F1}s[/]";
+            }
+            else if (result.IsSuccess)
+            {
+                statusText = $"[green]\u2713 Completed in {duration:F1}s[/]";
+            }
+            else
+            {
+                statusText = $"[red]\u2717 Failed after {duration:F1}s[/]";
+            }
+
+            progress.SetContent(new List<string> { statusText });
         }
 
         // If no output was streamed, show result output

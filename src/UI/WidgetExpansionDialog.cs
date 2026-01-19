@@ -553,10 +553,23 @@ public static class WidgetExpansionDialog
         foreach (var action in actions)
         {
             var label = action.Label;
+            var icons = new List<string>();
+
+            if (action.RequiresSudo)
+            {
+                icons.Add("!");
+            }
             if (action.IsDanger)
             {
+                icons.Add("⚠");
+            }
+
+            if (icons.Count > 0)
+            {
+                var iconStr = string.Join(" ", icons);
                 var padding = new string(' ', Math.Max(0, 30 - action.Label.Length));
-                label = $"[yellow]{action.Label}[/]{padding}⚠";
+                var color = action.IsDanger ? "yellow" : "white";
+                label = $"[{color}]{action.Label}[/]{padding}{iconStr}";
             }
             var item = new ListItem(label) { Tag = action };
             actionsList.AddItem(item);

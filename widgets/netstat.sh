@@ -21,12 +21,12 @@ fi
 all_tcp=$(ss -tan 2>/dev/null)
 
 # Parse connection states from the single call
-established=$(echo "$all_tcp" | grep -c "ESTAB" || echo 0)
-time_wait=$(echo "$all_tcp" | grep -c "TIME-WAIT" || echo 0)
-close_wait=$(echo "$all_tcp" | grep -c "CLOSE-WAIT" || echo 0)
-listen=$(echo "$all_tcp" | grep -c "LISTEN" || echo 0)
-syn_recv=$(echo "$all_tcp" | grep -c "SYN-RECV" || echo 0)
-fin_wait=$(echo "$all_tcp" | grep -c "FIN-WAIT" || echo 0)
+established=$(echo "$all_tcp" | grep -c "ESTAB")
+time_wait=$(echo "$all_tcp" | grep -c "TIME-WAIT")
+close_wait=$(echo "$all_tcp" | grep -c "CLOSE-WAIT")
+listen=$(echo "$all_tcp" | grep -c "LISTEN")
+syn_recv=$(echo "$all_tcp" | grep -c "SYN-RECV")
+fin_wait=$(echo "$all_tcp" | grep -c "FIN-WAIT")
 
 echo "row: [bold]Connection States:[/]"
 echo "row: [status:ok] ESTABLISHED: [green]$established[/]"

@@ -30,6 +30,11 @@ public class WidgetAction
     public bool IsDanger => Flags.Contains("danger", StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Whether this action requires sudo/root privileges
+    /// </summary>
+    public bool RequiresSudo => Flags.Contains("sudo", StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Whether to refresh widget after successful execution
     /// </summary>
     public bool RefreshAfterSuccess => Flags.Contains("refresh", StringComparer.OrdinalIgnoreCase);
