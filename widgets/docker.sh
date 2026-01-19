@@ -77,10 +77,15 @@ if [ $running -gt 0 ]; then
             echo "row: [grey50]  Network: ${net_io}[/]"
         done
     else
-        docker stats --no-stream --format "table {{.Name}}|{{.CPUPerc}}|{{.MemPerc}}" 2>/dev/null | tail -n +2 | head -n 5 | while IFS='|' read -r name cpu mem; do
+        # Limit to 3 containers in standard mode
+        docker stats --no-stream --format "table {{.Name}}|{{.CPUPerc}}|{{.MemPerc}}" 2>/dev/null | tail -n +2 | head -n 3 | while IFS='|' read -r name cpu mem; do
             name_short=$(echo "$name" | cut -c1-20)
             echo "row: [grey70]${name_short}: CPU ${cpu} MEM ${mem}[/]"
         done
+        if [ $running -gt 3 ]; then
+            remaining=$((running - 3))
+            echo "row: [grey70]... and $remaining more[/]"
+        fi
     fi
 fi
 
@@ -122,14 +127,32 @@ if [ "$EXTENDED" = true ]; then
 fi
 
 # Docker actions (dynamic based on state)
-echo "action: Prune unused images:docker system prune -f"
 
 # Show different actions based on container state
 if [ $running -gt 0 ]; then
+    # Get first running container for quick actions
+    first_container=$(docker ps --format "{{.Names}}" | head -n1)
+    if [ -n "$first_container" ]; then
+        echo "action: View logs (${first_container}):docker logs --tail 100 ${first_container}"
+        echo "action: [danger,refresh] Restart ${first_container}:docker restart ${first_container}"
+    fi
+
     echo "action: [danger,refresh] Restart all containers:docker restart \$(docker ps -q)"
     echo "action: [danger,refresh] Stop all containers:docker stop \$(docker ps -q)"
 else
     echo "action: [refresh] Start all containers:docker start \$(docker ps -aq)"
 fi
 
+if [ $stopped -gt 0 ]; then
+    # Get first stopped container for quick start
+    first_stopped=$(docker ps -aq --filter "status=exited" | head -n1)
+    stopped_name=$(docker inspect --format='{{.Name}}' "$first_stopped" 2>/dev/null | sed 's/\///')
+    if [ -n "$stopped_name" ]; then
+        echo "action: [refresh] Start ${stopped_name}:docker start ${stopped_name}"
+    fi
+fi
+
+echo "action: List all containers:docker ps -a"
+echo "action: Prune unused images:docker system prune -f"
+echo "action: [danger] Prune everything:docker system prune -af --volumes"
 echo "action: [refresh] Pull latest images:docker-compose pull 2>/dev/null || echo 'docker-compose not available'"
