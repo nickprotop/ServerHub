@@ -43,15 +43,19 @@ public static class WidgetExpansionDialog
         int modalWidth = Math.Min((int)(screenWidth * 0.9), 150);   // 90% of screen, max 150
         int modalHeight = Math.Min((int)(screenHeight * 0.9), 40);  // 90% of screen, max 40
 
-        // Create borderless modal with AgentStudio aesthetic
+        // Create modal with subtle single border, no title
         var modal = new WindowBuilder(windowSystem)
-            .WithTitle($"Widget: {widgetData.Title}")
             .WithSize(modalWidth, modalHeight)
             .Centered()                         // Call AFTER WithSize for correct centering
             .AsModal()                          // Block input to main window
-            .Borderless()                       // Clean, no traditional borders
+            .WithBorderStyle(BorderStyle.Single)
+            .WithBorderColor(Color.Grey35)      // Subtle border matching aesthetic
+            .HideTitle()                        // No title bar
             .Resizable(false)                   // Fixed size
             .Movable(false)                     // Cannot be dragged
+            .Minimizable(false)                 // No minimize button
+            .Maximizable(false)                 // No maximize button
+            .HideCloseButton()                  // No close button (use Esc)
             .WithColors(Color.Grey15, Color.Grey93)  // Dark bg, light text
             .Build();
 
