@@ -163,6 +163,49 @@ serverhub --compute-checksums
 
 Bundled widgets (in `~/.local/share/serverhub/widgets/`) are pre-validated at build time and don't require checksums in your config.
 
+## Extended Mode
+
+When a user opens the expanded view (double-click or Enter on a widget), the script is re-executed with the `--extended` argument. This allows scripts to output additional detail that wouldn't fit in the dashboard view.
+
+### Detecting Extended Mode
+
+Check for `--extended` in your script arguments:
+
+```bash
+#!/bin/bash
+EXTENDED=false
+if [[ "$1" == "--extended" ]]; then
+    EXTENDED=true
+fi
+```
+
+### Usage Pattern
+
+```bash
+echo "title: My Widget"
+echo "refresh: 5"
+
+# Always show summary
+echo "row: [status:ok] Service running"
+
+# Show additional detail only in extended mode
+if [ "$EXTENDED" = true ]; then
+    echo "row: "
+    echo "row: [bold]Extended Details:[/]"
+    echo "row: PID: 12345"
+    echo "row: Uptime: 5 days"
+    echo "row: Memory: 256MB"
+    # ... more detailed info
+fi
+```
+
+### Best Practices
+
+- **Dashboard view**: Keep output concise (fits within `max_lines`)
+- **Extended view**: Include full details, logs, stats, etc.
+- Scripts without `--extended` handling work normally (same output in both views)
+- Extended mode is optional - scripts don't need to handle it
+
 ## Output Requirements
 
 - Scripts must be executable (`chmod +x`)
