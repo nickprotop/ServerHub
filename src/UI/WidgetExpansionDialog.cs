@@ -583,92 +583,23 @@ public static class WidgetExpansionDialog
     /// <summary>
     /// Executes a widget action with confirmation and result display
     /// </summary>
-    private static async void ExecuteAction(
+    private static void ExecuteAction(
         WidgetAction action,
         ConsoleWindowSystem windowSystem,
         Window parentModal,
         Func<Task>? onRefreshRequested)
     {
-        // Show confirmation dialog
-        ActionConfirmationDialog.Show(
+        // Show unified dialog (confirm → execute → results in one dialog)
+        ActionExecutionDialog.Show(
             action,
             windowSystem,
             parentModal,
-            onConfirm: async () =>
+            onComplete: (result) =>
             {
-                // Create cancellation token source
-                var cts = new CancellationTokenSource();
-
-                // Show progress dialog (child of expansion dialog, non-closable)
-                var progressModal = ActionProgressDialog.Show(
-                    action,
-                    windowSystem,
-                    parentModal,
-                    onTerminate: () =>
-                    {
-                        // Terminate execution (SIGTERM -> SIGKILL)
-                        cts.Cancel();
-                    },
-                    maxTimeout: 60);
-
-                // Execute the action with progress updates and termination callbacks
-                var executor = new ActionExecutor();
-                var result = await executor.ExecuteAsync(
-                    action,
-                    cts.Token,
-                    onProgressUpdate: (elapsedSeconds) =>
-                    {
-                        // Update timer and progress bar every second
-                        ActionProgressDialog.UpdateTimer(progressModal, elapsedSeconds, 60);
-                        ActionProgressDialog.UpdateProgress(progressModal, elapsedSeconds, 60);
-                    },
-                    onGracefulTerminate: () =>
-                    {
-                        // Show terminating status (SIGTERM sent)
-                        ActionProgressDialog.ShowTerminating(progressModal);
-                    },
-                    onForceKill: () =>
-                    {
-                        // Show force killing status (SIGKILL sent)
-                        ActionProgressDialog.ShowForceKilling(progressModal);
-                    });
-
-                // Update final status
-                if (result.Stderr.Contains("terminated", StringComparison.OrdinalIgnoreCase))
+                // If action succeeded and refresh flag is set, trigger widget refresh
+                if (result.IsSuccess && action.RefreshAfterSuccess)
                 {
-                    ActionProgressDialog.UpdateStatus(progressModal, "Terminated", Color.Red);
-                    await Task.Delay(500); // Brief pause to show status
-                }
-                else if (result.IsSuccess)
-                {
-                    ActionProgressDialog.UpdateStatus(progressModal, "Completed", Color.Green);
-                    await Task.Delay(300); // Brief pause to show status
-                }
-                else
-                {
-                    ActionProgressDialog.UpdateStatus(progressModal, "Failed", Color.Red);
-                    await Task.Delay(500); // Brief pause to show status
-                }
-
-                // Close progress dialog
-                progressModal.Close();
-
-                // Show result dialog (only if not terminated)
-                if (!result.Stderr.Contains("terminated", StringComparison.OrdinalIgnoreCase))
-                {
-                    ActionResultDialog.Show(
-                        action,
-                        result,
-                        windowSystem,
-                        parentModal,
-                        onClose: () =>
-                        {
-                            // If action succeeded and refresh flag is set, trigger widget refresh
-                            if (result.IsSuccess && action.RefreshAfterSuccess)
-                            {
-                                onRefreshRequested?.Invoke();
-                            }
-                        });
+                    onRefreshRequested?.Invoke();
                 }
             },
             onCancel: () =>

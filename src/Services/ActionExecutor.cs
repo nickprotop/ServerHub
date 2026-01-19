@@ -21,6 +21,8 @@ public class ActionExecutor
     /// <param name="action">Action to execute</param>
     /// <param name="cancellationToken">Cancellation token for termination</param>
     /// <param name="onProgressUpdate">Callback for progress updates (elapsed seconds)</param>
+    /// <param name="onOutputReceived">Callback when stdout line is received (streaming)</param>
+    /// <param name="onErrorReceived">Callback when stderr line is received (streaming)</param>
     /// <param name="onGracefulTerminate">Callback when SIGTERM is sent (graceful shutdown)</param>
     /// <param name="onForceKill">Callback when SIGKILL is sent (force kill)</param>
     /// <returns>Execution result with stdout, stderr, exit code, and duration</returns>
@@ -28,11 +30,15 @@ public class ActionExecutor
         WidgetAction action,
         CancellationToken cancellationToken = default,
         Action<int>? onProgressUpdate = null,
+        Action<string>? onOutputReceived = null,
+        Action<string>? onErrorReceived = null,
         Action? onGracefulTerminate = null,
         Action? onForceKill = null)
     {
         var stopwatch = Stopwatch.StartNew();
         Process? process = null;
+        var outputBuilder = new System.Text.StringBuilder();
+        var errorBuilder = new System.Text.StringBuilder();
 
         try
         {
@@ -55,8 +61,31 @@ public class ActionExecutor
             process.StartInfo.UseShellExecute = false;
             process.StartInfo.CreateNoWindow = true;
 
+            // Event-based streaming for real-time output
+            process.OutputDataReceived += (s, e) =>
+            {
+                if (e.Data != null)
+                {
+                    outputBuilder.AppendLine(e.Data);
+                    onOutputReceived?.Invoke(e.Data);
+                }
+            };
+
+            process.ErrorDataReceived += (s, e) =>
+            {
+                if (e.Data != null)
+                {
+                    errorBuilder.AppendLine(e.Data);
+                    onErrorReceived?.Invoke(e.Data);
+                }
+            };
+
             // Start process
             process.Start();
+
+            // Begin async reading
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
 
             // Background timer for progress updates
             var progressTimer = new System.Timers.Timer(1000); // 1 second interval
@@ -67,10 +96,6 @@ public class ActionExecutor
                 onProgressUpdate?.Invoke(elapsedSeconds);
             };
             progressTimer.Start();
-
-            // Start reading output concurrently
-            var outputTask = process.StandardOutput.ReadToEndAsync();
-            var errorTask = process.StandardError.ReadToEndAsync();
 
             // Wait for process completion with timeout and cancellation support
             var processExited = false;
@@ -93,8 +118,10 @@ public class ActionExecutor
                     return new ActionResult
                     {
                         ExitCode = -1,
-                        Stdout = "",
-                        Stderr = "Execution terminated by user",
+                        Stdout = outputBuilder.ToString(),
+                        Stderr = errorBuilder.Length > 0
+                            ? errorBuilder.ToString() + "\nExecution terminated by user"
+                            : "Execution terminated by user",
                         Duration = stopwatch.Elapsed
                     };
                 }
@@ -114,22 +141,23 @@ public class ActionExecutor
                 return new ActionResult
                 {
                     ExitCode = -1,
-                    Stdout = "",
-                    Stderr = $"Command timed out after {DefaultTimeoutSeconds} seconds",
+                    Stdout = outputBuilder.ToString(),
+                    Stderr = errorBuilder.Length > 0
+                        ? errorBuilder.ToString() + $"\nCommand timed out after {DefaultTimeoutSeconds} seconds"
+                        : $"Command timed out after {DefaultTimeoutSeconds} seconds",
                     Duration = stopwatch.Elapsed
                 };
             }
 
-            // Process completed normally
-            var stdout = await outputTask;
-            var stderr = await errorTask;
+            // Process completed normally - wait briefly for any final output events
+            await Task.Delay(50);
             stopwatch.Stop();
 
             return new ActionResult
             {
                 ExitCode = process.ExitCode,
-                Stdout = stdout ?? "",
-                Stderr = stderr ?? "",
+                Stdout = outputBuilder.ToString().TrimEnd(),
+                Stderr = errorBuilder.ToString().TrimEnd(),
                 Duration = stopwatch.Elapsed
             };
         }
@@ -144,8 +172,10 @@ public class ActionExecutor
             return new ActionResult
             {
                 ExitCode = -1,
-                Stdout = "",
-                Stderr = "Execution terminated by user",
+                Stdout = outputBuilder.ToString(),
+                Stderr = errorBuilder.Length > 0
+                    ? errorBuilder.ToString() + "\nExecution terminated by user"
+                    : "Execution terminated by user",
                 Duration = stopwatch.Elapsed
             };
         }
@@ -167,7 +197,7 @@ public class ActionExecutor
             return new ActionResult
             {
                 ExitCode = -1,
-                Stdout = "",
+                Stdout = outputBuilder.ToString(),
                 Stderr = $"Execution failed: {ex.Message}",
                 Duration = stopwatch.Elapsed
             };
