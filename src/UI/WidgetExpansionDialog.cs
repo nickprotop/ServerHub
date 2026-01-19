@@ -55,7 +55,6 @@ public static class WidgetExpansionDialog
             .Movable(false)                     // Cannot be dragged
             .Minimizable(false)                 // No minimize button
             .Maximizable(false)                 // No maximize button
-            .HideCloseButton()                  // No close button (use Esc)
             .WithColors(Color.Grey15, Color.Grey93)  // Dark bg, light text
             .Build();
 
