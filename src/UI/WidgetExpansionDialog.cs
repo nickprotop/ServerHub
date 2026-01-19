@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
 using ServerHub.Models;
+using ServerHub.Services;
 using SharpConsoleUI;
 using SharpConsoleUI.Builders;
 using SharpConsoleUI.Controls;
@@ -10,29 +11,29 @@ using Spectre.Console;
 namespace ServerHub.UI;
 
 /// <summary>
-/// Handles displaying full widget content in a modal expansion dialog
+/// Handles displaying full widget content in a modal expansion dialog.
+/// Self-contained: owns the widget while open and manages its own refresh loop.
 /// </summary>
 public static class WidgetExpansionDialog
 {
+    private static readonly string[] SpinnerFrames = { "◐", "◓", "◑", "◒" };
+
     /// <summary>
-    /// Shows a modal dialog with the full widget content (AgentStudio-inspired design)
+    /// Shows a modal dialog with the full widget content (AgentStudio-inspired design).
+    /// The modal owns this widget while open and handles its own refresh with --extended data.
     /// </summary>
     /// <param name="widgetId">Widget identifier</param>
-    /// <param name="widgetData">Full widget data to display</param>
+    /// <param name="widgetData">Initial widget data to display (from main dialog's cache)</param>
     /// <param name="windowSystem">Console window system</param>
     /// <param name="renderer">Widget renderer for creating content</param>
-    /// <param name="config">Configuration for getting refresh interval</param>
-    /// <param name="onUpdate">Callback to register the update function</param>
-    /// <param name="onRefreshRequested">Callback to request widget refresh</param>
+    /// <param name="refreshService">Service to handle widget refresh</param>
     /// <param name="onClose">Callback when modal closes</param>
     public static void Show(
         string widgetId,
         WidgetData widgetData,
         ConsoleWindowSystem windowSystem,
         WidgetRenderer renderer,
-        ServerHubConfig? config,
-        Action<Action<WidgetData>>? onUpdate = null,
-        Action? onRefreshRequested = null,
+        WidgetRefreshService refreshService,
         Action? onClose = null)
     {
         // Calculate modal size: 90% of screen with reasonable max constraints
@@ -54,29 +55,39 @@ public static class WidgetExpansionDialog
             .WithColors(Color.Grey15, Color.Grey93)  // Dark bg, light text
             .Build();
 
-        // Header section (AgentStudio pattern)
-        int refreshInterval = GetRefreshInterval(widgetId, config);
-        var headerLine2 = $"[grey50]Last updated: {widgetData.Timestamp:yyyy-MM-dd HH:mm:ss}  •  Refresh: {refreshInterval}s";
-        if (widgetData.HasActions)
-        {
-            var actionCount = widgetData.Actions.Count;
-            var actionText = actionCount == 1 ? "action" : "actions";
-            headerLine2 += $"  •  {actionCount} {actionText}";
-        }
-        headerLine2 += "[/]";
+        // Get refresh interval from service
+        int refreshInterval = refreshService.GetRefreshInterval(widgetId);
 
-        modal.AddControl(Controls.Markup()
+        // Header section (AgentStudio pattern) - show loading initially
+        var headerLine2 = $"[grey50]Refresh: {refreshInterval}s  •  Loading extended data...[/]";
+
+        var headerControl = Controls.Markup()
             .WithName("modal_header")
             .AddLine($"[cyan1 bold]{widgetData.Title}[/]")
             .AddLine(headerLine2)
             .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Left)
             .WithMargin(1, 0, 1, 0)
-            .Build());
+            .Build();
+        modal.AddControl(headerControl);
 
         // Separator rule
         modal.AddControl(Controls.RuleBuilder()
             .WithColor(Color.Grey23)
             .Build());
+
+        // Loading panel (shown while fetching initial extended data)
+        var loadingPanel = Controls.Markup()
+            .WithName("loading_panel")
+            .AddLine("")
+            .AddLine("")
+            .AddLine("[grey50]Loading extended data...[/]")
+            .AddLine("")
+            .AddLine("[cyan1]━━━━━━━━━━[/][grey23]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/]")
+            .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Center)
+            .WithVerticalAlignment(SharpConsoleUI.Layout.VerticalAlignment.Fill)
+            .Build();
+        loadingPanel.Visible = true;
+        modal.AddControl(loadingPanel);
 
         // Build full content using existing WidgetRenderer (NO truncation, NO duplication)
         var widgetPanel = renderer.CreateWidgetPanel(
@@ -89,13 +100,15 @@ public static class WidgetExpansionDialog
             showTruncationIndicator: false
         );
 
-        // Create side-by-side layout: Content (left 65%) + Actions (right 35%)
+        // Create side-by-side layout: Content (left) + Actions (right)
         var mainGrid = Controls.HorizontalGrid()
+            .WithName("main_grid")
             .WithVerticalAlignment(SharpConsoleUI.Layout.VerticalAlignment.Fill)
             .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Stretch)
             .Build();
+        mainGrid.Visible = false;  // Hide until extended data arrives
 
-        // LEFT COLUMN - Content (65%)
+        // LEFT COLUMN - Content
         var contentColumn = new ColumnContainer(mainGrid)
         {
             VerticalAlignment = SharpConsoleUI.Layout.VerticalAlignment.Fill
@@ -115,7 +128,6 @@ public static class WidgetExpansionDialog
             .Build();
 
         contentColumn.AddContent(scrollPanel);
-        // No width or flex set - fills remaining space
         mainGrid.AddColumn(contentColumn);
 
         // MIDDLE - Vertical separator
@@ -163,35 +175,15 @@ public static class WidgetExpansionDialog
             .WithHighlightColors(Color.Grey35, Color.White)  // Subtle gray highlight
             .WithDoubleClickActivation(true)
             .WithMargin(1, 0, 1, 0)
-            .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Stretch)  // Stretch horizontally
+            .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Stretch)
             .WithVerticalAlignment(SharpConsoleUI.Layout.VerticalAlignment.Fill)
             .Build();
 
         // Populate initial actions
-        foreach (var action in widgetData.Actions)
-        {
-            var label = action.Label;
-            if (action.IsDanger)
-            {
-                // Pad with spaces and add warning symbol
-                var padding = new string(' ', Math.Max(0, 30 - action.Label.Length));
-                label = $"[yellow]{action.Label}[/]{padding}⚠";
-            }
-            var item = new ListItem(label) { Tag = action };
-            actionsList.AddItem(item);
-        }
-
-        // Handle action activation (Enter or double-click)
-        actionsList.ItemActivated += (s, item) =>
-        {
-            if (item?.Tag is WidgetAction selectedAction)
-            {
-                ExecuteAction(selectedAction, windowSystem, modal, onRefreshRequested);
-            }
-        };
+        PopulateActionsList(actionsList, widgetData.Actions);
 
         actionsColumn.AddContent(actionsList);
-        actionsColumn.BackgroundColor = Color.Grey19;  // Subtle visual distinction
+        actionsColumn.BackgroundColor = Color.Grey19;
         actionsColumn.ForegroundColor = Color.Grey93;
         mainGrid.AddColumn(actionsColumn);
 
@@ -216,6 +208,51 @@ public static class WidgetExpansionDialog
             .StickyBottom()
             .Build());
 
+        // State for refresh loop
+        var cts = new CancellationTokenSource();
+        var currentData = widgetData;
+        var isRefreshing = false;
+
+        // Create update context to share state with refresh loop
+        var updateContext = new ModalUpdateContext
+        {
+            HeaderControl = headerControl,
+            LoadingPanel = loadingPanel,
+            MainGrid = mainGrid,
+            WidgetPanel = widgetPanel,
+            ActionsList = actionsList,
+            SeparatorColumn = separatorColumn,
+            ActionsSeparator = actionsSeparator,
+            ActionsColumn = actionsColumn,
+            ActionsHeader = actionsHeader,
+            RefreshInterval = refreshInterval,
+            Renderer = renderer,
+            CurrentTitle = widgetData.Title,
+            LastUpdated = widgetData.Timestamp,
+            ActionCount = widgetData.Actions.Count
+        };
+
+        // Handle action activation (Enter or double-click)
+        actionsList.ItemActivated += (s, item) =>
+        {
+            if (item?.Tag is WidgetAction selectedAction)
+            {
+                ExecuteAction(
+                    selectedAction,
+                    windowSystem,
+                    modal,
+                    onRefreshRequested: async () =>
+                    {
+                        // Trigger immediate refresh with extended data
+                        isRefreshing = true;
+                        var data = await refreshService.RefreshAsync(widgetId, extended: true);
+                        currentData = data;
+                        UpdateModalContent(updateContext, data);
+                        isRefreshing = false;
+                    });
+            }
+        };
+
         // Handle keyboard shortcuts (AgentStudio pattern)
         modal.KeyPressed += (s, e) =>
         {
@@ -225,108 +262,52 @@ public static class WidgetExpansionDialog
                 e.Handled = true;
             }
             // Only close on Enter if there are NO actions (content-only mode)
-            else if (e.KeyInfo.Key == ConsoleKey.Enter && !widgetData.HasActions)
+            else if (e.KeyInfo.Key == ConsoleKey.Enter && !currentData.HasActions)
             {
                 modal.Close();
                 e.Handled = true;
             }
             // Quick action execution via number keys (1-9)
-            else if (widgetData.HasActions && e.KeyInfo.Key >= ConsoleKey.D1 && e.KeyInfo.Key <= ConsoleKey.D9)
+            else if (currentData.HasActions && e.KeyInfo.Key >= ConsoleKey.D1 && e.KeyInfo.Key <= ConsoleKey.D9)
             {
                 var index = e.KeyInfo.Key - ConsoleKey.D1;
-                if (index < widgetData.Actions.Count)
+                if (index < currentData.Actions.Count)
                 {
-                    var selectedAction = widgetData.Actions[index];
-                    ExecuteAction(selectedAction, windowSystem, modal, onRefreshRequested);
+                    var selectedAction = currentData.Actions[index];
+                    ExecuteAction(
+                        selectedAction,
+                        windowSystem,
+                        modal,
+                        onRefreshRequested: async () =>
+                        {
+                            isRefreshing = true;
+                            var data = await refreshService.RefreshAsync(widgetId, extended: true);
+                            currentData = data;
+                            UpdateModalContent(updateContext, data);
+                            isRefreshing = false;
+                        });
                     e.Handled = true;
                 }
             }
         };
 
-        // Register update callback with captured references
-        var headerControl = modal.FindControl<MarkupControl>("modal_header");
-
-        onUpdate?.Invoke((newData) =>
-        {
-            // Update header with new timestamp
-            if (headerControl != null)
-            {
-                var updatedHeaderLine2 = $"[grey50]Last updated: {newData.Timestamp:yyyy-MM-dd HH:mm:ss}  •  Refresh: {refreshInterval}s";
-                if (newData.HasActions)
-                {
-                    var actionCount = newData.Actions.Count;
-                    var actionText = actionCount == 1 ? "action" : "actions";
-                    updatedHeaderLine2 += $"  •  {actionCount} {actionText}";
-                }
-                updatedHeaderLine2 += "[/]";
-
-                headerControl.SetContent(new List<string>
-                {
-                    $"[cyan1 bold]{newData.Title}[/]",
-                    updatedHeaderLine2
-                });
-            }
-
-            // Update widget content (use captured reference to widgetPanel)
-            renderer.UpdateWidgetPanel(widgetPanel, newData, maxLines: null, showTruncationIndicator: false);
-
-            // Update actions list only if actions changed (better UX - avoid flicker)
-            var actionsChanged = false;
-
-            // Quick check: count different
-            if (actionsList.Items.Count != newData.Actions.Count)
-            {
-                actionsChanged = true;
-            }
-            else
-            {
-                // Deep check: compare each action
-                for (int i = 0; i < newData.Actions.Count; i++)
-                {
-                    var currentAction = actionsList.Items[i].Tag as WidgetAction;
-                    var newAction = newData.Actions[i];
-
-                    if (currentAction == null ||
-                        currentAction.Label != newAction.Label ||
-                        currentAction.Command != newAction.Command ||
-                        currentAction.IsDanger != newAction.IsDanger)
-                    {
-                        actionsChanged = true;
-                        break;
-                    }
-                }
-            }
-
-            if (actionsChanged)
-            {
-                actionsList.ClearItems();
-                foreach (var action in newData.Actions)
-                {
-                    var label = action.Label;
-                    if (action.IsDanger)
-                    {
-                        var padding = new string(' ', Math.Max(0, 50 - action.Label.Length));
-                        label = $"[yellow]{action.Label}[/]{padding}⚠";
-                    }
-                    var item = new ListItem(label) { Tag = action };
-                    actionsList.AddItem(item);
-                }
-
-                // Update visibility of actions section
-                separatorColumn.Visible = newData.HasActions;
-                actionsSeparator.Visible = newData.HasActions;
-                actionsColumn.Visible = newData.HasActions;
-                actionsHeader.Visible = newData.HasActions;
-                actionsList.Visible = newData.HasActions;
-                // Content column automatically stretches to fill remaining space
-            }
-        });
-
         // Handle modal close
         modal.OnClosed += (s, e) =>
         {
+            cts.Cancel();
             onClose?.Invoke();
         };
+
+        // Start self-contained refresh loop
+        _ = RunRefreshLoopAsync(
+            widgetId,
+            refreshService,
+            updateContext,
+            refreshInterval,
+            () => isRefreshing,
+            (refreshing) => isRefreshing = refreshing,
+            (data) => currentData = data,
+            cts.Token);
 
         // Show modal
         windowSystem.AddWindow(modal);
@@ -335,12 +316,264 @@ public static class WidgetExpansionDialog
     }
 
     /// <summary>
-    /// Gets the refresh interval for a widget
+    /// Context containing all UI elements that need to be updated
     /// </summary>
-    private static int GetRefreshInterval(string widgetId, ServerHubConfig? config)
+    private class ModalUpdateContext
     {
-        var widgetConfig = config?.Widgets.GetValueOrDefault(widgetId);
-        return widgetConfig?.Refresh ?? config?.DefaultRefresh ?? 5;
+        public MarkupControl? HeaderControl { get; init; }
+        public MarkupControl? LoadingPanel { get; init; }
+        public HorizontalGridControl? MainGrid { get; init; }
+        public IWindowControl? WidgetPanel { get; init; }
+        public ListControl? ActionsList { get; init; }
+        public ColumnContainer? SeparatorColumn { get; init; }
+        public SeparatorControl? ActionsSeparator { get; init; }
+        public ColumnContainer? ActionsColumn { get; init; }
+        public MarkupControl? ActionsHeader { get; init; }
+        public int RefreshInterval { get; init; }
+        public WidgetRenderer? Renderer { get; init; }
+        public string CurrentTitle { get; set; } = "";
+        public DateTime LastUpdated { get; set; } = DateTime.Now;
+        public int ActionCount { get; set; }
+    }
+
+    /// <summary>
+    /// Runs the self-contained refresh loop for the modal.
+    /// First fetches extended data immediately, then refreshes at the widget's interval.
+    /// </summary>
+    private static async Task RunRefreshLoopAsync(
+        string widgetId,
+        WidgetRefreshService refreshService,
+        ModalUpdateContext context,
+        int refreshInterval,
+        Func<bool> getIsRefreshing,
+        Action<bool> setIsRefreshing,
+        Action<WidgetData> setCurrentData,
+        CancellationToken ct)
+    {
+        int spinnerFrame = 0;
+        bool firstLoad = true;
+        bool isCurrentlyRefreshing = false;
+
+        // Start spinner animation task that runs continuously
+        var spinnerTask = Task.Run(async () =>
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                try
+                {
+                    if (isCurrentlyRefreshing)
+                    {
+                        UpdateHeaderSpinner(context, spinnerFrame, true);
+                    }
+                    spinnerFrame++;
+                    await Task.Delay(250, ct);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+            }
+        }, ct);
+
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                // Mark as refreshing
+                isCurrentlyRefreshing = true;
+                setIsRefreshing(true);
+
+                // Fetch extended data (spinner animates concurrently)
+                var newData = await refreshService.RefreshAsync(widgetId, extended: true);
+                setCurrentData(newData);
+
+                // Mark as not refreshing
+                isCurrentlyRefreshing = false;
+                setIsRefreshing(false);
+
+                // Update modal content
+                UpdateModalContent(context, newData);
+
+                // On first load, hide loading panel and show content
+                if (firstLoad && context.LoadingPanel != null && context.MainGrid != null)
+                {
+                    context.LoadingPanel.Visible = false;
+                    context.MainGrid.Visible = true;
+                    firstLoad = false;
+                }
+
+                // Wait for next refresh interval
+                await Task.Delay(refreshInterval * 1000, ct);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected when modal closes
+        }
+
+        // Wait for spinner task to complete
+        try
+        {
+            await spinnerTask;
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected
+        }
+    }
+
+    /// <summary>
+    /// Updates the modal header with spinner during refresh
+    /// </summary>
+    private static void UpdateHeaderSpinner(ModalUpdateContext context, int spinnerFrame, bool showSpinner)
+    {
+        if (context.HeaderControl == null)
+            return;
+
+        var title = showSpinner
+            ? $"[cyan1 bold]{context.CurrentTitle} {SpinnerFrames[spinnerFrame % 4]}[/]"
+            : $"[cyan1 bold]{context.CurrentTitle}[/]";
+
+        // Build header line 2 from cached values
+        var headerLine2 = $"[grey50]Last updated: {context.LastUpdated:yyyy-MM-dd HH:mm:ss}  •  Refresh: {context.RefreshInterval}s";
+        if (context.ActionCount > 0)
+        {
+            var actionText = context.ActionCount == 1 ? "action" : "actions";
+            headerLine2 += $"  •  {context.ActionCount} {actionText}";
+        }
+        headerLine2 += "[/]";
+
+        context.HeaderControl.SetContent(new List<string>
+        {
+            title,
+            headerLine2
+        });
+    }
+
+    /// <summary>
+    /// Updates the modal header with timestamp and optional spinner
+    /// </summary>
+    private static void UpdateHeader(ModalUpdateContext context, WidgetData data, bool isRefreshing, int spinnerFrame)
+    {
+        if (context.HeaderControl == null)
+            return;
+
+        var title = isRefreshing
+            ? $"[cyan1 bold]{data.Title} {SpinnerFrames[spinnerFrame % 4]}[/]"
+            : $"[cyan1 bold]{data.Title}[/]";
+
+        var headerLine2 = BuildHeaderLine2(data, context.RefreshInterval);
+
+        context.HeaderControl.SetContent(new List<string>
+        {
+            title,
+            headerLine2
+        });
+    }
+
+    /// <summary>
+    /// Updates all modal content with new widget data
+    /// </summary>
+    private static void UpdateModalContent(ModalUpdateContext context, WidgetData newData)
+    {
+        if (context.HeaderControl == null || context.Renderer == null)
+            return;
+
+        // Update context tracking fields
+        context.CurrentTitle = newData.Title;
+        context.LastUpdated = newData.Timestamp;
+        context.ActionCount = newData.Actions.Count;
+
+        // Update header
+        UpdateHeader(context, newData, false, 0);
+
+        // Update widget content
+        if (context.WidgetPanel != null)
+        {
+            context.Renderer.UpdateWidgetPanel(context.WidgetPanel, newData, maxLines: null, showTruncationIndicator: false);
+        }
+
+        // Update actions list only if actions changed
+        if (context.ActionsList != null)
+        {
+            var actionsChanged = HasActionsChanged(context.ActionsList, newData.Actions);
+
+            if (actionsChanged)
+            {
+                context.ActionsList.ClearItems();
+                PopulateActionsList(context.ActionsList, newData.Actions);
+
+                // Update visibility of actions section
+                if (context.SeparatorColumn != null)
+                    context.SeparatorColumn.Visible = newData.HasActions;
+                if (context.ActionsSeparator != null)
+                    context.ActionsSeparator.Visible = newData.HasActions;
+                if (context.ActionsColumn != null)
+                    context.ActionsColumn.Visible = newData.HasActions;
+                if (context.ActionsHeader != null)
+                    context.ActionsHeader.Visible = newData.HasActions;
+                context.ActionsList.Visible = newData.HasActions;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Checks if actions have changed
+    /// </summary>
+    private static bool HasActionsChanged(ListControl actionsList, List<WidgetAction> newActions)
+    {
+        if (actionsList.Items.Count != newActions.Count)
+            return true;
+
+        for (int i = 0; i < newActions.Count; i++)
+        {
+            var currentAction = actionsList.Items[i].Tag as WidgetAction;
+            var newAction = newActions[i];
+
+            if (currentAction == null ||
+                currentAction.Label != newAction.Label ||
+                currentAction.Command != newAction.Command ||
+                currentAction.IsDanger != newAction.IsDanger)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Populates the actions list with action items
+    /// </summary>
+    private static void PopulateActionsList(ListControl actionsList, List<WidgetAction> actions)
+    {
+        foreach (var action in actions)
+        {
+            var label = action.Label;
+            if (action.IsDanger)
+            {
+                var padding = new string(' ', Math.Max(0, 30 - action.Label.Length));
+                label = $"[yellow]{action.Label}[/]{padding}⚠";
+            }
+            var item = new ListItem(label) { Tag = action };
+            actionsList.AddItem(item);
+        }
+    }
+
+    /// <summary>
+    /// Builds the second line of the header with timestamp and action count
+    /// </summary>
+    private static string BuildHeaderLine2(WidgetData widgetData, int refreshInterval)
+    {
+        var headerLine2 = $"[grey50]Last updated: {widgetData.Timestamp:yyyy-MM-dd HH:mm:ss}  •  Refresh: {refreshInterval}s";
+        if (widgetData.HasActions)
+        {
+            var actionCount = widgetData.Actions.Count;
+            var actionText = actionCount == 1 ? "action" : "actions";
+            headerLine2 += $"  •  {actionCount} {actionText}";
+        }
+        headerLine2 += "[/]";
+        return headerLine2;
     }
 
     /// <summary>
@@ -350,7 +583,7 @@ public static class WidgetExpansionDialog
         WidgetAction action,
         ConsoleWindowSystem windowSystem,
         Window parentModal,
-        Action? onRefreshRequested)
+        Func<Task>? onRefreshRequested)
     {
         // Show confirmation dialog
         ActionConfirmationDialog.Show(
@@ -369,13 +602,13 @@ public static class WidgetExpansionDialog
                     parentModal,
                     onTerminate: () =>
                     {
-                        // Terminate execution (SIGTERM → SIGKILL)
+                        // Terminate execution (SIGTERM -> SIGKILL)
                         cts.Cancel();
                     },
                     maxTimeout: 60);
 
                 // Execute the action with progress updates and termination callbacks
-                var executor = new Services.ActionExecutor();
+                var executor = new ActionExecutor();
                 var result = await executor.ExecuteAsync(
                     action,
                     cts.Token,

@@ -34,7 +34,7 @@ class Program
     private static FocusManager? _focusManager;
     private static readonly Dictionary<string, WidgetData> _fullWidgetData = new();
     private static string? _openModalWidgetId = null;
-    private static Action<WidgetData>? _modalUpdateCallback = null;
+    private static WidgetRefreshService? _refreshService;
 
     static async Task<int> Main(string[] args)
     {
@@ -106,6 +106,7 @@ class Program
             _parser = new WidgetProtocolParser();
             _renderer = new WidgetRenderer();
             _layoutEngine = new LayoutEngine();
+            _refreshService = new WidgetRefreshService(_executor, _parser, _config);
 
             // Initialize ConsoleEx window system
             _windowSystem = new ConsoleWindowSystem(new NetConsoleDriver(RenderMode.Buffer))
@@ -424,7 +425,7 @@ class Program
                 // Update status bar with widget counts and system stats
                 UpdateStatusBar();
 
-                await Task.Delay(1000, ct);
+                await Task.Delay(250, ct);  // Faster spinner animation
             }
             catch (OperationCanceledException)
             {
@@ -675,6 +676,10 @@ class Program
         if (_isPaused)
             return;
 
+        // Skip if modal is open for this widget - modal handles its own refresh
+        if (_openModalWidgetId == widgetId)
+            return;
+
         // Mark as refreshing
         _isRefreshing[widgetId] = true;
 
@@ -845,49 +850,45 @@ class Program
 
             // Update full widget data for expansion dialog (use original data, not spinner version)
             _fullWidgetData[widgetId] = widgetData;
-
-            // If there's an open modal for this widget, update it too
-            if (_openModalWidgetId == widgetId && _modalUpdateCallback != null)
-            {
-                _modalUpdateCallback(widgetData);
-            }
         }
     }
 
     /// <summary>
-    /// Shows a modal dialog with the full widget content
+    /// Shows a modal dialog with the full widget content.
+    /// The modal owns the widget while open - main dialog skips refresh for this widget.
     /// </summary>
     private static void ShowWidgetDialog(string widgetId)
     {
         if (!_fullWidgetData.TryGetValue(widgetId, out var widgetData))
             return;
 
-        if (_windowSystem == null || _mainWindow == null || _renderer == null)
+        if (_windowSystem == null || _mainWindow == null || _renderer == null || _refreshService == null)
             return;
 
-        // Set the modal tracking variables
+        // Set the modal tracking variable - main dialog will skip this widget
         _openModalWidgetId = widgetId;
 
+        // Show self-contained dialog with its own refresh loop
         WidgetExpansionDialog.Show(
             widgetId,
             widgetData,
             _windowSystem,
             _renderer,
-            _config,
-            onUpdate: (callback) => _modalUpdateCallback = callback,
-            onRefreshRequested: () =>
-            {
-                // Trigger widget refresh after action execution
-                var widgetConfig = _config?.Widgets.GetValueOrDefault(widgetId);
-                if (widgetConfig != null)
-                {
-                    _ = RefreshWidgetAsync(widgetId, widgetConfig);
-                }
-            },
+            _refreshService,
             onClose: () =>
             {
+                var closedWidgetId = _openModalWidgetId;
                 _openModalWidgetId = null;
-                _modalUpdateCallback = null;
+
+                // Refresh the widget now that modal is closed
+                if (closedWidgetId != null)
+                {
+                    var widgetConfig = _config?.Widgets.GetValueOrDefault(closedWidgetId);
+                    if (widgetConfig != null)
+                    {
+                        _ = RefreshWidgetAsync(closedWidgetId, widgetConfig);
+                    }
+                }
             }
         );
     }
