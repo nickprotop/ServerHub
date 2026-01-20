@@ -54,7 +54,7 @@ public static class SudoPasswordDialog
 
         // Calculate modal size - compact and centered
         int modalWidth = 60;
-        int modalHeight = 16;
+        int modalHeight = 19;
 
         var modal = new WindowBuilder(windowSystem)
             .WithSize(modalWidth, modalHeight)
@@ -87,6 +87,9 @@ public static class SudoPasswordDialog
             .AddLine("")
             .AddLine("[grey70]Action:[/]")
             .AddLine($"[white]{Markup.Escape(action.Label)}[/]")
+            .AddLine("")
+            .AddLine("[grey70]Command:[/]")
+            .AddLine($"[grey58]{Markup.Escape(action.Command)}[/]")
             .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Center)
             .Build());
 
@@ -122,11 +125,7 @@ public static class SudoPasswordDialog
             .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Center)
             .Build());
 
-        // Buttons
-        var buttonGrid = Controls.HorizontalGrid()
-            .WithName("buttons")
-            .Build();
-
+        // Buttons - use ButtonRow factory for automatic centering
         var authenticateButton = Controls.Button(" Authenticate ")
             .WithName("btn_auth")
             .Build();
@@ -134,12 +133,8 @@ public static class SudoPasswordDialog
             .WithName("btn_cancel")
             .Build();
 
-        var leftCol = new ColumnContainer(buttonGrid);
-        leftCol.AddContent(authenticateButton);
-        buttonGrid.AddColumn(leftCol);
-        var rightCol = new ColumnContainer(buttonGrid);
-        rightCol.AddContent(cancelButton);
-        buttonGrid.AddColumn(rightCol);
+        var buttonGrid = HorizontalGridControl.ButtonRow(authenticateButton, cancelButton);
+        buttonGrid.Name = "buttons";
 
         modal.AddControl(Controls.Markup().AddLine("").Build());
         modal.AddControl(buttonGrid);

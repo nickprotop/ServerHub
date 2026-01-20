@@ -209,16 +209,9 @@ public static class ActionExecutionDialog
             .Build();
         closeButton.Visible = false;
 
-        // Button grid for confirm state (Execute + Cancel)
-        var confirmButtonGrid = Controls.HorizontalGrid()
-            .WithName("confirm_buttons")
-            .Build();
-        var leftCol = new ColumnContainer(confirmButtonGrid);
-        leftCol.AddContent(executeButton);
-        confirmButtonGrid.AddColumn(leftCol);
-        var rightCol = new ColumnContainer(confirmButtonGrid);
-        rightCol.AddContent(cancelButton);
-        confirmButtonGrid.AddColumn(rightCol);
+        // Button grid for confirm state (Execute + Cancel) - centered
+        var confirmButtonGrid = HorizontalGridControl.ButtonRow(executeButton, cancelButton);
+        confirmButtonGrid.Name = "confirm_buttons";
 
         modal.AddControl(confirmButtonGrid);
         modal.AddControl(terminateButton);
@@ -277,7 +270,7 @@ public static class ActionExecutionDialog
         }
 
         // Handler for Execute button - shows password dialog if sudo required
-        void HandleExecute()
+        async void HandleExecute()
         {
             // Simple guard: Don't do anything if dialog already closed
             if (_disposedDialogs.Contains(modal))
@@ -285,20 +278,32 @@ public static class ActionExecutionDialog
 
             if (action.RequiresSudo)
             {
-                // Show password dialog immediately
-                SudoPasswordDialog.Show(action, windowSystem, (passwordResult) =>
-                {
-                    // Simple guard: Don't execute if dialog was closed
-                    if (_disposedDialogs.Contains(modal))
-                        return;
+                // First check if sudo credentials are already cached
+                var executor = new ActionExecutor();
+                bool sudoCached = await executor.CheckSudoCachedAsync();
 
-                    if (passwordResult.Success)
+                if (sudoCached)
+                {
+                    // Credentials are cached, no password needed
+                    StartExecution();
+                }
+                else
+                {
+                    // Show password dialog
+                    SudoPasswordDialog.Show(action, windowSystem, (passwordResult) =>
                     {
-                        sudoPassword = passwordResult.Password;
-                        StartExecution();
-                    }
-                    // If cancelled - just stay in confirm state
-                });
+                        // Simple guard: Don't execute if dialog was closed
+                        if (_disposedDialogs.Contains(modal))
+                            return;
+
+                        if (passwordResult.Success)
+                        {
+                            sudoPassword = passwordResult.Password;
+                            StartExecution();
+                        }
+                        // If cancelled - just stay in confirm state
+                    });
+                }
             }
             else
             {
