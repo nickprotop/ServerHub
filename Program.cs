@@ -590,10 +590,11 @@ class Program
         Window? warningWindow = null;
         warningWindow = new WindowBuilder(_windowSystem)
             .WithName("DevModeWarning")
-            .WithTitle("Development Mode")
+            .HideTitle()
             .WithSize(60, 16)
             .Centered()
             .WithBackgroundColor(Color.Grey11)
+            .WithBorderStyle(BorderStyle.Single)
             .AsModal()
             .Minimizable(false)
             .Maximizable(false)
