@@ -206,7 +206,7 @@ For **development only**, you can skip custom widget checksum validation:
 serverhub --dev-mode --widgets-path ./my-dev-widgets
 ```
 
-Dev mode shows prominent warnings (status bar, orange border, dialog) because:
+Dev mode shows prominent warnings (status bar, startup dialog) because:
 - Bundled widgets are **still validated** even in dev mode
 - This is for development, not for "I don't want to deal with checksums"
 - **Never use `--dev-mode` in production**

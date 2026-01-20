@@ -171,22 +171,15 @@ class Program
         if (_windowSystem == null || _config == null)
             return;
 
-        var windowBuilder = new WindowBuilder(_windowSystem)
+        _mainWindow = new WindowBuilder(_windowSystem)
             .WithTitle("ServerHub")
             .WithName("MainWindow")
             .WithColors(Spectre.Console.Color.Grey11, Spectre.Console.Color.Grey93)
             .Borderless()
             .Maximized()
             .WithAsyncWindowThread(UpdateDashboardAsync)
-            .OnKeyPressed(HandleKeyPress);
-
-        // Layer 2: Orange border in dev mode (visual indicator)
-        if (_devMode)
-        {
-            windowBuilder.WithColors(Spectre.Console.Color.Grey11, Spectre.Console.Color.Orange1);
-        }
-
-        _mainWindow = windowBuilder.Build();
+            .OnKeyPressed(HandleKeyPress)
+            .Build();
 
         // Get terminal dimensions
         var terminalWidth = Console.WindowWidth;

@@ -246,7 +246,7 @@ serverhub --dev-mode --widgets-path ./my-dev-widgets
 
 **Important:**
 - Bundled widgets are **always** validated, even in dev mode
-- Dev mode shows 3 prominent warnings (status bar, orange border, dialog)
+- Dev mode shows prominent warnings (status bar, startup dialog)
 - **Never use --dev-mode in production**
 
 | Validation | Normal Mode | --dev-mode |
