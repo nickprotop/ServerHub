@@ -263,6 +263,25 @@ public static class SudoPasswordDialog
     }
 
     /// <summary>
+    /// Checks if sudo credentials are already cached (no password needed).
+    /// Uses sudo -n (non-interactive) which fails if password is required.
+    /// </summary>
+    /// <param name="callback">Callback with true if sudo is ready, false if password needed</param>
+    public static async void CheckSudoReadyAsync(Action<bool> callback)
+    {
+        var testAction = new WidgetAction
+        {
+            Label = "Test",
+            Command = "sudo -n true"  // Non-interactive: succeeds only if credentials are cached
+        };
+
+        var executor = new ActionExecutor();
+        var result = await executor.ExecuteAsync(testAction);
+
+        callback(result.ExitCode == 0);
+    }
+
+    /// <summary>
     /// Tests the password with a simple sudo command
     /// </summary>
     private static async void TestPasswordAsync(string password, Action<bool> callback)

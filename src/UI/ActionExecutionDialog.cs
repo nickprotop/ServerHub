@@ -254,13 +254,21 @@ public static class ActionExecutionDialog
             string commandToExecute;
             string? stdinForExecution = null;
 
-            if (action.RequiresSudo && sudoPassword != null)
+            if (action.RequiresSudo)
             {
-                // Wrap command with sudo -S for stdin password
-                commandToExecute = $"sudo -S -- {action.Command}";
-                stdinForExecution = sudoPassword;
-                // Clear password immediately after capturing
-                sudoPassword = null;
+                if (sudoPassword != null)
+                {
+                    // Wrap command with sudo -S for stdin password
+                    commandToExecute = $"sudo -S -- {action.Command}";
+                    stdinForExecution = sudoPassword;
+                    // Clear password immediately after capturing
+                    sudoPassword = null;
+                }
+                else
+                {
+                    // Sudo credentials are cached, no password needed
+                    commandToExecute = $"sudo -- {action.Command}";
+                }
             }
             else
             {
@@ -298,25 +306,37 @@ public static class ActionExecutionDialog
         {
             if (action.RequiresSudo)
             {
-                // Show UAC-style password dialog
-                SudoPasswordDialog.Show(action, windowSystem, (passwordResult) =>
+                // First check if sudo credentials are already cached
+                SudoPasswordDialog.CheckSudoReadyAsync((sudoReady) =>
                 {
-                    if (passwordResult.Success && passwordResult.Password != null)
+                    if (sudoReady)
                     {
-                        // Got valid password, proceed with execution
-                        sudoPassword = passwordResult.Password;
+                        // Sudo is ready, execute directly (credentials are cached)
                         StartExecution();
                     }
-                    else if (passwordResult.MaxAttemptsReached)
+                    else
                     {
-                        // Too many failed attempts - show error and stay in confirm
-                        windowSystem.NotificationStateService.ShowNotification(
-                            "Authentication Failed",
-                            "Too many failed password attempts. Action cancelled.",
-                            NotificationSeverity.Danger,
-                            timeout: 5000);
+                        // Need password - show UAC-style password dialog
+                        SudoPasswordDialog.Show(action, windowSystem, (passwordResult) =>
+                        {
+                            if (passwordResult.Success && passwordResult.Password != null)
+                            {
+                                // Got valid password, proceed with execution
+                                sudoPassword = passwordResult.Password;
+                                StartExecution();
+                            }
+                            else if (passwordResult.MaxAttemptsReached)
+                            {
+                                // Too many failed attempts - show error and stay in confirm
+                                windowSystem.NotificationStateService.ShowNotification(
+                                    "Authentication Failed",
+                                    "Too many failed password attempts. Action cancelled.",
+                                    NotificationSeverity.Danger,
+                                    timeout: 5000);
+                            }
+                            // If cancelled, just stay in confirm state (do nothing)
+                        });
                     }
-                    // If cancelled, just stay in confirm state (do nothing)
                 });
             }
             else
