@@ -622,17 +622,27 @@ class Program
         var contentControl = contentBuilder.Build();
         warningWindow.AddControl(contentControl);
 
-        // Button to acknowledge - only way to close the dialog
-        var button = Controls
+        // Buttons: I Understand and Quit
+        var understandButton = Controls
             .Button(" I Understand ")
-            .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Center)
             .OnClick((sender, e) =>
             {
                 _windowSystem?.CloseWindow(warningWindow!);
                 StartWidgetRefreshTimers(); // Start scripts only after acknowledgment
             })
             .Build();
-        warningWindow.AddControl(button);
+
+        var quitButton = Controls
+            .Button("    Quit    ")
+            .WithMargin(2, 0, 0, 0)
+            .OnClick((sender, e) =>
+            {
+                _windowSystem?.Shutdown(0);
+            })
+            .Build();
+
+        var buttonGrid = HorizontalGridControl.ButtonRow(understandButton, quitButton);
+        warningWindow.AddControl(buttonGrid);
 
         _windowSystem.AddWindow(warningWindow);
     }
