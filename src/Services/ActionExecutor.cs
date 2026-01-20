@@ -22,6 +22,7 @@ public class ActionExecutor
     /// <param name="cancellationToken">Cancellation token for termination</param>
     /// <param name="sudoPassword">Optional sudo password if action requires sudo</param>
     /// <param name="stdinInput">Optional input to write to stdin</param>
+    /// <param name="timeoutSeconds">Timeout in seconds (null = default 60s, 0 = no timeout)</param>
     /// <param name="onProgressUpdate">Callback for progress updates (elapsed seconds)</param>
     /// <param name="onOutputReceived">Callback when stdout line is received (streaming)</param>
     /// <param name="onErrorReceived">Callback when stderr line is received (streaming)</param>
@@ -33,6 +34,7 @@ public class ActionExecutor
         CancellationToken cancellationToken = default,
         string? sudoPassword = null,
         string? stdinInput = null,
+        int? timeoutSeconds = null,
         Action<int>? onProgressUpdate = null,
         Action<string>? onOutputReceived = null,
         Action<string>? onErrorReceived = null,
@@ -43,6 +45,11 @@ public class ActionExecutor
         Process? process = null;
         var outputBuilder = new System.Text.StringBuilder();
         var errorBuilder = new System.Text.StringBuilder();
+
+        // Resolve timeout: null = default, 0 = infinite (use int.MaxValue), N = N seconds
+        var effectiveTimeout = timeoutSeconds ?? DefaultTimeoutSeconds;
+        var hasNoTimeout = effectiveTimeout == 0;
+        var timeoutLimit = hasNoTimeout ? int.MaxValue : effectiveTimeout;
 
         // Handle sudo actions - check credentials and wrap command
         string commandToExecute = action.Command;
@@ -145,7 +152,7 @@ public class ActionExecutor
 
             // Wait for process completion with timeout and cancellation support
             var processExited = false;
-            while (!processExited && elapsedSeconds < DefaultTimeoutSeconds)
+            while (!processExited && elapsedSeconds < timeoutLimit)
             {
                 // Check if process has exited
                 if (process.HasExited)
@@ -189,8 +196,8 @@ public class ActionExecutor
                     ExitCode = -1,
                     Stdout = outputBuilder.ToString(),
                     Stderr = errorBuilder.Length > 0
-                        ? errorBuilder.ToString() + $"\nCommand timed out after {DefaultTimeoutSeconds} seconds"
-                        : $"Command timed out after {DefaultTimeoutSeconds} seconds",
+                        ? errorBuilder.ToString() + $"\nCommand timed out after {effectiveTimeout} seconds"
+                        : $"Command timed out after {effectiveTimeout} seconds",
                     Duration = stopwatch.Elapsed
                 };
             }

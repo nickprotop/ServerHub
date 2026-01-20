@@ -38,4 +38,19 @@ public class WidgetAction
     /// Whether to refresh widget after successful execution
     /// </summary>
     public bool RefreshAfterSuccess => Flags.Contains("refresh", StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Custom timeout in seconds (null = not specified, use default)
+    /// </summary>
+    public int? Timeout { get; set; }
+
+    /// <summary>
+    /// Whether this action has no timeout limit (timeout=0)
+    /// </summary>
+    public bool HasNoTimeout => Timeout == 0;
+
+    /// <summary>
+    /// Effective timeout to use (returns Timeout if specified, otherwise default 60 seconds)
+    /// </summary>
+    public int EffectiveTimeout => Timeout ?? 60;
 }

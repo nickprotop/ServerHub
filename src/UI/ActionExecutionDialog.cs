@@ -18,8 +18,6 @@ namespace ServerHub.UI;
 /// </summary>
 public static class ActionExecutionDialog
 {
-    private const int MaxTimeout = 60;
-
     // Output mode: true = add new control per line (uses AutoScroll), false = update single control content
     private const bool AddControlsPerLine = true;
 
@@ -149,6 +147,17 @@ public static class ActionExecutionDialog
         sudoHint.Visible = action.RequiresSudo;
         modal.AddControl(sudoHint);
 
+        // Timeout hint if applicable (shown in confirm state for infinite timeout)
+        var timeoutHint = Controls.Markup()
+            .WithName("dialog_timeout")
+            .AddLine("")
+            .AddLine(action.HasNoTimeout ? "[orange1 on grey23] \u23f1 This action has no timeout limit [/]" : "")
+            .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Center)
+            .WithMargin(0, 0, 0, 0)
+            .Build();
+        timeoutHint.Visible = action.HasNoTimeout;
+        modal.AddControl(timeoutHint);
+
         // Output section header
         modal.AddControl(Controls.Markup()
             .WithName("dialog_output_header")
@@ -206,16 +215,28 @@ public static class ActionExecutionDialog
         var closeButton = Controls.Button("  Close  ")
             .WithName("btn_close")
             .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Center)
+            .WithMargin(2, 0, 0, 0)
             .Build();
         closeButton.Visible = false;
+
+        var retryButton = Controls.Button("  Retry  ")
+            .WithName("btn_retry")
+            .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Center)
+            .Build();
+        retryButton.Visible = false;
 
         // Button grid for confirm state (Execute + Cancel) - centered
         var confirmButtonGrid = HorizontalGridControl.ButtonRow(executeButton, cancelButton);
         confirmButtonGrid.Name = "confirm_buttons";
 
+        // Button grid for finished-failed state (Retry + Close) - centered
+        var finishedButtonGrid = HorizontalGridControl.ButtonRow(retryButton, closeButton);
+        finishedButtonGrid.Name = "finished_buttons";
+        finishedButtonGrid.Visible = false;
+
         modal.AddControl(confirmButtonGrid);
         modal.AddControl(terminateButton);
-        modal.AddControl(closeButton);
+        modal.AddControl(finishedButtonGrid);
 
         // Footer separator
         modal.AddControl(Controls.RuleBuilder()
@@ -243,6 +264,9 @@ public static class ActionExecutionDialog
         {
             dialogState = "running";
 
+            // Get the effective timeout for this action
+            var effectiveTimeout = action.EffectiveTimeout;
+
             // Transition to running state
             TransitionToRunning(modal, action);
 
@@ -253,7 +277,8 @@ public static class ActionExecutionDialog
                 cts.Token,
                 sudoPassword: sudoPassword,
                 stdinInput: null,
-                onProgressUpdate: (elapsedSeconds) => UpdateProgress(modal, elapsedSeconds, MaxTimeout),
+                timeoutSeconds: effectiveTimeout,
+                onProgressUpdate: (elapsedSeconds) => UpdateProgress(modal, elapsedSeconds, effectiveTimeout),
                 onOutputReceived: (line) => AppendOutput(modal, line),
                 onErrorReceived: (line) => AppendError(modal, line),
                 onGracefulTerminate: () => ShowTerminating(modal),
@@ -327,6 +352,19 @@ public static class ActionExecutionDialog
 
         closeButton.Click += (s, e) => modal.Close();
 
+        retryButton.Click += (s, e) =>
+        {
+            // Reset for re-execution
+            sudoPassword = null;
+            cts = new CancellationTokenSource();
+
+            // Clear previous output
+            ClearOutput(modal);
+
+            // Execute again (HandleExecute will check sudo cache and prompt if needed)
+            HandleExecute();
+        };
+
         // Keyboard shortcuts
         modal.KeyPressed += (s, e) =>
         {
@@ -343,7 +381,11 @@ public static class ActionExecutionDialog
                 }
                 else if (dialogState == "finished")
                 {
-                    modal.Close();
+                    // Retry on Enter
+                    sudoPassword = null;
+                    cts = new CancellationTokenSource();
+                    ClearOutput(modal);
+                    HandleExecute();
                 }
                 e.Handled = true;
             }
@@ -424,11 +466,18 @@ public static class ActionExecutionDialog
             status.SetContent(new List<string> { "[cyan1]\u25cf[/] [grey70]Running...[/]" });
         }
 
-        // Show timer
+        // Show timer - display differently for infinite timeout
         var timer = modal.FindControl<MarkupControl>("dialog_timer");
         if (timer != null)
         {
-            timer.SetContent(new List<string> { $"[grey70]Elapsed: [cyan1]0s[/] / {MaxTimeout}s[/]" });
+            if (action.HasNoTimeout)
+            {
+                timer.SetContent(new List<string> { "[grey70]Elapsed: [cyan1]0s[/][/]" });
+            }
+            else
+            {
+                timer.SetContent(new List<string> { $"[grey70]Elapsed: [cyan1]0s[/] / {action.EffectiveTimeout}s[/]" });
+            }
         }
 
         // Show progress bar
@@ -453,6 +502,13 @@ public static class ActionExecutionDialog
             sudo.Visible = false;
         }
 
+        // Hide timeout hint
+        var timeout = modal.FindControl<MarkupControl>("dialog_timeout");
+        if (timeout != null)
+        {
+            timeout.Visible = false;
+        }
+
         // Update output placeholder
         var outputContent = modal.FindControl<MarkupControl>("dialog_output_content");
         if (outputContent != null)
@@ -460,17 +516,37 @@ public static class ActionExecutionDialog
             outputContent.SetContent(new List<string> { "[grey50](waiting for output...)[/]" });
         }
 
-        // Switch buttons: hide confirm buttons, show terminate
+        // Switch buttons: hide confirm/finished buttons, show terminate
         var confirmButtons = modal.FindControl<HorizontalGridControl>("confirm_buttons");
         if (confirmButtons != null)
         {
             confirmButtons.Visible = false;
         }
 
+        var finishedButtons = modal.FindControl<HorizontalGridControl>("finished_buttons");
+        if (finishedButtons != null)
+        {
+            finishedButtons.Visible = false;
+        }
+
+        // Hide retry and close buttons individually too (they might be visible from a previous run)
+        var retryButton = modal.FindControl<ButtonControl>("btn_retry");
+        if (retryButton != null)
+        {
+            retryButton.Visible = false;
+        }
+
+        var closeButton = modal.FindControl<ButtonControl>("btn_close");
+        if (closeButton != null)
+        {
+            closeButton.Visible = false;
+        }
+
         var terminateButton = modal.FindControl<ButtonControl>("btn_terminate");
         if (terminateButton != null)
         {
             terminateButton.Visible = true;
+            terminateButton.IsEnabled = true;
             terminateButton.SetFocus(true, FocusReason.Programmatic);
         }
 
@@ -487,30 +563,68 @@ public static class ActionExecutionDialog
     /// </summary>
     private static void UpdateProgress(Window modal, int elapsedSeconds, int maxTimeout)
     {
+        // Check if this is an infinite timeout (0)
+        var hasNoTimeout = maxTimeout == 0;
+
         // Update timer
         var timer = modal.FindControl<MarkupControl>("dialog_timer");
         if (timer != null)
         {
-            var remaining = maxTimeout - elapsedSeconds;
-            var color = remaining <= 10 ? "red" : remaining <= 30 ? "yellow" : "cyan1";
-            timer.SetContent(new List<string> { $"[grey70]Elapsed: [{color}]{elapsedSeconds}s[/] / {maxTimeout}s[/]" });
+            if (hasNoTimeout)
+            {
+                // Infinite timeout: just show elapsed time
+                timer.SetContent(new List<string> { $"[grey70]Elapsed: [cyan1]{elapsedSeconds}s[/][/]" });
+            }
+            else
+            {
+                // Finite timeout: show elapsed / max with color warning
+                var remaining = maxTimeout - elapsedSeconds;
+                var color = remaining <= 10 ? "red" : remaining <= 30 ? "yellow" : "cyan1";
+                timer.SetContent(new List<string> { $"[grey70]Elapsed: [{color}]{elapsedSeconds}s[/] / {maxTimeout}s[/]" });
+            }
         }
 
         // Update progress bar
         var progress = modal.FindControl<MarkupControl>("dialog_progress");
         if (progress != null)
         {
-            var percentage = (double)elapsedSeconds / maxTimeout;
             var barWidth = 50;
-            var filledWidth = (int)(barWidth * percentage);
 
-            var filled = new string('\u2501', Math.Max(0, filledWidth));
-            var empty = new string('\u2501', Math.Max(0, barWidth - filledWidth));
+            if (hasNoTimeout)
+            {
+                // Infinite timeout: show pulsing indicator (moving segment)
+                var pulsePosition = elapsedSeconds % barWidth;
+                var pulseWidth = 5;
+                var bar = new char[barWidth];
+                for (int i = 0; i < barWidth; i++)
+                {
+                    bar[i] = '\u2501';
+                }
 
-            var remaining = maxTimeout - elapsedSeconds;
-            var color = remaining <= 10 ? "red" : remaining <= 30 ? "yellow" : "cyan1";
+                // Build the bar with the pulse highlight
+                var beforePulse = Math.Max(0, pulsePosition);
+                var pulseEnd = Math.Min(barWidth, pulsePosition + pulseWidth);
 
-            progress.SetContent(new List<string> { $"[{color}]{filled}[/][grey23]{empty}[/]" });
+                var before = beforePulse > 0 ? new string('\u2501', beforePulse) : "";
+                var pulse = new string('\u2501', pulseEnd - beforePulse);
+                var after = pulseEnd < barWidth ? new string('\u2501', barWidth - pulseEnd) : "";
+
+                progress.SetContent(new List<string> { $"[grey23]{before}[/][cyan1]{pulse}[/][grey23]{after}[/]" });
+            }
+            else
+            {
+                // Finite timeout: show progress bar filling up
+                var percentage = (double)elapsedSeconds / maxTimeout;
+                var filledWidth = (int)(barWidth * percentage);
+
+                var filled = new string('\u2501', Math.Max(0, filledWidth));
+                var empty = new string('\u2501', Math.Max(0, barWidth - filledWidth));
+
+                var remaining = maxTimeout - elapsedSeconds;
+                var color = remaining <= 10 ? "red" : remaining <= 30 ? "yellow" : "cyan1";
+
+                progress.SetContent(new List<string> { $"[{color}]{filled}[/][grey23]{empty}[/]" });
+            }
         }
     }
 
@@ -528,6 +642,31 @@ public static class ActionExecutionDialog
     private static void AppendError(Window modal, string line)
     {
         AppendToOutput(modal, line, isError: true);
+    }
+
+    /// <summary>
+    /// Clears all output from the output panel for retry
+    /// </summary>
+    private static void ClearOutput(Window modal)
+    {
+        var scrollPanel = modal.FindControl<ScrollablePanelControl>("dialog_output_panel");
+        if (scrollPanel == null) return;
+
+        // Remove tracking for this modal
+        _hasReceivedOutput.Remove(modal);
+        _outputLines.Remove(modal);
+
+        // Clear all controls from scroll panel
+        foreach (var child in scrollPanel.Children.ToList())
+        {
+            scrollPanel.RemoveControl(child);
+        }
+
+        // Re-add the placeholder
+        var placeholder = new MarkupControl(new List<string> { "[grey50](waiting for output...)[/]" });
+        placeholder.Name = "dialog_output_content";
+        placeholder.Margin = new Margin(1, 0, 1, 0);
+        scrollPanel.AddControl(placeholder);
     }
 
     private static void AppendToOutput(Window modal, string line, bool isError)
@@ -560,6 +699,7 @@ public static class ActionExecutionDialog
         }
         else
         {
+#pragma warning disable CS0162 // Unreachable code detected - kept for alternative output mode
             // Mode: Update single control content (manual scroll)
             if (!_outputLines.TryGetValue(modal, out var lines))
             {
@@ -575,6 +715,7 @@ public static class ActionExecutionDialog
             }
 
             scrollPanel?.ScrollToBottom();
+#pragma warning restore CS0162
         }
     }
 
@@ -704,25 +845,37 @@ public static class ActionExecutionDialog
             }
         }
 
-        // Switch buttons: hide terminate, show close
+        // Switch buttons: hide terminate, show finished buttons (Retry + Close)
         var terminateButton = modal.FindControl<ButtonControl>("btn_terminate");
         if (terminateButton != null)
         {
             terminateButton.Visible = false;
         }
 
+        var finishedButtons = modal.FindControl<HorizontalGridControl>("finished_buttons");
+        if (finishedButtons != null)
+        {
+            finishedButtons.Visible = true;
+        }
+
+        var retryButton = modal.FindControl<ButtonControl>("btn_retry");
+        if (retryButton != null)
+        {
+            retryButton.Visible = true;
+            retryButton.SetFocus(true, FocusReason.Programmatic);
+        }
+
         var closeButton = modal.FindControl<ButtonControl>("btn_close");
         if (closeButton != null)
         {
             closeButton.Visible = true;
-            closeButton.SetFocus(true, FocusReason.Programmatic);
         }
 
         // Update footer
         var footer = modal.FindControl<MarkupControl>("dialog_footer");
         if (footer != null)
         {
-            footer.SetContent(new List<string> { "[grey70]Enter/Esc: Close  \u2022  \u2191\u2193/Mouse Wheel: Scroll[/]" });
+            footer.SetContent(new List<string> { "[grey70]Enter: Retry  \u2022  Esc: Close  \u2022  Tab: Switch  \u2022  \u2191\u2193: Scroll[/]" });
         }
     }
 }

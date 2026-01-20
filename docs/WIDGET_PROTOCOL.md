@@ -31,13 +31,52 @@ row: [progress:75:inline]
 row: [grey70]Muted text[/]
 ```
 
-### action: \<Label\>:\<script\> [arguments]
+### action: [flags] \<Label\>:\<command\>
 
-Defines an interactive action (future feature).
+Defines an interactive action that users can execute from the expanded widget view.
 
+**Basic Syntax:**
 ```
-action: Restart Service:/usr/local/bin/restart.sh nginx
+action: Label:command
+action: [flags] Label:command
 ```
+
+**Flags** (comma-separated in brackets):
+
+| Flag | Description |
+|------|-------------|
+| `danger` | Shows warning indicator, requires confirmation |
+| `sudo` | Executes with elevated privileges (prompts for password if needed) |
+| `refresh` | Refreshes the widget after successful execution |
+| `timeout=N` | Custom timeout in seconds (default: 60) |
+
+**Timeout Values:**
+- `timeout=N` - Command times out after N seconds
+- `timeout=0` - No timeout (runs indefinitely until terminated)
+- No flag - Uses default 60 second timeout
+
+**Examples:**
+```bash
+# Simple action
+action: View logs:journalctl -n 50
+
+# Action with flags
+action: [danger,refresh] Restart nginx:systemctl restart nginx
+action: [sudo] Update packages:apt update
+action: [sudo,danger,refresh] Reboot:reboot
+
+# Actions with custom timeout
+action: [sudo,timeout=120] Update cache:apt update
+action: [sudo,danger,timeout=600] Full upgrade:apt full-upgrade -y
+action: [timeout=0] View live log:journalctl -f -n 100
+```
+
+**UI Behavior:**
+- Actions appear as buttons in the expanded widget view
+- `danger` actions show a warning banner before execution
+- `sudo` actions show a password prompt if credentials aren't cached
+- `timeout=0` actions show a "no timeout limit" warning
+- Progress bar shows elapsed time vs timeout (or pulsing animation for infinite)
 
 ## Inline Elements
 

@@ -130,15 +130,18 @@ public class WidgetProtocolParser
     /// <summary>
     /// Parses an action definition
     /// Format: [flags] Label:command
-    /// Flags: danger, refresh (comma-separated)
+    /// Flags: danger, refresh, sudo, timeout=N (comma-separated)
     /// Example: [danger,refresh] Restart all:docker restart $(docker ps -q)
+    /// Example: [sudo,timeout=120] Long task:./slow-script.sh
+    /// Example: [timeout=0] Infinite task:tail -f /var/log/syslog
     /// </summary>
     private WidgetAction? ParseAction(string content)
     {
         var flags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        int? timeout = null;
         var workingContent = content.Trim();
 
-        // Parse flags: [flag1,flag2]
+        // Parse flags: [flag1,flag2,timeout=N]
         var flagMatch = Regex.Match(workingContent, @"^\[([^\]]+)\]\s*");
         if (flagMatch.Success)
         {
@@ -146,7 +149,22 @@ public class WidgetProtocolParser
             foreach (var flag in flagString.Split(','))
             {
                 var trimmedFlag = flag.Trim();
-                if (!string.IsNullOrEmpty(trimmedFlag))
+                if (string.IsNullOrEmpty(trimmedFlag))
+                {
+                    continue;
+                }
+
+                // Check for timeout=N pattern
+                var timeoutMatch = Regex.Match(trimmedFlag, @"^timeout=(\d+)$", RegexOptions.IgnoreCase);
+                if (timeoutMatch.Success)
+                {
+                    if (int.TryParse(timeoutMatch.Groups[1].Value, out var timeoutValue))
+                    {
+                        timeout = timeoutValue;
+                    }
+                    // Don't add timeout=N to flags - it's a value, not a boolean flag
+                }
+                else
                 {
                     flags.Add(trimmedFlag);
                 }
@@ -173,7 +191,8 @@ public class WidgetProtocolParser
         {
             Label = label,
             Command = command,
-            Flags = flags
+            Flags = flags,
+            Timeout = timeout
         };
     }
 
