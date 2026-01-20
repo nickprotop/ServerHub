@@ -4,19 +4,33 @@
 [![.NET](https://img.shields.io/badge/.NET-9.0-purple.svg)](https://dotnet.microsoft.com/)
 [![Platform](https://img.shields.io/badge/Platform-Linux-orange.svg)]()
 
-A terminal-based server monitoring dashboard with responsive multi-column layout.
+**An extensible server dashboard that doesn't just watch—it acts.**
+
+ServerHub is a terminal control panel for servers and homelabs. Monitor your system, execute actions, and build custom monitoring for your specific setup—all without touching the codebase.
+
+**Monitor. Act. Extend.**
 
 ![ServerHub Screenshot](.github/Screenshot.png)
 
-## Features
+## What Makes ServerHub Different
 
-- Responsive 1-4 column layout that adapts to terminal width
-- 14 bundled widgets (CPU, memory, disk, Docker, services, and more)
-- Custom widget support with SHA256 security validation
-- YAML-based configuration
-- Keyboard navigation between widgets (Tab/Shift+Tab)
-- Pause/resume widget refresh
-- Visual status indicators and progress bars
+**Extensible by design** - Write a bash script, and it becomes a widget. Monitor anything: custom services, APIs, hardware you built yourself, scripts you already have. No compilation required.
+
+**Context-aware actions** - Widgets don't just display data—they export actions based on what they're showing. A service widget shows different restart options depending on which services are running. An updates widget exports "Upgrade All" only when updates are available. Docker widget offers actions per container. Each widget adapts to the current state.
+
+**Control, not just monitoring** - Upgrade packages, restart services, manage containers, trigger backups—execute actions with confirmation dialogs, progress tracking, and sudo support when needed. Your dashboard becomes a control panel.
+
+**Security-first extensibility** - SHA256 validation for custom widgets with a documented threat model. Minimal environment variables. Path restrictions. Symlink blocking. Professional security without sacrificing flexibility.
+
+## Core Features
+
+- **14 bundled widgets** - CPU, memory, disk, network, Docker, systemd services, package updates, logs, SSL certificates, sensors, and more
+- **Responsive layout** - 1-4 column layout adapts to terminal width
+- **Custom widgets** - Write bash scripts to monitor anything specific to your setup
+- **Action system** - Execute commands directly from widgets with progress tracking
+- **SHA256 validation** - All custom widgets require checksum validation (development mode available)
+- **YAML configuration** - Simple, version-controllable config files
+- **Keyboard navigation** - Tab/Shift+Tab between widgets, arrow keys to scroll
 
 ## Requirements
 
@@ -145,12 +159,68 @@ See [docs/WIDGET_PROTOCOL.md](docs/WIDGET_PROTOCOL.md) for the full protocol ref
 
 Widgets are **executable scripts that run with your user privileges**. A malicious widget could read your files, make network requests, or do anything else you can do. We'd rather be annoying about checksums than watch your server have a very bad day.
 
+### Threat Model
+
+**What we protect against:**
+
+| Threat | Protection |
+| --- | --- |
+| **Malicious custom widgets** | Checksum requirement forces you to review code before trusting |
+| **Tampering after trust** | Modified files fail checksum validation and won't run |
+| **Copy-paste attacks** | We don't auto-show checksums on failure (see [Why We Don't Auto-Generate Checksums](#why-we-dont-auto-generate-checksums)) |
+| **Accidental execution of untrusted code** | Unknown widgets are blocked by default |
+| **Symlink attacks** | Symlinks are detected and blocked during validation |
+| **Path traversal** | Scripts must be within allowed widget directories |
+| **Environment variable leakage** | Widgets run with minimal environment variables |
+
+**What we DON'T protect against:**
+
+| Threat | Notes |
+| --- | --- |
+| **Compromised build environment** | If attackers modify bundled checksums at build time, they can ship malicious code. Mitigation: reproducible builds, signed releases (future) |
+| **You approving malicious code** | If you `--discover` a widget and approve without reading it, that's on you |
+| **Privilege escalation** | Widgets run as your user. If you run ServerHub as root, widgets run as root. **Don't do this.** |
+| **TOCTOU race conditions** | Small window between checksum validation and execution. Low risk in practice |
+| **Side-channel attacks** | Widget output is displayed; timing or output analysis is possible |
+
 ### Trust Hierarchy
 
-| Source | Trust Level | Checksum Source |
-|--------|-------------|-----------------|
-| **Bundled widgets** | Highest | Hardcoded at build time (maintainer-reviewed) |
-| **Custom widgets** | User-verified | You add `sha256` to config after reviewing code |
+| Source | Trust Level | Checksum Source | Failure Behavior |
+| --- | --- | --- | --- |
+| **Bundled widgets** | Highest | Hardcoded at build time (maintainer-reviewed) | Widget disabled with error message in widget area |
+| **Custom widgets** | User-verified | You add `sha256` to config after reviewing code | Widget disabled with error message in widget area |
+
+### Validation Layers
+
+ServerHub performs multiple security checks before executing any widget script:
+
+1. **File Existence** - Script file must exist at the specified path
+2. **Symlink Detection** - Symlinks are blocked (prevents following malicious links)
+3. **Path Restriction** - Script must be within allowed widget directories:
+   - `--widgets-path` (if specified)
+   - `~/.config/serverhub/widgets/` (custom widgets)
+   - `~/.local/share/serverhub/widgets/` (bundled widgets)
+4. **Executable Permissions** - Script must have execute permission (Unix systems)
+5. **SHA256 Checksum** - Script content must match trusted checksum
+
+Additionally during execution:
+- **Minimal Environment** - Widgets run with cleared environment variables (only PATH, HOME, USER, LANG)
+- **Timeout Enforcement** - Scripts are killed if they exceed configured timeout
+
+### Failure Behavior
+
+| Scenario | Behavior |
+| --- | --- |
+| Bundled widget checksum mismatch | Widget refuses to run, displays "Checksum mismatch" error |
+| Bundled widget file missing | Widget refuses to run, displays "Widget not found" error |
+| Custom widget missing checksum | Widget refuses to run, displays "No checksum configured" with instructions |
+| Custom widget checksum mismatch | Widget refuses to run, displays "Checksum mismatch" error with expected vs actual |
+| Custom widget file missing | Widget refuses to run, displays "Widget not found" error |
+| Symlink detected | Widget refuses to run, displays "Symlinks are not allowed" error |
+| Path outside allowed directories | Widget refuses to run, displays "Script path is not within allowed directories" error |
+| Script not executable | Widget refuses to run, displays "Script is not executable" with chmod instructions |
+
+In all cases, **other widgets continue to function normally**. A single compromised or misconfigured widget doesn't take down your dashboard.
 
 ### How It Works
 
@@ -171,12 +241,15 @@ Without a checksum, custom widgets will not run. This is intentional.
 ### Adding Custom Widgets Safely
 
 **Option 1: Discovery (Recommended)**
+
 ```bash
 serverhub --discover
 ```
-This shows you a code preview of each widget before adding it. When you approve, the checksum is captured at that moment - the "trusted moment" when you've actually seen what the code does.
+
+This shows you a code preview of each widget before adding it. When you approve, the checksum is captured at that moment—the "trusted moment" when you've actually seen what the code does.
 
 **Option 2: Manual**
+
 ```bash
 # 1. Read the script yourself
 cat ~/.config/serverhub/widgets/my-widget.sh
@@ -185,6 +258,7 @@ cat ~/.config/serverhub/widgets/my-widget.sh
 sha256sum ~/.config/serverhub/widgets/my-widget.sh
 
 # 3. Add to config with the checksum
+nano ~/.config/serverhub/config.yaml
 ```
 
 ### Why We Don't Auto-Generate Checksums
@@ -192,33 +266,98 @@ sha256sum ~/.config/serverhub/widgets/my-widget.sh
 When a widget fails validation, ServerHub does **not** helpfully show you "just add this checksum." That would defeat the entire security model:
 
 1. Attacker modifies a widget file
-2. You run ServerHub, it fails with "missing checksum"
-3. If it showed the checksum, you'd copy-paste it without thinking
+2. You run ServerHub, it fails with "checksum mismatch"
+3. If it showed the new checksum, you'd copy-paste it without thinking
 4. Congratulations, you've just blessed malicious code
 
-Instead, you must go through a "trusted moment" - either `--discover` (which shows the code) or manually running `sha256sum` (which requires conscious action).
+Instead, you must go through a "trusted moment"—either `--discover` (which shows the code) or manually running `sha256sum` (which requires conscious action).
+
+### Why SHA256?
+
+We use SHA256 for checksum validation. While even older algorithms like SHA1 would provide sufficient collision resistance for integrity checking of small scripts, SHA256 is:
+
+- The current industry standard
+- Unlikely to raise concerns in security audits
+- Widely supported and understood
+- Future-proof for the foreseeable future
 
 ### Development Mode
 
-For **development only**, you can skip custom widget checksum validation:
+For **widget development only**, you can skip custom widget checksum validation:
 
 ```bash
 serverhub --dev-mode --widgets-path ./my-dev-widgets
 ```
 
-Dev mode shows prominent warnings (status bar, orange border, startup dialog) because:
+Dev mode indicators:
+- Orange border around the dashboard
+- Warning in status bar
+- Startup dialog requiring acknowledgment
+
+Important notes:
 - Bundled widgets are **still validated** even in dev mode
+- Symlink, path, and permission checks **still apply** in dev mode
 - This is for development, not for "I don't want to deal with checksums"
 - **Never use `--dev-mode` in production**
 
 ### Verification
 
-```bash
-# Check all your widgets
-serverhub --verify-checksums
+Verify all configured widget checksums:
 
-# Output shows VALID / MISMATCH / NO CHECKSUM for each
+```bash
+serverhub --verify-checksums
 ```
+
+Example output:
+```
+Verifying widget checksums...
+
+  cpu                  VALID (bundled)
+  memory               VALID (bundled)
+  my-custom-widget     VALID (config)
+  untrusted-widget     NO CHECKSUM
+      Run --discover or manually verify before adding checksum
+  tampered-widget      MISMATCH (config)
+      Expected: a1b2c3d4e5f6...
+      Actual:   f9e8d7c6b5a4...
+  missing-widget       NOT FOUND
+
+Results: 3 valid, 1 mismatch, 2 missing/no-checksum
+```
+
+Exit codes:
+- `0` - All widgets valid
+- `1` - One or more failures (mismatch, missing checksum, or not found)
+
+Use in scripts and CI/CD:
+```bash
+# Pre-deployment check
+serverhub --verify-checksums || { echo "Widget validation failed"; exit 1; }
+```
+
+### Recommendations
+
+1. **Never run ServerHub as root** — widgets inherit your privileges
+2. **Actually read widget code** during `--discover` — don't just approve blindly
+3. **Run `--verify-checksums` periodically** — catch tampering early (add to cron/systemd timers)
+4. **For high-security environments** — stick to bundled widgets only
+5. **Review widget updates** — if you update a custom widget, you'll need to update its checksum (which forces a re-review)
+6. **Avoid symlinks** — place widget scripts directly in widget directories, don't symlink to other locations
+7. **Check permissions** — ensure widget scripts have appropriate file permissions (chmod +x for execution, not world-writable)
+
+### Future Considerations
+
+These features are not currently implemented but are under consideration:
+
+**Signed Widgets**
+- GPG-signed widgets with trusted key management
+- Would enable a widget ecosystem where you trust maintainers rather than reviewing every line
+- More complex but scales better than per-widget checksums
+
+**Reproducible Builds**
+- Deterministic builds to verify bundled widget checksums independently
+- Build attestation for supply chain security
+- Allow independent verification of bundled widgets
 
 ## Built With
 
