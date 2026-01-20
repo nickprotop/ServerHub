@@ -1,0 +1,285 @@
+// Copyright (c) Nikolaos Protopapas. All rights reserved.
+// Licensed under the MIT License. See LICENSE file in the project root for full license information.
+
+using ServerHub.Models;
+using ServerHub.Services;
+using SharpConsoleUI;
+using SharpConsoleUI.Builders;
+using SharpConsoleUI.Controls;
+using SharpConsoleUI.Core;
+using Spectre.Console;
+
+namespace ServerHub.UI;
+
+/// <summary>
+/// UAC-style password dialog for sudo authentication.
+/// Minimizes all windows and shows a dramatic centered prompt.
+/// </summary>
+public static class SudoPasswordDialog
+{
+    private const int MaxAttempts = 3;
+
+    /// <summary>
+    /// Result of the password dialog
+    /// </summary>
+    public class PasswordResult
+    {
+        public bool Success { get; init; }
+        public string? Password { get; init; }
+        public bool Cancelled { get; init; }
+        public bool MaxAttemptsReached { get; init; }
+    }
+
+    /// <summary>
+    /// Shows the sudo password dialog with UAC-style presentation.
+    /// Minimizes all windows and restores them on completion.
+    /// </summary>
+    /// <param name="action">The action requiring sudo</param>
+    /// <param name="windowSystem">Console window system</param>
+    /// <param name="onResult">Callback with the result (password or cancellation)</param>
+    public static void Show(
+        WidgetAction action,
+        ConsoleWindowSystem windowSystem,
+        Action<PasswordResult> onResult)
+    {
+        // Store minimized state of all windows to restore later
+        var windowStates = new Dictionary<Window, WindowState>();
+        foreach (var window in windowSystem.Windows.Values.ToList())
+        {
+            windowStates[window] = window.State;
+            if (window.State != WindowState.Minimized)
+            {
+                window.Minimize();
+            }
+        }
+
+        // Calculate modal size - compact and centered
+        int modalWidth = 60;
+        int modalHeight = 16;
+
+        var modal = new WindowBuilder(windowSystem)
+            .WithSize(modalWidth, modalHeight)
+            .Centered()
+            .AsModal()
+            .WithBorderStyle(BorderStyle.DoubleLine)
+            .WithBorderColor(Color.Orange1)
+            .HideTitle()
+            .Resizable(false)
+            .Movable(false)
+            .Minimizable(false)
+            .Maximizable(false)
+            .WithColors(Color.Grey11, Color.Grey93)
+            .Build();
+
+        // Track state
+        var attempts = 0;
+        var dialogComplete = false;
+        PasswordResult? result = null;
+
+        // Header with lock icon
+        modal.AddControl(Controls.Markup()
+            .AddLine("")
+            .AddLine("[bold orange1]\U0001F512 Sudo Authentication Required[/]")
+            .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Center)
+            .Build());
+
+        // Command being executed
+        modal.AddControl(Controls.Markup()
+            .WithName("command_info")
+            .AddLine("")
+            .AddLine("[grey70]Action:[/]")
+            .AddLine($"[white]{Markup.Escape(action.Label)}[/]")
+            .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Center)
+            .Build());
+
+        // Error message area (initially hidden)
+        var errorMessage = Controls.Markup()
+            .WithName("error_message")
+            .AddLine("")
+            .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Center)
+            .Build();
+        errorMessage.Visible = false;
+        modal.AddControl(errorMessage);
+
+        // Password prompt
+        modal.AddControl(Controls.Markup()
+            .AddLine("")
+            .Build());
+
+        var passwordPrompt = new PromptControl();
+        passwordPrompt.Name = "password_input";
+        passwordPrompt.Prompt = "  Password: ";
+        passwordPrompt.MaskCharacter = '\u2022';
+        passwordPrompt.InputWidth = 30;
+        passwordPrompt.InputBackgroundColor = Color.Grey19;
+        passwordPrompt.InputFocusedBackgroundColor = Color.Grey23;
+        passwordPrompt.UnfocusOnEnter = false;
+        passwordPrompt.HorizontalAlignment = SharpConsoleUI.Layout.HorizontalAlignment.Center;
+        modal.AddControl(passwordPrompt);
+
+        // Disclaimer
+        modal.AddControl(Controls.Markup()
+            .AddLine("")
+            .AddLine("[grey50]Password is used once and immediately discarded.[/]")
+            .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Center)
+            .Build());
+
+        // Buttons
+        var buttonGrid = Controls.HorizontalGrid()
+            .WithName("buttons")
+            .Build();
+
+        var authenticateButton = Controls.Button(" Authenticate ")
+            .WithName("btn_auth")
+            .Build();
+        var cancelButton = Controls.Button("   Cancel   ")
+            .WithName("btn_cancel")
+            .Build();
+
+        var leftCol = new ColumnContainer(buttonGrid);
+        leftCol.AddContent(authenticateButton);
+        buttonGrid.AddColumn(leftCol);
+        var rightCol = new ColumnContainer(buttonGrid);
+        rightCol.AddContent(cancelButton);
+        buttonGrid.AddColumn(rightCol);
+
+        modal.AddControl(Controls.Markup().AddLine("").Build());
+        modal.AddControl(buttonGrid);
+
+        // Footer
+        modal.AddControl(Controls.Markup()
+            .WithName("footer")
+            .AddLine("")
+            .AddLine("[grey50]Enter: Authenticate  \u2022  Esc: Cancel[/]")
+            .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Center)
+            .StickyBottom()
+            .Build());
+
+        // Restore windows helper
+        void RestoreWindows()
+        {
+            foreach (var kvp in windowStates)
+            {
+                if (kvp.Value != WindowState.Minimized) // Was not minimized before
+                {
+                    kvp.Key.Restore();
+                }
+            }
+        }
+
+        // Complete dialog helper
+        void CompleteDialog(PasswordResult dialogResult)
+        {
+            if (dialogComplete) return;
+            dialogComplete = true;
+            result = dialogResult;
+
+            // Clear password from control
+            passwordPrompt.Input = "";
+
+            modal.Close();
+        }
+
+        // Authenticate helper
+        void DoAuthenticate()
+        {
+            var password = passwordPrompt.Input;
+
+            if (string.IsNullOrEmpty(password))
+            {
+                errorMessage.SetContent(new List<string> { "", "[red]Password is required[/]" });
+                errorMessage.Visible = true;
+                return;
+            }
+
+            attempts++;
+
+            // Test the password with a simple sudo command
+            TestPasswordAsync(password, (success) =>
+            {
+                if (success)
+                {
+                    CompleteDialog(new PasswordResult { Success = true, Password = password });
+                }
+                else
+                {
+                    // Clear password
+                    passwordPrompt.Input = "";
+
+                    if (attempts >= MaxAttempts)
+                    {
+                        CompleteDialog(new PasswordResult { Success = false, MaxAttemptsReached = true });
+                    }
+                    else
+                    {
+                        var remaining = MaxAttempts - attempts;
+                        errorMessage.SetContent(new List<string> {
+                            "",
+                            $"[red]Authentication failed. {remaining} attempt{(remaining == 1 ? "" : "s")} remaining.[/]"
+                        });
+                        errorMessage.Visible = true;
+                        passwordPrompt.SetFocus(true, FocusReason.Programmatic);
+                    }
+                }
+            });
+        }
+
+        // Button handlers
+        authenticateButton.Click += (s, e) => DoAuthenticate();
+        cancelButton.Click += (s, e) => CompleteDialog(new PasswordResult { Success = false, Cancelled = true });
+
+        // Keyboard shortcuts
+        modal.KeyPressed += (s, e) =>
+        {
+            if (e.KeyInfo.Key == ConsoleKey.Enter)
+            {
+                DoAuthenticate();
+                e.Handled = true;
+            }
+            else if (e.KeyInfo.Key == ConsoleKey.Escape)
+            {
+                CompleteDialog(new PasswordResult { Success = false, Cancelled = true });
+                e.Handled = true;
+            }
+        };
+
+        // Handle close
+        modal.OnClosed += (s, e) =>
+        {
+            RestoreWindows();
+
+            if (result == null)
+            {
+                result = new PasswordResult { Success = false, Cancelled = true };
+            }
+
+            onResult(result);
+        };
+
+        // Show and focus
+        windowSystem.AddWindow(modal);
+        windowSystem.SetActiveWindow(modal);
+        passwordPrompt.SetFocus(true, FocusReason.Programmatic);
+    }
+
+    /// <summary>
+    /// Tests the password with a simple sudo command
+    /// </summary>
+    private static async void TestPasswordAsync(string password, Action<bool> callback)
+    {
+        var testAction = new WidgetAction
+        {
+            Label = "Test",
+            Command = "sudo -S -- true"  // Simple command that succeeds if password is correct
+        };
+
+        var executor = new ActionExecutor();
+        var result = await executor.ExecuteAsync(
+            testAction,
+            stdinInput: password);
+
+        // Check if authentication succeeded
+        var success = result.ExitCode == 0;
+        callback(success);
+    }
+}

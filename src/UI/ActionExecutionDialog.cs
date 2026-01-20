@@ -13,7 +13,8 @@ namespace ServerHub.UI;
 
 /// <summary>
 /// Unified dialog for action confirmation, execution, and results.
-/// Evolves through three states: Confirm → Running → Finished
+/// Evolves through states: Confirm → Running → Finished
+/// For sudo actions, shows SudoPasswordDialog first.
 /// </summary>
 public static class ActionExecutionDialog
 {
@@ -78,6 +79,9 @@ public static class ActionExecutionDialog
         // Track execution result for onComplete callback
         ActionResult? executionResult = null;
 
+        // Track sudo password (set by SudoPasswordDialog if needed)
+        string? sudoPassword = null;
+
         // Header - shows action name and state
         var actionLabel = action.IsDanger
             ? $"[yellow]{action.Label}[/]  [red]\u26a0[/]"
@@ -135,7 +139,7 @@ public static class ActionExecutionDialog
         var sudoHint = Controls.Markup()
             .WithName("dialog_sudo")
             .AddLine("")
-            .AddLine(action.RequiresSudo ? "[orange1 on grey23] ! This action requires elevated privileges (sudo) [/]" : "")
+            .AddLine(action.RequiresSudo ? "[orange1 on grey23] \U0001F512 This action requires elevated privileges (sudo) [/]" : "")
             .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Center)
             .WithMargin(0, 0, 0, 0)
             .Build();
@@ -238,7 +242,7 @@ public static class ActionExecutionDialog
         // Track dialog state: "confirm", "running", "finished"
         var dialogState = "confirm";
 
-        // Execute action handler
+        // Execute action handler (called after password is obtained for sudo actions)
         async void StartExecution()
         {
             dialogState = "running";
@@ -246,11 +250,36 @@ public static class ActionExecutionDialog
             // Transition to running state
             TransitionToRunning(modal, action);
 
+            // Prepare command and stdin for execution
+            string commandToExecute;
+            string? stdinForExecution = null;
+
+            if (action.RequiresSudo && sudoPassword != null)
+            {
+                // Wrap command with sudo -S for stdin password
+                commandToExecute = $"sudo -S -- {action.Command}";
+                stdinForExecution = sudoPassword;
+                // Clear password immediately after capturing
+                sudoPassword = null;
+            }
+            else
+            {
+                commandToExecute = action.Command;
+            }
+
+            // Create action with the command to execute
+            var actionToExecute = new WidgetAction
+            {
+                Label = action.Label,
+                Command = commandToExecute
+            };
+
             // Execute the action
             var executor = new ActionExecutor();
             var result = await executor.ExecuteAsync(
-                action,
+                actionToExecute,
                 cts.Token,
+                stdinInput: stdinForExecution,
                 onProgressUpdate: (elapsedSeconds) => UpdateProgress(modal, elapsedSeconds, MaxTimeout),
                 onOutputReceived: (line) => AppendOutput(modal, line),
                 onErrorReceived: (line) => AppendError(modal, line),
@@ -264,8 +293,41 @@ public static class ActionExecutionDialog
             TransitionToFinished(modal, result);
         }
 
+        // Handler for Execute button - shows password dialog if sudo required
+        void HandleExecute()
+        {
+            if (action.RequiresSudo)
+            {
+                // Show UAC-style password dialog
+                SudoPasswordDialog.Show(action, windowSystem, (passwordResult) =>
+                {
+                    if (passwordResult.Success && passwordResult.Password != null)
+                    {
+                        // Got valid password, proceed with execution
+                        sudoPassword = passwordResult.Password;
+                        StartExecution();
+                    }
+                    else if (passwordResult.MaxAttemptsReached)
+                    {
+                        // Too many failed attempts - show error and stay in confirm
+                        windowSystem.NotificationStateService.ShowNotification(
+                            "Authentication Failed",
+                            "Too many failed password attempts. Action cancelled.",
+                            NotificationSeverity.Danger,
+                            timeout: 5000);
+                    }
+                    // If cancelled, just stay in confirm state (do nothing)
+                });
+            }
+            else
+            {
+                // No sudo required, execute directly
+                StartExecution();
+            }
+        }
+
         // Button click handlers
-        executeButton.Click += (s, e) => StartExecution();
+        executeButton.Click += (s, e) => HandleExecute();
 
         cancelButton.Click += (s, e) => modal.Close();
 
@@ -287,7 +349,7 @@ public static class ActionExecutionDialog
             {
                 if (dialogState == "confirm")
                 {
-                    StartExecution();
+                    HandleExecute();
                 }
                 else if (dialogState == "running" && terminateButton.IsEnabled)
                 {

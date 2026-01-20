@@ -20,6 +20,7 @@ public class ActionExecutor
     /// </summary>
     /// <param name="action">Action to execute</param>
     /// <param name="cancellationToken">Cancellation token for termination</param>
+    /// <param name="stdinInput">Optional input to write to stdin (for sudo -S, etc.)</param>
     /// <param name="onProgressUpdate">Callback for progress updates (elapsed seconds)</param>
     /// <param name="onOutputReceived">Callback when stdout line is received (streaming)</param>
     /// <param name="onErrorReceived">Callback when stderr line is received (streaming)</param>
@@ -29,6 +30,7 @@ public class ActionExecutor
     public async Task<ActionResult> ExecuteAsync(
         WidgetAction action,
         CancellationToken cancellationToken = default,
+        string? stdinInput = null,
         Action<int>? onProgressUpdate = null,
         Action<string>? onOutputReceived = null,
         Action<string>? onErrorReceived = null,
@@ -58,6 +60,7 @@ public class ActionExecutor
 
             process.StartInfo.RedirectStandardOutput = true;
             process.StartInfo.RedirectStandardError = true;
+            process.StartInfo.RedirectStandardInput = !string.IsNullOrEmpty(stdinInput);
             process.StartInfo.UseShellExecute = false;
             process.StartInfo.CreateNoWindow = true;
 
@@ -82,6 +85,13 @@ public class ActionExecutor
 
             // Start process
             process.Start();
+
+            // Write stdin input if provided (e.g., password for sudo -S)
+            if (!string.IsNullOrEmpty(stdinInput))
+            {
+                await process.StandardInput.WriteLineAsync(stdinInput);
+                process.StandardInput.Close();
+            }
 
             // Begin async reading
             process.BeginOutputReadLine();
