@@ -292,12 +292,12 @@ public static class ActionExecutionDialog
                     if (_disposedDialogs.Contains(modal))
                         return;
 
-                    if (passwordResult.Success && passwordResult.Password != null)
+                    if (passwordResult.Success)
                     {
                         sudoPassword = passwordResult.Password;
                         StartExecution();
                     }
-                    // If cancelled or failed, just stay in confirm state
+                    // If cancelled - just stay in confirm state
                 });
             }
             else

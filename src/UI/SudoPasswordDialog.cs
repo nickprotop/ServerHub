@@ -178,19 +178,10 @@ public static class SudoPasswordDialog
             modal.Close();
         }
 
-        // Authenticate helper
+        // Authenticate helper - return whatever user entered, let executor handle it
         void DoAuthenticate()
         {
             var password = passwordPrompt.Input;
-
-            if (string.IsNullOrEmpty(password))
-            {
-                errorMessage.SetContent(new List<string> { "", "[red]Password is required[/]" });
-                errorMessage.Visible = true;
-                return;
-            }
-
-            // Return the password - ActionExecutor will test it during execution
             CompleteDialog(new PasswordResult { Success = true, Password = password });
         }
 
