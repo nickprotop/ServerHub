@@ -20,7 +20,8 @@ public class ActionExecutor
     /// </summary>
     /// <param name="action">Action to execute</param>
     /// <param name="cancellationToken">Cancellation token for termination</param>
-    /// <param name="stdinInput">Optional input to write to stdin (for sudo -S, etc.)</param>
+    /// <param name="sudoPassword">Optional sudo password if action requires sudo</param>
+    /// <param name="stdinInput">Optional input to write to stdin</param>
     /// <param name="onProgressUpdate">Callback for progress updates (elapsed seconds)</param>
     /// <param name="onOutputReceived">Callback when stdout line is received (streaming)</param>
     /// <param name="onErrorReceived">Callback when stderr line is received (streaming)</param>
@@ -30,6 +31,7 @@ public class ActionExecutor
     public async Task<ActionResult> ExecuteAsync(
         WidgetAction action,
         CancellationToken cancellationToken = default,
+        string? sudoPassword = null,
         string? stdinInput = null,
         Action<int>? onProgressUpdate = null,
         Action<string>? onOutputReceived = null,
@@ -42,6 +44,40 @@ public class ActionExecutor
         var outputBuilder = new System.Text.StringBuilder();
         var errorBuilder = new System.Text.StringBuilder();
 
+        // Handle sudo actions - check credentials and wrap command
+        string commandToExecute = action.Command;
+        string? stdinForExecution = stdinInput;
+
+        if (action.RequiresSudo)
+        {
+            // Check if sudo credentials are cached
+            bool sudoCached = await CheckSudoCachedAsync(cancellationToken);
+
+            if (sudoCached)
+            {
+                // Credentials cached, no password needed
+                commandToExecute = $"sudo -- {action.Command}";
+            }
+            else if (!string.IsNullOrEmpty(sudoPassword))
+            {
+                // Use provided password
+                commandToExecute = $"sudo -S -- {action.Command}";
+                stdinForExecution = sudoPassword;
+            }
+            else
+            {
+                // No credentials and no password provided
+                stopwatch.Stop();
+                return new ActionResult
+                {
+                    ExitCode = 1,
+                    Stdout = string.Empty,
+                    Stderr = "Sudo password required but not provided",
+                    Duration = stopwatch.Elapsed
+                };
+            }
+        }
+
         try
         {
             process = new Process();
@@ -50,17 +86,17 @@ public class ActionExecutor
             if (Environment.OSVersion.Platform == PlatformID.Win32NT)
             {
                 process.StartInfo.FileName = "cmd.exe";
-                process.StartInfo.Arguments = $"/c {action.Command}";
+                process.StartInfo.Arguments = $"/c {commandToExecute}";
             }
             else
             {
                 process.StartInfo.FileName = "/bin/bash";
-                process.StartInfo.Arguments = $"-c \"{action.Command.Replace("\"", "\\\"")}\"";
+                process.StartInfo.Arguments = $"-c \"{commandToExecute.Replace("\"", "\\\"")}\"";
             }
 
             process.StartInfo.RedirectStandardOutput = true;
             process.StartInfo.RedirectStandardError = true;
-            process.StartInfo.RedirectStandardInput = !string.IsNullOrEmpty(stdinInput);
+            process.StartInfo.RedirectStandardInput = !string.IsNullOrEmpty(stdinForExecution);
             process.StartInfo.UseShellExecute = false;
             process.StartInfo.CreateNoWindow = true;
 
@@ -87,9 +123,9 @@ public class ActionExecutor
             process.Start();
 
             // Write stdin input if provided (e.g., password for sudo -S)
-            if (!string.IsNullOrEmpty(stdinInput))
+            if (!string.IsNullOrEmpty(stdinForExecution))
             {
-                await process.StandardInput.WriteLineAsync(stdinInput);
+                await process.StandardInput.WriteLineAsync(stdinForExecution);
                 process.StandardInput.Close();
             }
 
@@ -277,6 +313,31 @@ public class ActionExecutor
             {
                 // Ignore errors during force kill
             }
+        }
+    }
+
+    /// <summary>
+    /// Checks if sudo credentials are already cached (no password needed).
+    /// Uses sudo -n (non-interactive) which fails if password is required.
+    /// </summary>
+    private async Task<bool> CheckSudoCachedAsync(CancellationToken cancellationToken)
+    {
+        // Create test action without sudo flag to avoid recursive checking
+        var testAction = new WidgetAction
+        {
+            Label = "Test",
+            Command = "sudo -n true",  // Non-interactive: succeeds only if credentials are cached
+            Flags = new HashSet<string>()  // No flags = RequiresSudo will be false
+        };
+
+        try
+        {
+            var result = await ExecuteAsync(testAction, cancellationToken);
+            return result.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
         }
     }
 }
