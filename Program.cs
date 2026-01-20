@@ -138,17 +138,19 @@ class Program
             // Subscribe to terminal resize events
             _windowSystem.ConsoleDriver.ScreenResized += OnTerminalResized;
 
-            // Layer 3: Dev mode warning dialog (requires acknowledgment)
-            if (_devMode)
-            {
-                ShowDevModeWarningDialog();
-            }
-
             // Check for unconfigured scripts and show warning
             CheckForUnconfiguredWidgets();
 
-            // Start widget refresh timers
-            StartWidgetRefreshTimers();
+            // Dev mode: show warning dialog that MUST be acknowledged before scripts run
+            if (_devMode)
+            {
+                ShowDevModeWarningDialog(); // Will call StartWidgetRefreshTimers() when acknowledged
+            }
+            else
+            {
+                // Normal mode: start scripts immediately
+                StartWidgetRefreshTimers();
+            }
 
             // Run the application
             await Task.Run(() => _windowSystem.Run());
@@ -578,39 +580,26 @@ class Program
 
     /// <summary>
     /// Shows a warning dialog when running in dev mode (Layer 3 of dev mode warnings)
+    /// Scripts will not start until user acknowledges by clicking the button
     /// </summary>
     private static void ShowDevModeWarningDialog()
     {
         if (_windowSystem == null)
             return;
 
-        // Calculate centered position and size based on terminal dimensions
-        var terminalWidth = Console.WindowWidth;
-        var terminalHeight = Console.WindowHeight;
-
-        // Dialog size
-        var dialogWidth = Math.Min(65, terminalWidth - 10);
-        var dialogHeight = Math.Min(14, terminalHeight - 6);
-
-        // Center the dialog
-        var dialogX = (terminalWidth - dialogWidth) / 2;
-        var dialogY = (terminalHeight - dialogHeight) / 2;
-
-        var warningWindow = new WindowBuilder(_windowSystem)
+        Window? warningWindow = null;
+        warningWindow = new WindowBuilder(_windowSystem)
             .WithName("DevModeWarning")
-            .WithBounds(dialogX, dialogY, dialogWidth, dialogHeight)
-            .WithColors(Color.Grey11, Color.Orange1)
-            .OnKeyPressed(
-                (sender, e) =>
-                {
-                    // Close on ESC or Enter
-                    if (e.KeyInfo.Key == ConsoleKey.Escape || e.KeyInfo.Key == ConsoleKey.Enter)
-                    {
-                        _windowSystem.CloseWindow((Window)sender!);
-                        e.Handled = true;
-                    }
-                }
-            )
+            .WithTitle("Development Mode")
+            .WithSize(60, 16)
+            .Centered()
+            .WithBackgroundColor(Color.Grey11)
+            .AsModal()
+            .Minimizable(false)
+            .Maximizable(false)
+            .Resizable(false)
+            .Movable(false)
+            .HideCloseButton()
             .Build();
 
         var contentBuilder = Controls
@@ -628,11 +617,22 @@ class Program
         contentBuilder.AddLine("[grey70]• Use for development and testing only[/]");
         contentBuilder.AddLine("");
         contentBuilder.AddLine("[red]Do NOT use --dev-mode in production![/]");
-        contentBuilder.AddLine("");
-        contentBuilder.AddLine("[grey70]Press Enter or ESC to continue...[/]");
 
         var contentControl = contentBuilder.Build();
         warningWindow.AddControl(contentControl);
+
+        // Button to acknowledge - only way to close the dialog
+        var button = Controls
+            .Button(" I Understand ")
+            .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Center)
+            .OnClick((sender, e) =>
+            {
+                _windowSystem?.CloseWindow(warningWindow!);
+                StartWidgetRefreshTimers(); // Start scripts only after acknowledgment
+            })
+            .Build();
+        warningWindow.AddControl(button);
+
         _windowSystem.AddWindow(warningWindow);
     }
 
