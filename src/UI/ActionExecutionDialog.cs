@@ -19,8 +19,14 @@ public static class ActionExecutionDialog
 {
     private const int MaxTimeout = 60;
 
-    // Store output lines for each dialog instance
+    // Output mode: true = add new control per line (uses AutoScroll), false = update single control content
+    private const bool AddControlsPerLine = true;
+
+    // Store output lines for each dialog instance (used when AddControlsPerLine = false)
     private static readonly Dictionary<Window, List<string>> _outputLines = new();
+
+    // Track if first output received (to clear placeholder)
+    private static readonly HashSet<Window> _hasReceivedOutput = new();
 
     /// <summary>
     /// Shows the unified action dialog starting in confirm state.
@@ -158,6 +164,7 @@ public static class ActionExecutionDialog
             .WithScrollbar(true)
             .WithScrollbarPosition(ScrollbarPosition.Right)
             .WithMouseWheel(true)
+            .WithAutoScroll(true)
             .WithBackgroundColor(Color.Grey19)
             .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Stretch)
             .WithVerticalAlignment(SharpConsoleUI.Layout.VerticalAlignment.Fill)
@@ -323,6 +330,7 @@ public static class ActionExecutionDialog
         modal.OnClosed += (s, e) =>
         {
             _outputLines.Remove(modal);
+            _hasReceivedOutput.Remove(modal);
 
             if (dialogState == "confirm")
             {
@@ -472,26 +480,50 @@ public static class ActionExecutionDialog
 
     private static void AppendToOutput(Window modal, string line, bool isError)
     {
-        if (!_outputLines.TryGetValue(modal, out var lines))
-        {
-            return;
-        }
-
         // Format line (escape any markup in the actual output)
         var escapedLine = Markup.Escape(line);
         var formattedLine = isError ? $"[red]{escapedLine}[/]" : escapedLine;
-        lines.Add(formattedLine);
 
-        // Update the output content
-        var outputContent = modal.FindControl<MarkupControl>("dialog_output_content");
-        if (outputContent != null)
-        {
-            outputContent.SetContent(lines);
-        }
-
-        // Auto-scroll to bottom
         var scrollPanel = modal.FindControl<ScrollablePanelControl>("dialog_output_panel");
-        scrollPanel?.ScrollToBottom();
+
+        if (AddControlsPerLine)
+        {
+            // Mode: Add new control per line (AutoScroll handles scrolling)
+            if (!_hasReceivedOutput.Contains(modal))
+            {
+                _hasReceivedOutput.Add(modal);
+
+                // Remove placeholder on first output
+                var placeholder = modal.FindControl<MarkupControl>("dialog_output_content");
+                if (placeholder != null)
+                {
+                    scrollPanel?.RemoveControl(placeholder);
+                }
+            }
+
+            // Add new MarkupControl for this line
+            var lineControl = new MarkupControl(new List<string> { formattedLine });
+            lineControl.Margin = new Margin(1, 0, 1, 0);
+            scrollPanel?.AddControl(lineControl);
+        }
+        else
+        {
+            // Mode: Update single control content (manual scroll)
+            if (!_outputLines.TryGetValue(modal, out var lines))
+            {
+                return;
+            }
+
+            lines.Add(formattedLine);
+
+            var outputContent = modal.FindControl<MarkupControl>("dialog_output_content");
+            if (outputContent != null)
+            {
+                outputContent.SetContent(lines);
+            }
+
+            scrollPanel?.ScrollToBottom();
+        }
     }
 
     /// <summary>
@@ -577,8 +609,13 @@ public static class ActionExecutionDialog
             progress.SetContent(new List<string> { statusText });
         }
 
+        // Check if output was streamed
+        bool hasOutput = AddControlsPerLine
+            ? _hasReceivedOutput.Contains(modal)
+            : _outputLines.TryGetValue(modal, out var lines) && lines.Count > 0;
+
         // If no output was streamed, show result output
-        if (_outputLines.TryGetValue(modal, out var lines) && lines.Count == 0)
+        if (!hasOutput)
         {
             if (result.HasOutput)
             {
@@ -597,14 +634,22 @@ public static class ActionExecutionDialog
             }
         }
 
+        // Re-check if we have output now
+        hasOutput = AddControlsPerLine
+            ? _hasReceivedOutput.Contains(modal)
+            : _outputLines.TryGetValue(modal, out var outputLines) && outputLines.Count > 0;
+
         // If still no output, show message
-        var outputContent = modal.FindControl<MarkupControl>("dialog_output_content");
-        if (outputContent != null && _outputLines.TryGetValue(modal, out var outputLines) && outputLines.Count == 0)
+        if (!hasOutput)
         {
-            var message = result.IsSuccess
-                ? "[grey50](command completed with no output)[/]"
-                : $"[grey50](command failed with no output, exit code: {result.ExitCode})[/]";
-            outputContent.SetContent(new List<string> { message });
+            var outputContent = modal.FindControl<MarkupControl>("dialog_output_content");
+            if (outputContent != null)
+            {
+                var message = result.IsSuccess
+                    ? "[grey50](command completed with no output)[/]"
+                    : $"[grey50](command failed with no output, exit code: {result.ExitCode})[/]";
+                outputContent.SetContent(new List<string> { message });
+            }
         }
 
         // Switch buttons: hide terminate, show close
