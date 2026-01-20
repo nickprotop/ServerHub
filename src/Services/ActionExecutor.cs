@@ -320,7 +320,7 @@ public class ActionExecutor
     /// Checks if sudo credentials are already cached (no password needed).
     /// Uses sudo -n (non-interactive) which fails if password is required.
     /// </summary>
-    private async Task<bool> CheckSudoCachedAsync(CancellationToken cancellationToken)
+    public async Task<bool> CheckSudoCachedAsync(CancellationToken cancellationToken = default)
     {
         // Create test action without sudo flag to avoid recursive checking
         var testAction = new WidgetAction
