@@ -117,12 +117,30 @@ public static class ActionExecutionDialog
             .WithMargin(1, 0, 1, 0)
             .Build());
 
-        // Progress/status bar - shows hint in confirm, progress in running, result in finished
+        // Progress hint - shows hint in confirm state, hidden during running
         modal.AddControl(Controls.Markup()
-            .WithName("dialog_progress")
+            .WithName("dialog_progress_hint")
             .AddLine("[grey50]Press Enter to execute[/]")
             .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Left)
             .WithMargin(1, 0, 1, 0)
+            .Build());
+
+        // Progress bar - hidden in confirm state, visible during running
+        var progressBar = Controls.ProgressBar()
+            .WithName("dialog_progress_bar")
+            .Stretch()
+            .WithMargin(1, 0, 1, 0)
+            .Visible(false)
+            .Build();
+        modal.AddControl(progressBar);
+
+        // Progress status - shows completion status in finished state
+        modal.AddControl(Controls.Markup()
+            .WithName("dialog_progress_status")
+            .AddLine("")
+            .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Left)
+            .WithMargin(1, 0, 1, 0)
+            .Visible(false)
             .Build());
 
         // Danger warning if applicable (shown in confirm state)
@@ -480,12 +498,31 @@ public static class ActionExecutionDialog
             }
         }
 
-        // Show progress bar
-        var progress = modal.FindControl<MarkupControl>("dialog_progress");
-        if (progress != null)
+        // Hide progress hint
+        var progressHint = modal.FindControl<MarkupControl>("dialog_progress_hint");
+        if (progressHint != null)
         {
-            var emptyBar = new string('\u2501', 50);
-            progress.SetContent(new List<string> { $"[grey23]{emptyBar}[/]" });
+            progressHint.Visible = false;
+        }
+
+        // Show and configure progress bar
+        var progressBar = modal.FindControl<ProgressBarControl>("dialog_progress_bar");
+        if (progressBar != null)
+        {
+            progressBar.Visible = true;
+            progressBar.Value = 0;
+
+            if (action.HasNoTimeout)
+            {
+                // Indeterminate mode for infinite timeout - control handles animation
+                progressBar.IsIndeterminate = true;
+            }
+            else
+            {
+                // Determinate mode - we'll update Value in UpdateProgress
+                progressBar.IsIndeterminate = false;
+                progressBar.MaxValue = action.EffectiveTimeout;
+            }
         }
 
         // Hide danger warning
@@ -584,46 +621,26 @@ public static class ActionExecutionDialog
             }
         }
 
-        // Update progress bar
-        var progress = modal.FindControl<MarkupControl>("dialog_progress");
-        if (progress != null)
+        // Update progress bar value (indeterminate mode handles its own animation)
+        var progressBar = modal.FindControl<ProgressBarControl>("dialog_progress_bar");
+        if (progressBar != null && !hasNoTimeout)
         {
-            var barWidth = 50;
+            // Determinate mode: update value and color based on remaining time
+            progressBar.Value = elapsedSeconds;
 
-            if (hasNoTimeout)
+            // Change color based on remaining time
+            var remaining = maxTimeout - elapsedSeconds;
+            if (remaining <= 10)
             {
-                // Infinite timeout: show pulsing indicator (moving segment)
-                var pulsePosition = elapsedSeconds % barWidth;
-                var pulseWidth = 5;
-                var bar = new char[barWidth];
-                for (int i = 0; i < barWidth; i++)
-                {
-                    bar[i] = '\u2501';
-                }
-
-                // Build the bar with the pulse highlight
-                var beforePulse = Math.Max(0, pulsePosition);
-                var pulseEnd = Math.Min(barWidth, pulsePosition + pulseWidth);
-
-                var before = beforePulse > 0 ? new string('\u2501', beforePulse) : "";
-                var pulse = new string('\u2501', pulseEnd - beforePulse);
-                var after = pulseEnd < barWidth ? new string('\u2501', barWidth - pulseEnd) : "";
-
-                progress.SetContent(new List<string> { $"[grey23]{before}[/][cyan1]{pulse}[/][grey23]{after}[/]" });
+                progressBar.FilledColor = Color.Red;
+            }
+            else if (remaining <= 30)
+            {
+                progressBar.FilledColor = Color.Yellow;
             }
             else
             {
-                // Finite timeout: show progress bar filling up
-                var percentage = (double)elapsedSeconds / maxTimeout;
-                var filledWidth = (int)(barWidth * percentage);
-
-                var filled = new string('\u2501', Math.Max(0, filledWidth));
-                var empty = new string('\u2501', Math.Max(0, barWidth - filledWidth));
-
-                var remaining = maxTimeout - elapsedSeconds;
-                var color = remaining <= 10 ? "red" : remaining <= 30 ? "yellow" : "cyan1";
-
-                progress.SetContent(new List<string> { $"[{color}]{filled}[/][grey23]{empty}[/]" });
+                progressBar.FilledColor = Color.Cyan1;
             }
         }
     }
@@ -667,6 +684,28 @@ public static class ActionExecutionDialog
         placeholder.Name = "dialog_output_content";
         placeholder.Margin = new Margin(1, 0, 1, 0);
         scrollPanel.AddControl(placeholder);
+
+        // Reset progress controls for retry
+        var progressHint = modal.FindControl<MarkupControl>("dialog_progress_hint");
+        if (progressHint != null)
+        {
+            progressHint.Visible = true;
+        }
+
+        var progressBar = modal.FindControl<ProgressBarControl>("dialog_progress_bar");
+        if (progressBar != null)
+        {
+            progressBar.IsIndeterminate = false;
+            progressBar.Visible = false;
+            progressBar.Value = 0;
+            progressBar.FilledColor = Color.Cyan1; // Reset color
+        }
+
+        var progressStatus = modal.FindControl<MarkupControl>("dialog_progress_status");
+        if (progressStatus != null)
+        {
+            progressStatus.Visible = false;
+        }
     }
 
     private static void AppendToOutput(Window modal, string line, bool isError)
@@ -780,8 +819,17 @@ public static class ActionExecutionDialog
             timer.SetContent(new List<string> { "" });
         }
 
-        var progress = modal.FindControl<MarkupControl>("dialog_progress");
-        if (progress != null)
+        // Hide progress bar and stop any animation
+        var progressBar = modal.FindControl<ProgressBarControl>("dialog_progress_bar");
+        if (progressBar != null)
+        {
+            progressBar.IsIndeterminate = false; // Stop animation timer
+            progressBar.Visible = false;
+        }
+
+        // Show completion status
+        var progressStatus = modal.FindControl<MarkupControl>("dialog_progress_status");
+        if (progressStatus != null)
         {
             var duration = result.Duration.TotalSeconds;
             string statusText;
@@ -799,7 +847,8 @@ public static class ActionExecutionDialog
                 statusText = $"[red]\u2717 Failed after {duration:F1}s[/]";
             }
 
-            progress.SetContent(new List<string> { statusText });
+            progressStatus.SetContent(new List<string> { statusText });
+            progressStatus.Visible = true;
         }
 
         // Check if output was streamed
