@@ -124,7 +124,7 @@ public static class ActionExecutionDialog
         var dangerWarning = Controls.Markup()
             .WithName("dialog_danger")
             .AddLine("")
-            .AddLine(action.IsDanger ? "[yellow on red] \u26a0 WARNING: This action may be destructive [/]" : "")
+            .AddLine(action.IsDanger ? "[white on red3] \u26a0 WARNING: This action may be destructive [/]" : "")
             .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Center)
             .WithMargin(0, 0, 0, 0)
             .Build();
@@ -135,7 +135,7 @@ public static class ActionExecutionDialog
         var sudoHint = Controls.Markup()
             .WithName("dialog_sudo")
             .AddLine("")
-            .AddLine(action.RequiresSudo ? "[grey70]! This action requires elevated privileges (sudo)[/]" : "")
+            .AddLine(action.RequiresSudo ? "[orange1 on grey23] ! This action requires elevated privileges (sudo) [/]" : "")
             .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Center)
             .WithMargin(0, 0, 0, 0)
             .Build();
