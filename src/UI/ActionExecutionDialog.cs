@@ -29,6 +29,9 @@ public static class ActionExecutionDialog
     // Track if first output received (to clear placeholder)
     private static readonly HashSet<Window> _hasReceivedOutput = new();
 
+    // Track disposal state per dialog (to prevent orphaned callbacks)
+    private static readonly HashSet<Window> _disposedDialogs = new();
+
     /// <summary>
     /// Shows the unified action dialog starting in confirm state.
     /// Handles the full lifecycle: confirm → execute → show results
@@ -250,49 +253,21 @@ public static class ActionExecutionDialog
             // Transition to running state
             TransitionToRunning(modal, action);
 
-            // Prepare command and stdin for execution
-            string commandToExecute;
-            string? stdinForExecution = null;
-
-            if (action.RequiresSudo)
-            {
-                if (sudoPassword != null)
-                {
-                    // Wrap command with sudo -S for stdin password
-                    commandToExecute = $"sudo -S -- {action.Command}";
-                    stdinForExecution = sudoPassword;
-                    // Clear password immediately after capturing
-                    sudoPassword = null;
-                }
-                else
-                {
-                    // Sudo credentials are cached, no password needed
-                    commandToExecute = $"sudo -- {action.Command}";
-                }
-            }
-            else
-            {
-                commandToExecute = action.Command;
-            }
-
-            // Create action with the command to execute
-            var actionToExecute = new WidgetAction
-            {
-                Label = action.Label,
-                Command = commandToExecute
-            };
-
-            // Execute the action
+            // Execute the action - ActionExecutor handles sudo checking and command wrapping
             var executor = new ActionExecutor();
             var result = await executor.ExecuteAsync(
-                actionToExecute,
+                action,
                 cts.Token,
-                stdinInput: stdinForExecution,
+                sudoPassword: sudoPassword,
+                stdinInput: null,
                 onProgressUpdate: (elapsedSeconds) => UpdateProgress(modal, elapsedSeconds, MaxTimeout),
                 onOutputReceived: (line) => AppendOutput(modal, line),
                 onErrorReceived: (line) => AppendError(modal, line),
                 onGracefulTerminate: () => ShowTerminating(modal),
                 onForceKill: () => ShowForceKilling(modal));
+
+            // Clear password after execution
+            sudoPassword = null;
 
             executionResult = result;
             dialogState = "finished";
@@ -304,44 +279,29 @@ public static class ActionExecutionDialog
         // Handler for Execute button - shows password dialog if sudo required
         void HandleExecute()
         {
+            // Simple guard: Don't do anything if dialog already closed
+            if (_disposedDialogs.Contains(modal))
+                return;
+
             if (action.RequiresSudo)
             {
-                // First check if sudo credentials are already cached
-                SudoPasswordDialog.CheckSudoReadyAsync((sudoReady) =>
+                // Show password dialog immediately
+                SudoPasswordDialog.Show(action, windowSystem, (passwordResult) =>
                 {
-                    if (sudoReady)
+                    // Simple guard: Don't execute if dialog was closed
+                    if (_disposedDialogs.Contains(modal))
+                        return;
+
+                    if (passwordResult.Success && passwordResult.Password != null)
                     {
-                        // Sudo is ready, execute directly (credentials are cached)
+                        sudoPassword = passwordResult.Password;
                         StartExecution();
                     }
-                    else
-                    {
-                        // Need password - show UAC-style password dialog
-                        SudoPasswordDialog.Show(action, windowSystem, (passwordResult) =>
-                        {
-                            if (passwordResult.Success && passwordResult.Password != null)
-                            {
-                                // Got valid password, proceed with execution
-                                sudoPassword = passwordResult.Password;
-                                StartExecution();
-                            }
-                            else if (passwordResult.MaxAttemptsReached)
-                            {
-                                // Too many failed attempts - show error and stay in confirm
-                                windowSystem.NotificationStateService.ShowNotification(
-                                    "Authentication Failed",
-                                    "Too many failed password attempts. Action cancelled.",
-                                    NotificationSeverity.Danger,
-                                    timeout: 5000);
-                            }
-                            // If cancelled, just stay in confirm state (do nothing)
-                        });
-                    }
+                    // If cancelled or failed, just stay in confirm state
                 });
             }
             else
             {
-                // No sudo required, execute directly
                 StartExecution();
             }
         }
@@ -411,8 +371,13 @@ public static class ActionExecutionDialog
         // Handle modal close - cleanup and callbacks
         modal.OnClosed += (s, e) =>
         {
+            // Mark as disposed to prevent orphaned callbacks
+            _disposedDialogs.Add(modal);
+
+            // Cleanup tracking dictionaries
             _outputLines.Remove(modal);
             _hasReceivedOutput.Remove(modal);
+            // DON'T remove from _disposedDialogs - keep flag to prevent orphaned callbacks
 
             if (dialogState == "confirm")
             {
