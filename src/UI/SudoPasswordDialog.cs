@@ -49,7 +49,7 @@ public static class SudoPasswordDialog
             windowStates[window] = window.State;
             if (window.State != WindowState.Minimized)
             {
-                window.Minimize();
+                window.Minimize(force: true);  // UAC-style: minimize ALL windows
             }
         }
 
