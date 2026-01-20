@@ -14,10 +14,10 @@ namespace ServerHub.UI;
 /// <summary>
 /// UAC-style password dialog for sudo authentication.
 /// Minimizes all windows and shows a dramatic centered prompt.
+/// Single attempt - user must retry by clicking Execute again if password is wrong.
 /// </summary>
 public static class SudoPasswordDialog
 {
-    private const int MaxAttempts = 3;
 
     /// <summary>
     /// Result of the password dialog
@@ -27,7 +27,6 @@ public static class SudoPasswordDialog
         public bool Success { get; init; }
         public string? Password { get; init; }
         public bool Cancelled { get; init; }
-        public bool MaxAttemptsReached { get; init; }
     }
 
     /// <summary>
@@ -72,7 +71,6 @@ public static class SudoPasswordDialog
             .Build();
 
         // Track state
-        var attempts = 0;
         var dialogComplete = false;
         PasswordResult? result = null;
 
@@ -192,36 +190,8 @@ public static class SudoPasswordDialog
                 return;
             }
 
-            attempts++;
-
-            // Test the password with a simple sudo command
-            TestPasswordAsync(password, (success) =>
-            {
-                if (success)
-                {
-                    CompleteDialog(new PasswordResult { Success = true, Password = password });
-                }
-                else
-                {
-                    // Clear password
-                    passwordPrompt.Input = "";
-
-                    if (attempts >= MaxAttempts)
-                    {
-                        CompleteDialog(new PasswordResult { Success = false, MaxAttemptsReached = true });
-                    }
-                    else
-                    {
-                        var remaining = MaxAttempts - attempts;
-                        errorMessage.SetContent(new List<string> {
-                            "",
-                            $"[red]Authentication failed. {remaining} attempt{(remaining == 1 ? "" : "s")} remaining.[/]"
-                        });
-                        errorMessage.Visible = true;
-                        passwordPrompt.SetFocus(true, FocusReason.Programmatic);
-                    }
-                }
-            });
+            // Return the password - ActionExecutor will test it during execution
+            CompleteDialog(new PasswordResult { Success = true, Password = password });
         }
 
         // Button handlers
@@ -262,43 +232,4 @@ public static class SudoPasswordDialog
         passwordPrompt.SetFocus(true, FocusReason.Programmatic);
     }
 
-    /// <summary>
-    /// Checks if sudo credentials are already cached (no password needed).
-    /// Uses sudo -n (non-interactive) which fails if password is required.
-    /// </summary>
-    /// <param name="callback">Callback with true if sudo is ready, false if password needed</param>
-    public static async void CheckSudoReadyAsync(Action<bool> callback)
-    {
-        var testAction = new WidgetAction
-        {
-            Label = "Test",
-            Command = "sudo -n true"  // Non-interactive: succeeds only if credentials are cached
-        };
-
-        var executor = new ActionExecutor();
-        var result = await executor.ExecuteAsync(testAction);
-
-        callback(result.ExitCode == 0);
-    }
-
-    /// <summary>
-    /// Tests the password with a simple sudo command
-    /// </summary>
-    private static async void TestPasswordAsync(string password, Action<bool> callback)
-    {
-        var testAction = new WidgetAction
-        {
-            Label = "Test",
-            Command = "sudo -S -- true"  // Simple command that succeeds if password is correct
-        };
-
-        var executor = new ActionExecutor();
-        var result = await executor.ExecuteAsync(
-            testAction,
-            stdinInput: password);
-
-        // Check if authentication succeeded
-        var success = result.ExitCode == 0;
-        callback(success);
-    }
 }
