@@ -118,7 +118,7 @@ class Program
             {
                 // Layer 1: Top status bar warning in dev mode
                 TopStatus = _devMode
-                    ? "[bold yellow on red] DEV MODE - Custom widget checksums DISABLED [/]"
+                    ? "DEV MODE - Custom widget checksums DISABLED"
                     : "ServerHub - Server Monitoring Dashboard",
                 ShowTaskBar = false,
                 ShowBottomStatus = true,
@@ -676,7 +676,7 @@ class Program
         {
             // Show in bottom status bar (persistent warning)
             _windowSystem.BottomStatus =
-                $"[yellow]{unconfigured.Count} unconfigured script(s) found. Run --discover to review.[/]";
+                $"{unconfigured.Count} unconfigured script(s) found. Run --discover to review.";
         }
     }
 
