@@ -61,7 +61,7 @@ if ! command -v sensors &> /dev/null; then
     fi
 
     # Actions for fallback mode
-    echo "action: [sudo] Install lm-sensors:apt install -y lm-sensors && sensors-detect --auto"
+    echo "action: [sudo,timeout=180] Install lm-sensors:apt install -y lm-sensors && sensors-detect --auto"
     exit 0
 fi
 
@@ -248,7 +248,7 @@ fi
 
 # Actions
 echo "action: View full sensor data:sensors"
-echo "action: [sudo] Detect sensors:sensors-detect --auto"
+echo "action: [sudo,timeout=120] Detect sensors:sensors-detect --auto"
 
 # NVIDIA GPU actions
 if command -v nvidia-smi &> /dev/null; then

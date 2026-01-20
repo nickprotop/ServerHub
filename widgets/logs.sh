@@ -132,7 +132,7 @@ if [ "$EXTENDED" = true ]; then
 fi
 
 # Actions
-echo "action: View live log:journalctl -f -n 100"
+echo "action: [timeout=0] View live log:journalctl -f -n 100"
 echo "action: [sudo,danger] Clear old logs:journalctl --vacuum-time=7d"
 
 if [ "$errors" -gt 0 ]; then

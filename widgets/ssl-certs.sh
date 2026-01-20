@@ -166,12 +166,12 @@ fi
 
 # Actions
 if [ -d "/etc/letsencrypt" ]; then
-    echo "action: [sudo] Renew all certificates:certbot renew"
+    echo "action: [sudo,timeout=180] Renew all certificates:certbot renew"
 
     if [ $expiring_soon -gt 0 ]; then
-        echo "action: [sudo,danger] Force renewal:certbot renew --force-renewal"
+        echo "action: [sudo,danger,timeout=180] Force renewal:certbot renew --force-renewal"
     fi
 fi
 
-echo "action: Test certificates:certbot certificates 2>/dev/null || echo 'Certbot not available'"
+echo "action: [timeout=120] Test certificates:certbot certificates 2>/dev/null || echo 'Certbot not available'"
 echo "action: Check OCSP status:openssl s_client -connect localhost:443 -status < /dev/null 2>/dev/null | grep -A1 'OCSP Response'"
