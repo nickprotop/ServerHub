@@ -1,6 +1,7 @@
 // Copyright (c) Nikolaos Protopapas. All rights reserved.
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
+using ServerHub.Config;
 using ServerHub.Models;
 using ServerHub.Services;
 using ServerHub.UI;
@@ -35,6 +36,7 @@ class Program
     private static readonly Dictionary<string, WidgetData> _fullWidgetData = new();
     private static string? _openModalWidgetId = null;
     private static WidgetRefreshService? _refreshService;
+    private static bool _devMode = false;
 
     static async Task<int> Main(string[] args)
     {
@@ -74,9 +76,9 @@ class Program
                 return await DiscoverWidgetsAsync();
             }
 
-            if (options.ComputeChecksums)
+            if (options.VerifyChecksums)
             {
-                return await ComputeChecksumsAsync(options.ConfigPath);
+                return await VerifyChecksumsAsync(options.ConfigPath);
             }
 
             // Ensure directories exist
@@ -100,8 +102,11 @@ class Program
             var configMgr = new ConfigManager();
             _config = configMgr.LoadConfig(configPath);
 
+            // Store dev mode state for use throughout the application
+            _devMode = options.DevMode;
+
             // Initialize services
-            var validator = new ScriptValidator();
+            var validator = new ScriptValidator(devMode: options.DevMode);
             _executor = new ScriptExecutor(validator);
             _parser = new WidgetProtocolParser();
             _renderer = new WidgetRenderer();
@@ -111,7 +116,10 @@ class Program
             // Initialize ConsoleEx window system
             _windowSystem = new ConsoleWindowSystem(new NetConsoleDriver(RenderMode.Buffer))
             {
-                TopStatus = "ServerHub - Server Monitoring Dashboard",
+                // Layer 1: Top status bar warning in dev mode
+                TopStatus = _devMode
+                    ? "[bold yellow on red] DEV MODE - Custom widget checksums DISABLED [/]"
+                    : "ServerHub - Server Monitoring Dashboard",
                 ShowTaskBar = false,
                 ShowBottomStatus = true,
                 BottomStatus = "Press Ctrl+Q to quit | F5 to refresh | ? for help",
@@ -129,6 +137,15 @@ class Program
 
             // Subscribe to terminal resize events
             _windowSystem.ConsoleDriver.ScreenResized += OnTerminalResized;
+
+            // Layer 3: Dev mode warning dialog (requires acknowledgment)
+            if (_devMode)
+            {
+                ShowDevModeWarningDialog();
+            }
+
+            // Check for unconfigured scripts and show warning
+            CheckForUnconfiguredWidgets();
 
             // Start widget refresh timers
             StartWidgetRefreshTimers();
@@ -154,15 +171,22 @@ class Program
         if (_windowSystem == null || _config == null)
             return;
 
-        _mainWindow = new WindowBuilder(_windowSystem)
+        var windowBuilder = new WindowBuilder(_windowSystem)
             .WithTitle("ServerHub")
             .WithName("MainWindow")
             .WithColors(Spectre.Console.Color.Grey11, Spectre.Console.Color.Grey93)
             .Borderless()
             .Maximized()
             .WithAsyncWindowThread(UpdateDashboardAsync)
-            .OnKeyPressed(HandleKeyPress)
-            .Build();
+            .OnKeyPressed(HandleKeyPress);
+
+        // Layer 2: Orange border in dev mode (visual indicator)
+        if (_devMode)
+        {
+            windowBuilder.WithColors(Spectre.Console.Color.Grey11, Spectre.Console.Color.Orange1);
+        }
+
+        _mainWindow = windowBuilder.Build();
 
         // Get terminal dimensions
         var terminalWidth = Console.WindowWidth;
@@ -550,6 +574,110 @@ class Program
 
         helpWindow.AddControl(helpControl);
         _windowSystem.AddWindow(helpWindow);
+    }
+
+    /// <summary>
+    /// Shows a warning dialog when running in dev mode (Layer 3 of dev mode warnings)
+    /// </summary>
+    private static void ShowDevModeWarningDialog()
+    {
+        if (_windowSystem == null)
+            return;
+
+        // Calculate centered position and size based on terminal dimensions
+        var terminalWidth = Console.WindowWidth;
+        var terminalHeight = Console.WindowHeight;
+
+        // Dialog size
+        var dialogWidth = Math.Min(65, terminalWidth - 10);
+        var dialogHeight = Math.Min(14, terminalHeight - 6);
+
+        // Center the dialog
+        var dialogX = (terminalWidth - dialogWidth) / 2;
+        var dialogY = (terminalHeight - dialogHeight) / 2;
+
+        var warningWindow = new WindowBuilder(_windowSystem)
+            .WithName("DevModeWarning")
+            .WithBounds(dialogX, dialogY, dialogWidth, dialogHeight)
+            .WithColors(Color.Grey11, Color.Orange1)
+            .OnKeyPressed(
+                (sender, e) =>
+                {
+                    // Close on ESC or Enter
+                    if (e.KeyInfo.Key == ConsoleKey.Escape || e.KeyInfo.Key == ConsoleKey.Enter)
+                    {
+                        _windowSystem.CloseWindow((Window)sender!);
+                        e.Handled = true;
+                    }
+                }
+            )
+            .Build();
+
+        var contentBuilder = Controls
+            .Markup()
+            .WithBackgroundColor(Color.Grey11)
+            .WithMargin(2, 1, 2, 1);
+
+        contentBuilder.AddLine("");
+        contentBuilder.AddLine("[bold yellow]  Development Mode Active[/]");
+        contentBuilder.AddLine("");
+        contentBuilder.AddLine("[white]Custom widget checksum validation is DISABLED.[/]");
+        contentBuilder.AddLine("");
+        contentBuilder.AddLine("[grey70]• Custom widgets will run without integrity checks[/]");
+        contentBuilder.AddLine("[grey70]• Bundled widgets are still validated[/]");
+        contentBuilder.AddLine("[grey70]• Use for development and testing only[/]");
+        contentBuilder.AddLine("");
+        contentBuilder.AddLine("[red]Do NOT use --dev-mode in production![/]");
+        contentBuilder.AddLine("");
+        contentBuilder.AddLine("[grey70]Press Enter or ESC to continue...[/]");
+
+        var contentControl = contentBuilder.Build();
+        warningWindow.AddControl(contentControl);
+        _windowSystem.AddWindow(warningWindow);
+    }
+
+    /// <summary>
+    /// Checks for unconfigured executable scripts in widget directories and shows warning
+    /// </summary>
+    private static void CheckForUnconfiguredWidgets()
+    {
+        if (_windowSystem == null || _config == null)
+            return;
+
+        var unconfigured = new List<string>();
+
+        // Get all configured paths
+        var configuredPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var widget in _config.Widgets.Values)
+        {
+            var resolved = WidgetPaths.ResolveWidgetPath(widget.Path);
+            if (resolved != null)
+                configuredPaths.Add(Path.GetFullPath(resolved));
+        }
+
+        // Check each search path for unconfigured executables
+        foreach (var searchPath in WidgetPaths.GetSearchPaths())
+        {
+            if (!Directory.Exists(searchPath)) continue;
+
+            // Skip bundled widgets directory (those are trusted)
+            if (searchPath == WidgetPaths.GetBundledWidgetsDirectory()) continue;
+
+            foreach (var file in Directory.GetFiles(searchPath))
+            {
+                if (IsExecutable(file) && !configuredPaths.Contains(Path.GetFullPath(file)))
+                {
+                    unconfigured.Add(Path.GetFileName(file));
+                }
+            }
+        }
+
+        if (unconfigured.Count > 0)
+        {
+            // Show in bottom status bar (persistent warning)
+            _windowSystem.BottomStatus =
+                $"[yellow]{unconfigured.Count} unconfigured script(s) found. Run --discover to review.[/]";
+        }
     }
 
     private static void HandleKeyPress(object? sender, KeyPressedEventArgs e)
@@ -1031,8 +1159,12 @@ class Program
                     options.Discover = true;
                     break;
 
-                case "--compute-checksums":
-                    options.ComputeChecksums = true;
+                case "--verify-checksums":
+                    options.VerifyChecksums = true;
+                    break;
+
+                case "--dev-mode":
+                    options.DevMode = true;
                     break;
 
                 default:
@@ -1047,30 +1179,29 @@ class Program
         return options;
     }
 
-    private static async Task<int> DiscoverWidgetsAsync()
+    private static Task<int> DiscoverWidgetsAsync()
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var customWidgetsPath = Path.Combine(home, ".config", "serverhub", "widgets");
-        var configPath =
-            _config != null
-                ? ConfigManager.GetDefaultConfigPath()
-                : Path.Combine(home, ".config", "serverhub", "config.yaml");
+        var configPath = ConfigManager.GetDefaultConfigPath();
 
         if (!Directory.Exists(customWidgetsPath))
         {
             Console.WriteLine($"No custom widgets directory found: {customWidgetsPath}");
             Console.WriteLine("Create it and add your widget scripts there.");
-            return 0;
+            return Task.FromResult(0);
         }
 
-        // Load existing config to know which widgets are already configured
-        var configuredPaths = new HashSet<string>();
+        // Load or create config
+        var configManager = new ConfigManager();
+        ServerHubConfig? config = null;
+        var configuredPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         if (File.Exists(configPath))
         {
-            var configManager = new ConfigManager();
             try
             {
-                var config = configManager.LoadConfig(configPath);
+                config = configManager.LoadConfig(configPath);
                 foreach (var widget in config.Widgets.Values)
                 {
                     var resolved = WidgetPaths.ResolveWidgetPath(widget.Path);
@@ -1080,8 +1211,10 @@ class Program
                     }
                 }
             }
-            catch
-            { /* Ignore config load errors */
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Warning: Could not load existing config: {ex.Message}");
+                Console.WriteLine("A new config will be created if you approve any widgets.\n");
             }
         }
 
@@ -1094,12 +1227,13 @@ class Program
         if (files.Count == 0)
         {
             Console.WriteLine("No unconfigured widgets found.");
-            return 0;
+            return Task.FromResult(0);
         }
 
         Console.WriteLine($"Found {files.Count} unconfigured widget(s):\n");
 
-        var approved = new List<string>();
+        bool configModified = false;
+        int addedCount = 0;
 
         foreach (var file in files)
         {
@@ -1137,47 +1271,78 @@ class Program
 
             if (response?.ToLower() == "y")
             {
-                approved.Add(file);
+                // Create config if it doesn't exist
+                if (config == null)
+                {
+                    config = new ServerHubConfig
+                    {
+                        Widgets = new Dictionary<string, WidgetConfig>(),
+                        Layout = new LayoutConfig { Order = new List<string>() }
+                    };
+                }
+
+                var id = Path.GetFileNameWithoutExtension(file);
+
+                // Ensure unique ID
+                var baseId = id;
+                int suffix = 1;
+                while (config.Widgets.ContainsKey(id))
+                {
+                    id = $"{baseId}_{suffix++}";
+                }
+
+                // Add to config
+                config.Widgets[id] = new WidgetConfig
+                {
+                    Path = filename,
+                    Sha256 = checksum,
+                    Refresh = 5
+                };
+
+                // Add to layout order if it exists
+                if (config.Layout?.Order != null && !config.Layout.Order.Contains(id))
+                {
+                    config.Layout.Order.Add(id);
+                }
+
+                AnsiConsole.MarkupLine($"[green]Added '{id}' to config[/]");
+                configModified = true;
+                addedCount++;
             }
         }
 
-        if (approved.Count == 0)
+        if (!configModified || config == null)
         {
             Console.WriteLine("\nNo widgets added.");
-            return 0;
+            return Task.FromResult(0);
         }
 
-        // Generate YAML snippets
-        Console.WriteLine("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        Console.WriteLine("Add to config.yaml:");
-        Console.WriteLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-
-        foreach (var file in approved)
+        // Save the config
+        try
         {
-            var id = Path.GetFileNameWithoutExtension(file);
-            var checksum = ScriptValidator.CalculateChecksum(file);
-            var filename = Path.GetFileName(file);
-
-            Console.WriteLine($"  {id}:");
-            Console.WriteLine($"    path: {filename}");
-            Console.WriteLine($"    sha256: {checksum}");
-            Console.WriteLine($"    refresh: 5");
+            configManager.SaveConfig(config, configPath);
             Console.WriteLine();
+            AnsiConsole.MarkupLine($"[green]Config saved: {configPath}[/]");
+            Console.WriteLine($"Added {addedCount} widget(s) with checksums.");
+            Console.WriteLine("\nRun 'serverhub' to start with the new widgets.");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error saving config: {ex.Message}");
+            return Task.FromResult(1);
         }
 
-        Console.WriteLine("Don't forget to add widget IDs to your layout!");
-
-        return 0;
+        return Task.FromResult(0);
     }
 
-    private static async Task<int> ComputeChecksumsAsync(string? configPath)
+    private static Task<int> VerifyChecksumsAsync(string? configPath)
     {
         configPath ??= ConfigManager.GetDefaultConfigPath();
 
         if (!File.Exists(configPath))
         {
             Console.Error.WriteLine($"Config file not found: {configPath}");
-            return 1;
+            return Task.FromResult(1);
         }
 
         var configManager = new ConfigManager();
@@ -1189,28 +1354,68 @@ class Program
         catch (Exception ex)
         {
             Console.Error.WriteLine($"Config error: {ex.Message}");
-            return 1;
+            return Task.FromResult(1);
         }
 
-        Console.WriteLine("Widget Checksums:");
-        Console.WriteLine("─────────────────────────────────────");
+        var bundledPath = WidgetPaths.GetBundledWidgetsDirectory();
+        var bundledChecksums = Config.BundledWidgets.Checksums;
+        int passed = 0, failed = 0, missing = 0;
+
+        Console.WriteLine("Verifying widget checksums...\n");
 
         foreach (var (id, widget) in config.Widgets)
         {
             var resolved = WidgetPaths.ResolveWidgetPath(widget.Path);
-            if (resolved != null && File.Exists(resolved))
+
+            if (resolved == null || !File.Exists(resolved))
             {
-                var checksum = ScriptValidator.CalculateChecksum(resolved);
-                Console.WriteLine($"{id, -15} {checksum}");
-                Console.WriteLine($"                {resolved}");
+                AnsiConsole.MarkupLine($"  {id,-20} [red]NOT FOUND[/]");
+                missing++;
+                continue;
+            }
+
+            var actual = ScriptValidator.CalculateChecksum(resolved);
+            string? expected = null;
+            string source = "";
+
+            // Check config sha256
+            if (!string.IsNullOrEmpty(widget.Sha256))
+            {
+                expected = widget.Sha256;
+                source = "config";
+            }
+            // Check bundled
+            else if (resolved.StartsWith(bundledPath, StringComparison.Ordinal))
+            {
+                var rel = Path.GetRelativePath(bundledPath, resolved);
+                bundledChecksums.TryGetValue(rel, out expected);
+                source = "bundled";
+            }
+
+            if (expected == null)
+            {
+                AnsiConsole.MarkupLine($"  {id,-20} [yellow]NO CHECKSUM[/]");
+                Console.WriteLine($"      Run --discover or manually verify before adding checksum");
+                missing++;
+            }
+            else if (string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
+            {
+                AnsiConsole.MarkupLine($"  {id,-20} [green]VALID[/] ({source})");
+                passed++;
             }
             else
             {
-                Console.WriteLine($"{id, -15} [NOT FOUND]");
+                AnsiConsole.MarkupLine($"  {id,-20} [red]MISMATCH[/] ({source})");
+                Console.WriteLine($"      Expected: {expected}");
+                Console.WriteLine($"      Actual:   {actual}");
+                failed++;
             }
         }
 
-        return 0;
+        Console.WriteLine();
+        Console.WriteLine($"Results: {passed} valid, {failed} mismatch, {missing} missing/no-checksum");
+
+        return Task.FromResult(failed > 0 ? 1 : 0);
     }
 
     private static bool IsExecutable(string path)
@@ -1274,9 +1479,15 @@ class Program
         Console.WriteLine(
             "                                   Searches this path first, before default paths"
         );
-        Console.WriteLine("  --discover                       Find and add new custom widgets");
+        Console.WriteLine("  --discover                       Find and add new custom widgets to config");
         Console.WriteLine(
-            "  --compute-checksums              Print checksums for configured widgets"
+            "  --verify-checksums               Verify checksums for all configured widgets"
+        );
+        Console.WriteLine(
+            "  --dev-mode                       Skip checksum validation for custom widgets"
+        );
+        Console.WriteLine(
+            "                                   WARNING: Bundled widgets are still validated"
         );
         Console.WriteLine();
         Console.WriteLine("Examples:");
@@ -1287,18 +1498,25 @@ class Program
         Console.WriteLine(
             "  serverhub --widgets-path ./dev-widgets       Load widgets from ./dev-widgets"
         );
-        Console.WriteLine("  serverhub --widgets-path ~/widgets myconf.yaml");
         Console.WriteLine(
-            "  serverhub --discover                         Discover new widgets in ~/.config/serverhub/widgets/"
+            "  serverhub --dev-mode --widgets-path ./dev    Development mode with custom path"
         );
         Console.WriteLine(
-            "  serverhub --compute-checksums                Show checksums for all configured widgets"
+            "  serverhub --discover                         Discover and add new widgets to config"
+        );
+        Console.WriteLine(
+            "  serverhub --verify-checksums                 Verify all widget checksums"
         );
         Console.WriteLine();
         Console.WriteLine("Widget Search Paths (in priority order):");
         Console.WriteLine("  1. Custom path (if --widgets-path specified)");
         Console.WriteLine("  2. ~/.config/serverhub/widgets/              User custom widgets");
         Console.WriteLine("  3. ~/.local/share/serverhub/widgets/         Bundled widgets");
+        Console.WriteLine();
+        Console.WriteLine("Security:");
+        Console.WriteLine("  All custom widgets require sha256 checksums in config.yaml.");
+        Console.WriteLine("  Use --discover to add widgets with checksums automatically.");
+        Console.WriteLine("  Use --dev-mode only for development (disables custom widget checks).");
         Console.WriteLine();
         Console.WriteLine("Keyboard Shortcuts:");
         Console.WriteLine("  Ctrl+Q    Quit");
@@ -1312,6 +1530,7 @@ class Program
         public string? WidgetsPath { get; set; }
         public string? ConfigPath { get; set; }
         public bool Discover { get; set; }
-        public bool ComputeChecksums { get; set; }
+        public bool VerifyChecksums { get; set; }
+        public bool DevMode { get; set; }
     }
 }

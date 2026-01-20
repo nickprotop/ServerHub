@@ -45,7 +45,8 @@ source ~/.bashrc
 serverhub                      # Run with default config
 serverhub myconfig.yaml        # Use custom config file
 serverhub --discover           # Find and add custom widgets
-serverhub --compute-checksums  # Show checksums for configured widgets
+serverhub --verify-checksums   # Verify all widget checksums
+serverhub --dev-mode           # Development mode (see Security section)
 serverhub --help               # Show all options
 ```
 
@@ -115,14 +116,14 @@ See [config.example.yaml](config.example.yaml) for full configuration options.
 
 Place custom widget scripts in `~/.config/serverhub/widgets/`.
 
-Custom widgets require SHA256 checksum validation for security:
+**All custom widgets require SHA256 checksum validation** (see Security section below).
 
 ```bash
-# Discover new widgets and get their checksums
+# Discover new widgets interactively (recommended)
 serverhub --discover
 
-# Or compute checksums for existing config
-serverhub --compute-checksums
+# Verify checksums for all configured widgets
+serverhub --verify-checksums
 ```
 
 ### Widget Protocol (Brief)
@@ -137,6 +138,87 @@ echo "row: [grey70]Last updated: $(date)[/]"
 ```
 
 See [docs/WIDGET_PROTOCOL.md](docs/WIDGET_PROTOCOL.md) for the full protocol reference.
+
+## Security
+
+### Why This Matters
+
+Widgets are **executable scripts that run with your user privileges**. A malicious widget could read your files, make network requests, or do anything else you can do. We'd rather be annoying about checksums than watch your server have a very bad day.
+
+### Trust Hierarchy
+
+| Source | Trust Level | Checksum Source |
+|--------|-------------|-----------------|
+| **Bundled widgets** | Highest | Hardcoded at build time (maintainer-reviewed) |
+| **Custom widgets** | User-verified | You add `sha256` to config after reviewing code |
+
+### How It Works
+
+1. **Bundled widgets** (`~/.local/share/serverhub/widgets/`) are pre-validated with checksums baked into the application at build time. They just work.
+
+2. **Custom widgets** (`~/.config/serverhub/widgets/`) **require** a `sha256` checksum in your config:
+
+```yaml
+widgets:
+  my-widget:
+    path: my-widget.sh
+    sha256: a1b2c3d4e5f6...  # Required!
+    refresh: 10
+```
+
+Without a checksum, custom widgets will not run. This is intentional.
+
+### Adding Custom Widgets Safely
+
+**Option 1: Discovery (Recommended)**
+```bash
+serverhub --discover
+```
+This shows you a code preview of each widget before adding it. When you approve, the checksum is captured at that moment - the "trusted moment" when you've actually seen what the code does.
+
+**Option 2: Manual**
+```bash
+# 1. Read the script yourself
+cat ~/.config/serverhub/widgets/my-widget.sh
+
+# 2. Calculate the checksum
+sha256sum ~/.config/serverhub/widgets/my-widget.sh
+
+# 3. Add to config with the checksum
+```
+
+### Why We Don't Auto-Generate Checksums
+
+When a widget fails validation, ServerHub does **not** helpfully show you "just add this checksum." That would defeat the entire security model:
+
+1. Attacker modifies a widget file
+2. You run ServerHub, it fails with "missing checksum"
+3. If it showed the checksum, you'd copy-paste it without thinking
+4. Congratulations, you've just blessed malicious code
+
+Instead, you must go through a "trusted moment" - either `--discover` (which shows the code) or manually running `sha256sum` (which requires conscious action).
+
+### Development Mode
+
+For **development only**, you can skip custom widget checksum validation:
+
+```bash
+serverhub --dev-mode --widgets-path ./my-dev-widgets
+```
+
+Dev mode shows prominent warnings (status bar, orange border, dialog) because:
+- Bundled widgets are **still validated** even in dev mode
+- This is for development, not for "I don't want to deal with checksums"
+- **Never use `--dev-mode` in production**
+
+### Verification
+
+```bash
+# Check all your widgets
+serverhub --verify-checksums
+
+# Output shows VALID / MISMATCH / NO CHECKSUM for each
+```
 
 ## Built With
 

@@ -15,11 +15,17 @@ namespace ServerHub.Services;
 public class ScriptValidator
 {
     private readonly Dictionary<string, string> _bundledChecksums;
+    private readonly bool _devMode;
 
-    public ScriptValidator()
+    /// <summary>
+    /// Creates a new script validator
+    /// </summary>
+    /// <param name="devMode">When true, skip checksum validation for custom widgets (bundled always validated)</param>
+    public ScriptValidator(bool devMode = false)
     {
         // Load hardcoded checksums from generated file
         _bundledChecksums = BundledWidgets.Checksums;
+        _devMode = devMode;
     }
 
     /// <summary>
@@ -66,31 +72,57 @@ public class ScriptValidator
             return ValidationResult.Failure($"Script is not executable: {realPath}. Run: chmod +x {scriptPath}");
         }
 
-        // 5. Checksum validation
+        // 5. Checksum validation with mandatory enforcement
+        // Determine checksum source and expected value
+        string? checksumToValidate = null;
+        string checksumSource = "";
+        var bundledPath = WidgetPaths.GetBundledWidgetsDirectory();
+        bool isBundled = realPath.StartsWith(bundledPath, StringComparison.Ordinal);
+
+        // Priority 1: Config YAML sha256 (user-provided)
         if (!string.IsNullOrEmpty(expectedChecksum))
         {
-            var actualChecksum = CalculateChecksum(realPath);
-            if (!string.Equals(actualChecksum, expectedChecksum, StringComparison.OrdinalIgnoreCase))
+            checksumToValidate = expectedChecksum;
+            checksumSource = "config";
+        }
+        // Priority 2: Bundled checksums (hardcoded at build time)
+        else if (isBundled)
+        {
+            var relativePath = Path.GetRelativePath(bundledPath, realPath);
+            if (_bundledChecksums.TryGetValue(relativePath, out var bundled))
             {
-                return ValidationResult.Failure($"Checksum mismatch for {scriptPath}.\nExpected: {expectedChecksum}\nActual: {actualChecksum}");
+                checksumToValidate = bundled;
+                checksumSource = "bundled";
             }
         }
-        else
+
+        // Dev mode: ONLY skip custom widget checksums, ALWAYS validate bundled
+        if (_devMode && !isBundled && string.IsNullOrEmpty(checksumToValidate))
         {
-            // Check if this is a bundled widget (should have checksum)
-            var bundledPath = WidgetPaths.GetBundledWidgetsDirectory();
-            if (realPath.StartsWith(bundledPath, StringComparison.Ordinal))
-            {
-                var relativePath = Path.GetRelativePath(bundledPath, realPath);
-                if (_bundledChecksums.TryGetValue(relativePath, out var bundledChecksum))
-                {
-                    var actualChecksum = CalculateChecksum(realPath);
-                    if (!string.Equals(actualChecksum, bundledChecksum, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return ValidationResult.Failure($"Bundled widget checksum mismatch: {relativePath}");
-                    }
-                }
-            }
+            return ValidationResult.Success(realPath);
+        }
+
+        // ENFORCE: Must have checksum from a trusted source
+        if (string.IsNullOrEmpty(checksumToValidate))
+        {
+            var filename = Path.GetFileName(realPath);
+            return ValidationResult.Failure(
+                $"Missing sha256 for: {filename}\n" +
+                "To add this widget securely:\n" +
+                "  1. Review the script content manually\n" +
+                "  2. Run: serverhub --discover\n" +
+                "  3. Or calculate: sha256sum " + filename + "\n" +
+                "For development only: --dev-mode");
+        }
+
+        // Validate checksum
+        var actualChecksum = CalculateChecksum(realPath);
+        if (!string.Equals(actualChecksum, checksumToValidate, StringComparison.OrdinalIgnoreCase))
+        {
+            return ValidationResult.Failure(
+                $"Checksum mismatch ({checksumSource}):\n" +
+                $"  Expected: {checksumToValidate}\n" +
+                $"  Actual:   {actualChecksum}");
         }
 
         return ValidationResult.Success(realPath);
