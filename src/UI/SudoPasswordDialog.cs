@@ -131,6 +131,7 @@ public static class SudoPasswordDialog
             .Build();
         var cancelButton = Controls.Button("   Cancel   ")
             .WithName("btn_cancel")
+            .WithMargin(2, 0, 0, 0)
             .Build();
 
         var buttonGrid = HorizontalGridControl.ButtonRow(authenticateButton, cancelButton);
