@@ -20,11 +20,18 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Local ConsoleEx reference for development -->
-    <ProjectReference Include="../ConsoleEx/SharpConsoleUI/SharpConsoleUI.csproj" />
-
     <!-- YAML configuration -->
     <PackageReference Include="YamlDotNet" Version="16.2.0" />
+  </ItemGroup>
+
+  <!-- Local development: use project reference if available -->
+  <ItemGroup Condition="Exists('../ConsoleEx/SharpConsoleUI/SharpConsoleUI.csproj')">
+    <ProjectReference Include="../ConsoleEx/SharpConsoleUI/SharpConsoleUI.csproj" />
+  </ItemGroup>
+
+  <!-- Production/CI: use NuGet package -->
+  <ItemGroup Condition="!Exists('../ConsoleEx/SharpConsoleUI/SharpConsoleUI.csproj')">
+    <PackageReference Include="SharpConsoleUI" Version="2.3.0" />
   </ItemGroup>
 
   <!-- Generate bundled widget checksums before compilation -->
