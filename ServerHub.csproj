@@ -29,15 +29,25 @@
     <PackageReference Include="SharpConsoleUI" Version="2.4.0" />
   </ItemGroup>
 
+  <!-- Exclude generated files from auto-discovery, we'll add them explicitly -->
+  <ItemGroup>
+    <Compile Remove="src/Config/*.g.cs" />
+  </ItemGroup>
 
   <!-- Generate bundled widget checksums before compilation -->
-  <Target Name="GenerateChecksums" BeforeTargets="BeforeBuild">
+  <Target Name="GenerateChecksums" BeforeTargets="CoreCompile">
     <Exec Command="bash $(ProjectDir)generate-checksums.sh" />
+    <ItemGroup>
+      <Compile Include="src/Config/BundledWidgets.g.cs" />
+    </ItemGroup>
   </Target>
 
   <!-- Generate default config from config.yaml before compilation -->
-  <Target Name="GenerateDefaultConfig" BeforeTargets="BeforeBuild">
+  <Target Name="GenerateDefaultConfig" BeforeTargets="CoreCompile">
     <Exec Command="bash $(ProjectDir)generate-default-config.sh" />
+    <ItemGroup>
+      <Compile Include="src/Config/DefaultConfig.g.cs" />
+    </ItemGroup>
   </Target>
 
 </Project>
