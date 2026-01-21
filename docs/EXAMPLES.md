@@ -86,7 +86,7 @@ if (extended) {
     Console.WriteLine($"row: [grey70]OS: {Environment.OSVersion}[/]");
 }
 
-// Context-aware actions (only shown in extended view)
+// Actions (shown as buttons in expanded view)
 Console.WriteLine("action: [danger,sudo,refresh] Restart Main:systemctl restart myapp-api");
 Console.WriteLine("action: View Logs:journalctl -u myapp-api -n 50 --no-pager");
 ```
