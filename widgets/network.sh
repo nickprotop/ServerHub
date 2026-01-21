@@ -157,4 +157,4 @@ fi
 # Actions
 echo "action: Show all connections:ss -tunapl"
 echo "action: Show routing table:ip route"
-echo "action: [sudo,danger] Restart networking:systemctl restart networking"
+echo "action: [sudo,danger,refresh] Restart networking:systemctl restart networking"

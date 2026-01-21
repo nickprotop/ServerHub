@@ -184,4 +184,4 @@ fi
 
 # General actions
 echo "action: List all services:systemctl list-units --type=service --all"
-echo "action: [sudo] Reload systemd:systemctl daemon-reload"
+echo "action: [sudo,refresh] Reload systemd:systemctl daemon-reload"

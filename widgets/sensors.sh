@@ -248,7 +248,7 @@ fi
 
 # Actions
 echo "action: View full sensor data:sensors"
-echo "action: [sudo,timeout=120] Detect sensors:sensors-detect --auto"
+echo "action: [sudo,refresh,timeout=120] Detect sensors:sensors-detect --auto"
 
 # NVIDIA GPU actions
 if command -v nvidia-smi &> /dev/null; then

@@ -111,7 +111,7 @@ if [ "$EXTENDED" = true ]; then
 fi
 
 # Actions (context-based)
-echo "action: [sudo] Drop caches:sh -c 'sync && echo 3 > /proc/sys/vm/drop_caches' && echo 'Caches dropped'"
+echo "action: [sudo,refresh] Drop caches:sh -c 'sync && echo 3 > /proc/sys/vm/drop_caches' && echo 'Caches dropped'"
 
 if [ "$percent" -gt 90 ]; then
     # Get top memory process for kill action

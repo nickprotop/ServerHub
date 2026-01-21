@@ -166,10 +166,10 @@ fi
 
 # Actions
 if [ -d "/etc/letsencrypt" ]; then
-    echo "action: [sudo,timeout=180] Renew all certificates:certbot renew"
+    echo "action: [sudo,refresh,timeout=180] Renew all certificates:certbot renew"
 
     if [ $expiring_soon -gt 0 ]; then
-        echo "action: [sudo,danger,timeout=180] Force renewal:certbot renew --force-renewal"
+        echo "action: [sudo,danger,refresh,timeout=180] Force renewal:certbot renew --force-renewal"
     fi
 fi
 

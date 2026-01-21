@@ -121,13 +121,13 @@ if command -v apt &> /dev/null; then
     fi
 
     # APT Actions
-    echo "action: [sudo,timeout=120] Update package cache:apt update"
+    echo "action: [sudo,refresh,timeout=120] Update package cache:apt update"
     if [ "$total_updates" -gt 0 ]; then
-        echo "action: [sudo,danger,timeout=600] Upgrade packages:apt upgrade -y"
-        echo "action: [sudo,danger,timeout=600] Full upgrade:apt full-upgrade -y"
+        echo "action: [sudo,danger,refresh,timeout=600] Upgrade packages:apt upgrade -y"
+        echo "action: [sudo,danger,refresh,timeout=600] Full upgrade:apt full-upgrade -y"
     fi
     if [ "$autoremove" -gt 0 ] 2>/dev/null; then
-        echo "action: [sudo,timeout=120] Auto-remove unused:apt autoremove -y"
+        echo "action: [sudo,refresh,timeout=120] Auto-remove unused:apt autoremove -y"
     fi
 
 elif command -v dnf &> /dev/null; then
@@ -170,9 +170,9 @@ elif command -v dnf &> /dev/null; then
     fi
 
     # DNF Actions
-    echo "action: [sudo,timeout=120] Check for updates:dnf check-update"
+    echo "action: [sudo,refresh,timeout=120] Check for updates:dnf check-update"
     if [ "$total_updates" -gt 0 ]; then
-        echo "action: [sudo,danger,timeout=600] Upgrade packages:dnf upgrade -y"
+        echo "action: [sudo,danger,refresh,timeout=600] Upgrade packages:dnf upgrade -y"
     fi
 
 elif command -v yum &> /dev/null; then
@@ -190,9 +190,9 @@ elif command -v yum &> /dev/null; then
     fi
 
     # YUM Actions
-    echo "action: [sudo,timeout=120] Check for updates:yum check-update"
+    echo "action: [sudo,refresh,timeout=120] Check for updates:yum check-update"
     if [ "$total_updates" -gt 0 ]; then
-        echo "action: [sudo,danger,timeout=600] Upgrade packages:yum update -y"
+        echo "action: [sudo,danger,refresh,timeout=600] Upgrade packages:yum update -y"
     fi
 
 elif command -v pacman &> /dev/null; then
@@ -236,9 +236,9 @@ elif command -v pacman &> /dev/null; then
     fi
 
     # Pacman Actions
-    echo "action: [sudo,timeout=120] Sync database:pacman -Sy"
+    echo "action: [sudo,refresh,timeout=120] Sync database:pacman -Sy"
     if [ "$total_updates" -gt 0 ]; then
-        echo "action: [sudo,danger,timeout=600] Upgrade system:pacman -Syu --noconfirm"
+        echo "action: [sudo,danger,refresh,timeout=600] Upgrade system:pacman -Syu --noconfirm"
     fi
 
 elif command -v zypper &> /dev/null; then
@@ -263,9 +263,9 @@ elif command -v zypper &> /dev/null; then
     fi
 
     # Zypper Actions
-    echo "action: [sudo,timeout=120] Refresh repos:zypper refresh"
+    echo "action: [sudo,refresh,timeout=120] Refresh repos:zypper refresh"
     if [ "$total_updates" -gt 0 ]; then
-        echo "action: [sudo,danger,timeout=600] Update system:zypper update -y"
+        echo "action: [sudo,danger,refresh,timeout=600] Update system:zypper update -y"
     fi
 
 else

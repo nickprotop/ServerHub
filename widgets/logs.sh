@@ -133,7 +133,7 @@ fi
 
 # Actions
 echo "action: [timeout=0] View live log:journalctl -f -n 100"
-echo "action: [sudo,danger] Clear old logs:journalctl --vacuum-time=7d"
+echo "action: [sudo,danger,refresh] Clear old logs:journalctl --vacuum-time=7d"
 
 if [ "$errors" -gt 0 ]; then
     echo "action: View all errors:journalctl --since '1 hour ago' -p err --no-pager"

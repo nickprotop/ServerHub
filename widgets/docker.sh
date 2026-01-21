@@ -153,6 +153,6 @@ if [ $stopped -gt 0 ]; then
 fi
 
 echo "action: List all containers:docker ps -a"
-echo "action: [timeout=120] Prune unused images:docker system prune -f"
-echo "action: [danger,timeout=180] Prune everything:docker system prune -af --volumes"
+echo "action: [refresh,timeout=120] Prune unused images:docker system prune -f"
+echo "action: [danger,refresh,timeout=180] Prune everything:docker system prune -af --volumes"
 echo "action: [refresh,timeout=300] Pull latest images:docker-compose pull 2>/dev/null || echo 'docker-compose not available'"
