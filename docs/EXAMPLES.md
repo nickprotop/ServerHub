@@ -29,66 +29,72 @@ Modern C# with top-level statements. One file, runs like a script with full .NET
 ```csharp
 #!/usr/bin/env dotnet script
 
+using System;
 using System.Net.Http;
-using System.Text.Json;
 using System.Diagnostics;
+using System.Threading.Tasks;
 
 // Check if running in extended mode
 var extended = Args.Contains("--extended");
 
-Console.WriteLine("title: API Health");
+await RunAsync();
 
-var endpoints = new[] {
-    ("https://api.myapp.com/health", "Main API"),
-    ("https://api-staging.myapp.com/health", "Staging API"),
-    ("http://localhost:3000/health", "Local API")
-};
+async Task RunAsync()
+{
+    Console.WriteLine("title: API Health");
 
-using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+    var endpoints = new[] {
+        ("https://api.myapp.com/health", "Main API"),
+        ("https://api-staging.myapp.com/health", "Staging API"),
+        ("http://localhost:3000/health", "Local API")
+    };
 
-foreach (var (url, name) in endpoints) {
-    var sw = Stopwatch.StartNew();
-    try {
-        var response = await client.GetAsync(url);
-        sw.Stop();
+    using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
 
-        if (response.IsSuccessStatusCode) {
-            Console.WriteLine($"row: [green]●[/] {name} - [status:ok] Healthy");
+    foreach (var (url, name) in endpoints) {
+        var sw = Stopwatch.StartNew();
+        try {
+            var response = await client.GetAsync(url);
+            sw.Stop();
 
-            // Extended mode: show response time and details
-            if (extended) {
-                Console.WriteLine($"row:   [grey70]Response time: {sw.ElapsedMilliseconds}ms[/]");
-                Console.WriteLine($"row:   [grey70]Status: {(int)response.StatusCode} {response.StatusCode}[/]");
-                Console.WriteLine($"row:   [grey70]Content-Type: {response.Content.Headers.ContentType}[/]");
+            if (response.IsSuccessStatusCode) {
+                Console.WriteLine($"row: [green]●[/] {name} - [status:ok] Healthy");
+
+                // Extended mode: show response time and details
+                if (extended) {
+                    Console.WriteLine($"row:   [grey70]Response time: {sw.ElapsedMilliseconds}ms[/]");
+                    Console.WriteLine($"row:   [grey70]Status: {(int)response.StatusCode} {response.StatusCode}[/]");
+                    Console.WriteLine($"row:   [grey70]Content-Type: {response.Content.Headers.ContentType}[/]");
+                }
+            } else {
+                Console.WriteLine($"row: [yellow]●[/] {name} - [status:warning] HTTP {(int)response.StatusCode}");
+                if (extended) {
+                    Console.WriteLine($"row:   [grey70]Response time: {sw.ElapsedMilliseconds}ms[/]");
+                }
             }
-        } else {
-            Console.WriteLine($"row: [yellow]●[/] {name} - [status:warning] HTTP {(int)response.StatusCode}");
+        } catch (Exception ex) {
+            Console.WriteLine($"row: [red]●[/] {name} - [status:error] Unreachable");
             if (extended) {
-                Console.WriteLine($"row:   [grey70]Response time: {sw.ElapsedMilliseconds}ms[/]");
+                Console.WriteLine($"row:   [grey70]Error: {ex.Message}[/]");
             }
-        }
-    } catch (Exception ex) {
-        Console.WriteLine($"row: [red]●[/] {name} - [status:error] Unreachable");
-        if (extended) {
-            Console.WriteLine($"row:   [grey70]Error: {ex.Message}[/]");
         }
     }
-}
 
-Console.WriteLine("row: ");
-Console.WriteLine($"row: [grey70]Last check: {DateTime.Now:HH:mm:ss}[/]");
-
-// Extended mode: show additional system info
-if (extended) {
     Console.WriteLine("row: ");
-    Console.WriteLine("row: [bold]System Info:[/]");
-    Console.WriteLine($"row: [grey70].NET Version: {Environment.Version}[/]");
-    Console.WriteLine($"row: [grey70]OS: {Environment.OSVersion}[/]");
-}
+    Console.WriteLine($"row: [grey70]Last check: {DateTime.Now:HH:mm:ss}[/]");
 
-// Actions (shown as buttons in expanded view)
-Console.WriteLine("action: [danger,sudo,refresh] Restart Main:systemctl restart myapp-api");
-Console.WriteLine("action: View Logs:journalctl -u myapp-api -n 50 --no-pager");
+    // Extended mode: show additional system info
+    if (extended) {
+        Console.WriteLine("row: ");
+        Console.WriteLine("row: [bold]System Info:[/]");
+        Console.WriteLine($"row: [grey70].NET Version: {Environment.Version}[/]");
+        Console.WriteLine($"row: [grey70]OS: {Environment.OSVersion}[/]");
+    }
+
+    // Actions (shown as buttons in expanded view)
+    Console.WriteLine("action: [danger,sudo,refresh] Restart Main:systemctl restart myapp-api");
+    Console.WriteLine("action: View Logs:journalctl -u myapp-api -n 50 --no-pager");
+}
 ```
 
 **Dashboard view (compact):**
