@@ -153,6 +153,16 @@ echo "row: [grey70]Last updated: $(date)[/]"
 
 See [docs/WIDGET_PROTOCOL.md](docs/WIDGET_PROTOCOL.md) for the full protocol reference.
 
+### Example Use Cases
+
+Real-world examples showing custom widgets for specific scenarios:
+
+- **Development Droplet** - Monitor APIs, Docker services, deployments with one-click actions
+- **Homelab Server** - Track Proxmox VMs, NAS health, backups with control actions
+- **Production Monitor** - Service health, error logs, SSL certs with emergency actions
+
+See [docs/EXAMPLES.md](docs/EXAMPLES.md) for complete working examples with scripts.
+
 ## Security
 
 ### Why This Matters
