@@ -12,11 +12,17 @@ This also serves as a practical showcase of [SharpConsoleUI](https://github.com/
 
 ## Language-Agnostic Widgets
 
-Widgets can be written in **any language**. ServerHub simply executes them and reads stdout - no SDK or library required. Here are examples of the same "API Health Check" widget in different languages:
+Widgets can be written in **any language**. ServerHub simply executes them and reads stdout - no SDK or library required.
+
+**Extended View Support:** Widgets can detect when they're opened in expanded mode (Press Enter on any widget) and show additional detail - full logs, response times, system info, etc. Dashboard shows summaries; expanded view shows everything.
+
+Here are examples of the same "API Health Check" widget in different languages with extended view support:
 
 ### C# Script
 
 Modern C# with top-level statements. One file, runs like a script with full .NET power.
+
+**Supports expanded view** - Press Enter on the widget to see full details with response times and headers.
 
 **File:** `~/.config/serverhub/widgets/api-health.csx`
 
@@ -25,6 +31,10 @@ Modern C# with top-level statements. One file, runs like a script with full .NET
 
 using System.Net.Http;
 using System.Text.Json;
+using System.Diagnostics;
+
+// Check if running in extended mode
+var extended = Args.Contains("--extended");
 
 Console.WriteLine("title: API Health");
 
@@ -37,24 +47,60 @@ var endpoints = new[] {
 using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
 
 foreach (var (url, name) in endpoints) {
+    var sw = Stopwatch.StartNew();
     try {
         var response = await client.GetAsync(url);
-        var status = response.IsSuccessStatusCode ?
-            "[green]●[/] {name} - [status:ok] Healthy" :
-            $"[yellow]●[/] {name} - [status:warning] HTTP {(int)response.StatusCode}";
-        Console.WriteLine($"row: {status}");
-    } catch {
+        sw.Stop();
+
+        if (response.IsSuccessStatusCode) {
+            Console.WriteLine($"row: [green]●[/] {name} - [status:ok] Healthy");
+
+            // Extended mode: show response time and details
+            if (extended) {
+                Console.WriteLine($"row:   [grey70]Response time: {sw.ElapsedMilliseconds}ms[/]");
+                Console.WriteLine($"row:   [grey70]Status: {(int)response.StatusCode} {response.StatusCode}[/]");
+                Console.WriteLine($"row:   [grey70]Content-Type: {response.Content.Headers.ContentType}[/]");
+            }
+        } else {
+            Console.WriteLine($"row: [yellow]●[/] {name} - [status:warning] HTTP {(int)response.StatusCode}");
+            if (extended) {
+                Console.WriteLine($"row:   [grey70]Response time: {sw.ElapsedMilliseconds}ms[/]");
+            }
+        }
+    } catch (Exception ex) {
         Console.WriteLine($"row: [red]●[/] {name} - [status:error] Unreachable");
+        if (extended) {
+            Console.WriteLine($"row:   [grey70]Error: {ex.Message}[/]");
+        }
     }
 }
 
 Console.WriteLine("row: ");
 Console.WriteLine($"row: [grey70]Last check: {DateTime.Now:HH:mm:ss}[/]");
 
-// Context-aware actions
+// Extended mode: show additional system info
+if (extended) {
+    Console.WriteLine("row: ");
+    Console.WriteLine("row: [bold]System Info:[/]");
+    Console.WriteLine($"row: [grey70].NET Version: {Environment.Version}[/]");
+    Console.WriteLine($"row: [grey70]OS: {Environment.OSVersion}[/]");
+}
+
+// Context-aware actions (only shown in extended view)
 Console.WriteLine("action: [danger,sudo,refresh] Restart Main:systemctl restart myapp-api");
 Console.WriteLine("action: View Logs:journalctl -u myapp-api -n 50 --no-pager");
 ```
+
+**Dashboard view (compact):**
+- Summary status for each endpoint
+- Color-coded indicators
+
+**Extended view (Press Enter):**
+- Full response times
+- HTTP headers
+- Error details
+- System information
+- Action buttons
 
 **Setup:**
 ```bash
