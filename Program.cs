@@ -815,6 +815,11 @@ class Program
         if (_isPaused)
             return;
 
+        // Skip all widget refreshes when sudo password dialog is open
+        // This prevents ANSI mouse sequence leaks during password entry
+        if (ServerHub.UI.SudoPasswordDialog.IsOpen)
+            return;
+
         // Skip if modal is open for this widget - modal handles its own refresh
         if (_openModalWidgetId == widgetId)
             return;

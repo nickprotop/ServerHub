@@ -18,6 +18,11 @@ namespace ServerHub.UI;
 /// </summary>
 public static class SudoPasswordDialog
 {
+    /// <summary>
+    /// Indicates whether the sudo password dialog is currently open.
+    /// Used to prevent background widget refresh during password entry.
+    /// </summary>
+    public static bool IsOpen { get; private set; }
 
     /// <summary>
     /// Result of the password dialog
@@ -69,6 +74,9 @@ public static class SudoPasswordDialog
             .Maximizable(false)
             .WithColors(Color.Grey11, Color.Grey93)
             .Build();
+
+        // Mark dialog as open to prevent widget refresh during password entry
+        IsOpen = true;
 
         // Track state
         var dialogComplete = false;
@@ -203,6 +211,9 @@ public static class SudoPasswordDialog
         // Handle close
         modal.OnClosed += (s, e) =>
         {
+            // Mark dialog as closed - allows widget refresh to resume
+            IsOpen = false;
+
             RestoreWindows();
 
             if (result == null)
