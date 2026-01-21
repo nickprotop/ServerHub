@@ -31,7 +31,7 @@
 
   <!-- Production/CI: use NuGet package -->
   <ItemGroup Condition="!Exists('../ConsoleEx/SharpConsoleUI/SharpConsoleUI.csproj')">
-    <PackageReference Include="SharpConsoleUI" Version="2.3.0" />
+    <PackageReference Include="SharpConsoleUI" Version="2.4.0" />
   </ItemGroup>
 
   <!-- Generate bundled widget checksums before compilation -->
