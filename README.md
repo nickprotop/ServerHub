@@ -34,24 +34,38 @@ ServerHub is a terminal control panel for servers and homelabs. Monitor your sys
 
 ## Requirements
 
-- .NET 9.0 Runtime
-- Linux
+- Linux (x86_64 or ARM64)
 - Bash (for widget scripts)
 
+No .NET runtime required - ServerHub ships as a self-contained binary.
+
 ## Installation
+
+### Quick Install (Recommended)
+
+Download and install the latest release:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nickprotop/ServerHub/main/install.sh | bash
+```
+
+This automatically:
+- Downloads the binary for your architecture
+- Installs bundled widgets
+- Adds `~/.local/bin` to your PATH
+- Creates default config on first run
+
+### Build from Source
+
+For development or if you want to build from source:
 
 ```bash
 git clone https://github.com/nickprotop/ServerHub.git
 cd ServerHub
-./install.sh
+./build-and-install.sh
 ```
 
-Add `~/.local/bin` to your PATH if not already present:
-
-```bash
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
-```
+Requires .NET 9.0 SDK for building.
 
 ## Usage
 
