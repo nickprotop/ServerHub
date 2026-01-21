@@ -86,20 +86,18 @@ class Program
 
             // Load configuration
             var configPath = options.ConfigPath ?? ConfigManager.GetDefaultConfigPath();
+            var configMgr = new ConfigManager();
+
             if (!File.Exists(configPath))
             {
                 Console.WriteLine($"Configuration file not found: {configPath}");
                 Console.WriteLine("Creating default configuration...");
-
-                var configManager = new ConfigManager();
-                configManager.CreateDefaultConfig(configPath);
-
+                configMgr.CreateDefaultConfig(configPath);
                 Console.WriteLine($"Default configuration created at: {configPath}");
-                Console.WriteLine("Edit the configuration file and run ServerHub again.");
-                return 0;
+                Console.WriteLine("Starting ServerHub with default configuration...");
+                Console.WriteLine();
             }
 
-            var configMgr = new ConfigManager();
             _config = configMgr.LoadConfig(configPath);
 
             // Store dev mode state for use throughout the application
