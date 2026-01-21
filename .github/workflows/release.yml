@@ -1,0 +1,112 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Build NativeAOT for linux-x64
+        run: |
+          dotnet publish -c Release \
+            -r linux-x64 \
+            -p:PublishAot=true \
+            -p:StripSymbols=true \
+            -p:PublishTrimmed=true \
+            -o ./publish/linux-x64
+
+      - name: Build NativeAOT for linux-arm64
+        run: |
+          dotnet publish -c Release \
+            -r linux-arm64 \
+            -p:PublishAot=true \
+            -p:StripSymbols=true \
+            -p:PublishTrimmed=true \
+            -o ./publish/linux-arm64
+
+      - name: Rename binaries
+        run: |
+          mv ./publish/linux-x64/ServerHub ./publish/serverhub-linux-x64
+          mv ./publish/linux-arm64/ServerHub ./publish/serverhub-linux-arm64
+          chmod +x ./publish/serverhub-*
+
+      - name: Package widgets
+        run: |
+          cd widgets
+          tar -czf ../publish/widgets.tar.gz *.sh
+          cd ..
+
+      - name: Copy install script
+        run: |
+          cp install.sh ./publish/install.sh
+          chmod +x ./publish/install.sh
+
+      - name: Generate checksums
+        run: |
+          cd publish
+          sha256sum serverhub-linux-x64 > SHA256SUMS
+          sha256sum serverhub-linux-arm64 >> SHA256SUMS
+          sha256sum widgets.tar.gz >> SHA256SUMS
+          cd ..
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            publish/serverhub-linux-x64
+            publish/serverhub-linux-arm64
+            publish/widgets.tar.gz
+            publish/install.sh
+            publish/SHA256SUMS
+          body: |
+            # ServerHub ${{ steps.version.outputs.VERSION }}
+
+            ## Installation
+
+            **Quick Install (Recommended):**
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/nickprotop/ServerHub/main/install.sh | bash
+            ```
+
+            **Manual Install:**
+            1. Download the binary for your architecture:
+               - `serverhub-linux-x64` for Intel/AMD (x86_64)
+               - `serverhub-linux-arm64` for ARM (Raspberry Pi, etc.)
+            2. Download `widgets.tar.gz`
+            3. Extract and install:
+            ```bash
+            chmod +x serverhub-linux-x64
+            sudo mv serverhub-linux-x64 /usr/local/bin/serverhub
+            mkdir -p ~/.local/share/serverhub/widgets
+            tar -xzf widgets.tar.gz -C ~/.local/share/serverhub/widgets
+            ```
+
+            ## What's Changed
+
+            See commit history for details.
+
+            ## Checksums
+
+            See `SHA256SUMS` for file verification.
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
