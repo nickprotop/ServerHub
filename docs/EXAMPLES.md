@@ -10,6 +10,300 @@ This also serves as a practical showcase of [SharpConsoleUI](https://github.com/
 
 ---
 
+## Language-Agnostic Widgets
+
+Widgets can be written in **any language**. ServerHub simply executes them and reads stdout - no SDK or library required. Here are examples of the same "API Health Check" widget in different languages:
+
+### C# Script
+
+Modern C# with top-level statements. One file, runs like a script with full .NET power.
+
+**File:** `~/.config/serverhub/widgets/api-health.csx`
+
+```csharp
+#!/usr/bin/env dotnet script
+
+using System.Net.Http;
+using System.Text.Json;
+
+Console.WriteLine("title: API Health");
+
+var endpoints = new[] {
+    ("https://api.myapp.com/health", "Main API"),
+    ("https://api-staging.myapp.com/health", "Staging API"),
+    ("http://localhost:3000/health", "Local API")
+};
+
+using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+
+foreach (var (url, name) in endpoints) {
+    try {
+        var response = await client.GetAsync(url);
+        var status = response.IsSuccessStatusCode ?
+            "[green]●[/] {name} - [status:ok] Healthy" :
+            $"[yellow]●[/] {name} - [status:warning] HTTP {(int)response.StatusCode}";
+        Console.WriteLine($"row: {status}");
+    } catch {
+        Console.WriteLine($"row: [red]●[/] {name} - [status:error] Unreachable");
+    }
+}
+
+Console.WriteLine("row: ");
+Console.WriteLine($"row: [grey70]Last check: {DateTime.Now:HH:mm:ss}[/]");
+
+// Context-aware actions
+Console.WriteLine("action: [danger,sudo,refresh] Restart Main:systemctl restart myapp-api");
+Console.WriteLine("action: View Logs:journalctl -u myapp-api -n 50 --no-pager");
+```
+
+**Setup:**
+```bash
+# Install dotnet-script globally (once)
+dotnet tool install -g dotnet-script
+
+# Make executable
+chmod +x api-health.csx
+```
+
+**Why C#:** Full .NET ecosystem (HttpClient, JSON, async/await, LINQ), type safety, modern syntax, NuGet packages.
+
+---
+
+### Python
+
+Great for APIs, JSON parsing, and data processing.
+
+**File:** `~/.config/serverhub/widgets/api-health.py`
+
+```python
+#!/usr/bin/env python3
+
+import requests
+from datetime import datetime
+
+print("title: API Health")
+
+endpoints = [
+    ("https://api.myapp.com/health", "Main API"),
+    ("https://api-staging.myapp.com/health", "Staging API"),
+    ("http://localhost:3000/health", "Local API")
+]
+
+for url, name in endpoints:
+    try:
+        response = requests.get(url, timeout=3)
+        if response.status_code == 200:
+            print(f"row: [green]●[/] {name} - [status:ok] Healthy")
+        else:
+            print(f"row: [yellow]●[/] {name} - [status:warning] HTTP {response.status_code}")
+    except:
+        print(f"row: [red]●[/] {name} - [status:error] Unreachable")
+
+print("row: ")
+print(f"row: [grey70]Last check: {datetime.now().strftime('%H:%M:%S')}[/]")
+
+# Actions
+print("action: [danger,sudo,refresh] Restart Main:systemctl restart myapp-api")
+print("action: View Logs:journalctl -u myapp-api -n 50 --no-pager")
+```
+
+**Setup:**
+```bash
+pip install requests
+chmod +x api-health.py
+```
+
+**Why Python:** Excellent library ecosystem, readable syntax, great for data processing.
+
+---
+
+### Node.js
+
+Perfect for async operations and npm packages.
+
+**File:** `~/.config/serverhub/widgets/api-health.js`
+
+```javascript
+#!/usr/bin/env node
+
+const https = require('https');
+const http = require('http');
+
+console.log("title: API Health");
+
+const endpoints = [
+    { url: "https://api.myapp.com/health", name: "Main API" },
+    { url: "https://api-staging.myapp.com/health", name: "Staging API" },
+    { url: "http://localhost:3000/health", name: "Local API" }
+];
+
+async function checkEndpoint(url, name) {
+    return new Promise((resolve) => {
+        const client = url.startsWith('https') ? https : http;
+        const timeout = setTimeout(() => {
+            resolve(`row: [red]●[/] ${name} - [status:error] Timeout`);
+        }, 3000);
+
+        client.get(url, (res) => {
+            clearTimeout(timeout);
+            if (res.statusCode === 200) {
+                resolve(`row: [green]●[/] ${name} - [status:ok] Healthy`);
+            } else {
+                resolve(`row: [yellow]●[/] ${name} - [status:warning] HTTP ${res.statusCode}`);
+            }
+        }).on('error', () => {
+            clearTimeout(timeout);
+            resolve(`row: [red]●[/] ${name} - [status:error] Unreachable`);
+        });
+    });
+}
+
+(async () => {
+    for (const { url, name } of endpoints) {
+        console.log(await checkEndpoint(url, name));
+    }
+
+    console.log("row: ");
+    console.log(`row: [grey70]Last check: ${new Date().toTimeString().slice(0, 8)}[/]`);
+
+    console.log("action: [danger,sudo,refresh] Restart Main:systemctl restart myapp-api");
+    console.log("action: View Logs:journalctl -u myapp-api -n 50 --no-pager");
+})();
+```
+
+**Setup:**
+```bash
+chmod +x api-health.js
+```
+
+**Why Node.js:** Native async/await, npm ecosystem, familiar to web developers.
+
+---
+
+### Go (Compiled Binary)
+
+High performance, single binary deployment.
+
+**File:** `~/.config/serverhub/widgets/api-health.go`
+
+```go
+package main
+
+import (
+    "fmt"
+    "net/http"
+    "time"
+)
+
+type Endpoint struct {
+    URL  string
+    Name string
+}
+
+func main() {
+    fmt.Println("title: API Health")
+
+    endpoints := []Endpoint{
+        {"https://api.myapp.com/health", "Main API"},
+        {"https://api-staging.myapp.com/health", "Staging API"},
+        {"http://localhost:3000/health", "Local API"},
+    }
+
+    client := &http.Client{Timeout: 3 * time.Second}
+
+    for _, ep := range endpoints {
+        resp, err := client.Get(ep.URL)
+        if err != nil {
+            fmt.Printf("row: [red]●[/] %s - [status:error] Unreachable\n", ep.Name)
+            continue
+        }
+        resp.Body.Close()
+
+        if resp.StatusCode == 200 {
+            fmt.Printf("row: [green]●[/] %s - [status:ok] Healthy\n", ep.Name)
+        } else {
+            fmt.Printf("row: [yellow]●[/] %s - [status:warning] HTTP %d\n", ep.Name, resp.StatusCode)
+        }
+    }
+
+    fmt.Println("row: ")
+    fmt.Printf("row: [grey70]Last check: %s[/]\n", time.Now().Format("15:04:05"))
+
+    fmt.Println("action: [danger,sudo,refresh] Restart Main:systemctl restart myapp-api")
+    fmt.Println("action: View Logs:journalctl -u myapp-api -n 50 --no-pager")
+}
+```
+
+**Setup:**
+```bash
+# Compile once
+go build -o api-health api-health.go
+chmod +x api-health
+```
+
+**Why Go:** Blazing fast, single binary, excellent for performance-critical widgets.
+
+---
+
+### Bash
+
+Lightweight, zero dependencies, perfect for system commands.
+
+**File:** `~/.config/serverhub/widgets/api-health.sh`
+
+```bash
+#!/bin/bash
+
+echo "title: API Health"
+
+check_api() {
+    local url="$1"
+    local name="$2"
+
+    response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 "$url" 2>/dev/null)
+
+    if [ "$response" = "200" ]; then
+        echo "row: [green]●[/] $name - [status:ok] Healthy"
+    elif [ -z "$response" ]; then
+        echo "row: [red]●[/] $name - [status:error] Unreachable"
+    else
+        echo "row: [yellow]●[/] $name - [status:warning] HTTP $response"
+    fi
+}
+
+check_api "https://api.myapp.com/health" "Main API"
+check_api "https://api-staging.myapp.com/health" "Staging API"
+check_api "http://localhost:3000/health" "Local API"
+
+echo "row: "
+echo "row: [grey70]Last check: $(date '+%H:%M:%S')[/]"
+
+echo "action: [danger,sudo,refresh] Restart Main:systemctl restart myapp-api"
+echo "action: View Logs:journalctl -u myapp-api -n 50 --no-pager"
+```
+
+**Setup:**
+```bash
+chmod +x api-health.sh
+```
+
+**Why Bash:** Minimal overhead, ubiquitous, great for simple system commands.
+
+---
+
+### Key Takeaway
+
+**Pick the right tool for the job:**
+- C# - Full .NET ecosystem, modern syntax, type safety
+- Python - Data processing, scientific computing, rich libraries
+- Node.js - Async operations, web APIs, npm packages
+- Go/Rust - High performance, compiled binaries
+- Bash - System commands, lightweight, zero setup
+
+All work equally well with ServerHub - just output text following the protocol.
+
+---
+
 ## Example 1: Development Droplet
 
 **Scenario:** You have a cloud droplet running your development/staging environment with Docker containers, Node.js APIs, and deployment scripts.

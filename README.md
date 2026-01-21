@@ -14,7 +14,7 @@ ServerHub is a terminal control panel for servers and homelabs. Monitor your sys
 
 ## What Makes ServerHub Different
 
-**Extensible by design** - Write a bash script, and it becomes a widget. Monitor anything: custom services, APIs, hardware you built yourself, scripts you already have. No compilation required.
+**Extensible by design** - Write a script in any language (C#, Python, bash, Node.js, Go, Rust, or compiled binaries). If it outputs to stdout, it's a widget. Monitor anything: custom services, APIs, hardware you built yourself, scripts you already have.
 
 **Context-aware actions** - Widgets don't just display data—they export actions based on what they're showing. A service widget shows different restart options depending on which services are running. An updates widget exports "Upgrade All" only when updates are available. Docker widget offers actions per container. Each widget adapts to the current state.
 
@@ -141,6 +141,8 @@ See [config.example.yaml](config.example.yaml) for full configuration options.
 | `ssl-certs` | SSL certificate expiry status |
 
 ## Custom Widgets
+
+Write widgets in any language - C# scripts, bash, Python, Node.js, Go, Rust, or compiled binaries. As long as it outputs to stdout following our protocol, it works.
 
 Place custom widget scripts in `~/.config/serverhub/widgets/`.
 
