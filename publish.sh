@@ -6,20 +6,34 @@
 
 set -e
 
-# Get bump type (major, minor, patch) - default to patch
-BUMP_TYPE="${1:-patch}"
+# Parse arguments
+BUMP_TYPE="patch"
+FORCE=false
 
-if [[ ! "$BUMP_TYPE" =~ ^(major|minor|patch)$ ]]; then
-    echo "Error: Invalid bump type '$BUMP_TYPE'"
-    echo "Usage: $0 [major|minor|patch]"
-    echo ""
-    echo "Examples:"
-    echo "  $0        # Bump patch version (default)"
-    echo "  $0 patch  # Bump patch version (1.0.0 -> 1.0.1)"
-    echo "  $0 minor  # Bump minor version (1.0.0 -> 1.1.0)"
-    echo "  $0 major  # Bump major version (1.0.0 -> 2.0.0)"
-    exit 1
-fi
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --force|-f)
+            FORCE=true
+            shift
+            ;;
+        major|minor|patch)
+            BUMP_TYPE="$1"
+            shift
+            ;;
+        *)
+            echo "Error: Invalid argument '$1'"
+            echo "Usage: $0 [major|minor|patch] [--force]"
+            echo ""
+            echo "Examples:"
+            echo "  $0              # Bump patch version (default)"
+            echo "  $0 patch        # Bump patch version (1.0.0 -> 1.0.1)"
+            echo "  $0 minor        # Bump minor version (1.0.0 -> 1.1.0)"
+            echo "  $0 major        # Bump major version (1.0.0 -> 2.0.0)"
+            echo "  $0 patch --force # Skip confirmation prompt"
+            exit 1
+            ;;
+    esac
+done
 
 # Check for uncommitted changes
 if ! git diff-index --quiet HEAD --; then
@@ -102,11 +116,13 @@ echo "  Type:     $BUMP_TYPE"
 echo ""
 
 # Confirm
-read -p "Create and push tag '$NEW_TAG'? [y/N] " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "Aborted."
-    exit 0
+if [ "$FORCE" = false ]; then
+    read -p "Create and push tag '$NEW_TAG'? [y/N] " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Aborted."
+        exit 0
+    fi
 fi
 
 # Create and push tag
@@ -123,7 +139,7 @@ echo "✓ Release $NEW_TAG published!"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "GitHub Actions will now:"
-echo "  1. Build NativeAOT binaries (linux-x64, linux-arm64)"
+echo "  1. Build self-contained binaries (linux-x64, linux-arm64)"
 echo "  2. Package widgets"
 echo "  3. Create GitHub Release"
 echo ""
