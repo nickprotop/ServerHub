@@ -60,9 +60,9 @@ echo "row: "
 echo "row: [grey70]Last check: $(date '+%H:%M:%S')[/]"
 
 # Export actions
-echo "action: Restart Main API|systemctl restart myapp-api"
-echo "action: Restart Staging|systemctl restart myapp-staging"
-echo "action: View Logs|journalctl -u myapp-api -n 50 --no-pager"
+echo "action: [danger,sudo,refresh] Restart Main API:systemctl restart myapp-api"
+echo "action: [danger,sudo,refresh] Restart Staging:systemctl restart myapp-staging"
+echo "action: View Logs:journalctl -u myapp-api -n 50 --no-pager"
 ```
 
 **Config:**
@@ -108,13 +108,13 @@ stopped=0
 echo "$containers" | while IFS='|' read -r name state status; do
     if [ "$state" = "running" ]; then
         echo "row: [green]●[/] $name - [status:ok] Running"
-        echo "action: Restart $name|docker restart $name"
-        echo "action: Stop $name|docker stop $name"
-        echo "action: Logs: $name|docker logs --tail 50 $name"
+        echo "action: [danger,refresh] Restart $name:docker restart $name"
+        echo "action: [danger,refresh] Stop $name:docker stop $name"
+        echo "action: Logs $name:docker logs --tail 50 $name"
         ((running++))
     else
         echo "row: [red]●[/] $name - [status:error] Stopped"
-        echo "action: Start $name|docker start $name"
+        echo "action: [refresh] Start $name:docker start $name"
         ((stopped++))
     fi
 done
@@ -123,8 +123,8 @@ echo "row: "
 echo "row: [cyan1]Running:[/] $running [grey70]|[/] [red]Stopped:[/] $stopped"
 
 # Global actions
-echo "action: Restart All|docker restart \$(docker ps -q)"
-echo "action: Docker Stats|docker stats --no-stream"
+echo "action: [danger,refresh] Restart All:docker restart \$(docker ps -q)"
+echo "action: Docker Stats:docker stats --no-stream"
 ```
 
 **Config:**
@@ -176,8 +176,8 @@ behind=$(git rev-list HEAD..origin/"$branch" --count 2>/dev/null)
 if [ "$behind" -gt 0 ]; then
     echo "row: "
     echo "row: [yellow]⚠[/] $behind commit(s) behind origin"
-    echo "action: Pull Changes|cd $REPO_PATH && git pull origin $branch|danger"
-    echo "action: Deploy|cd $REPO_PATH && git pull && npm install && pm2 restart myapp|danger"
+    echo "action: [danger,refresh] Pull Changes:cd $REPO_PATH && git pull origin $branch"
+    echo "action: [danger,refresh,timeout=120] Deploy:cd $REPO_PATH && git pull && npm install && pm2 restart myapp"
 else
     echo "row: "
     echo "row: [green]✓[/] Up to date"
@@ -191,8 +191,8 @@ if [ -n "$last_pull" ]; then
 fi
 
 # Always available actions
-echo "action: View Git Log|cd $REPO_PATH && git log --oneline -10"
-echo "action: Git Status|cd $REPO_PATH && git status"
+echo "action: View Git Log:cd $REPO_PATH && git log --oneline -10"
+echo "action: Git Status:cd $REPO_PATH && git status"
 ```
 
 **Config:**
@@ -241,13 +241,13 @@ stopped=0
 echo "$vms" | jq -r '.[] | "\(.vmid)|\(.name)|\(.status)"' | while IFS='|' read -r vmid name status; do
     if [ "$status" = "running" ]; then
         echo "row: [green]●[/] $name (ID: $vmid)"
-        echo "action: Stop $name|qm stop $vmid|danger"
-        echo "action: Reboot $name|qm reboot $vmid|danger"
-        echo "action: Console $name|qm terminal $vmid"
+        echo "action: [danger,sudo,refresh] Stop $name:qm stop $vmid"
+        echo "action: [danger,sudo,refresh] Reboot $name:qm reboot $vmid"
+        echo "action: [timeout=0] Console $name:qm terminal $vmid"
         ((running++))
     else
         echo "row: [grey70]○[/] $name (ID: $vmid) - Stopped"
-        echo "action: Start $name|qm start $vmid"
+        echo "action: [sudo,refresh] Start $name:qm start $vmid"
         ((stopped++))
     fi
 done
@@ -281,11 +281,11 @@ if mountpoint -q "$NAS_MOUNT"; then
     echo "row: [cyan1]Space:[/] $used / $total"
     echo "row: [progress:$percent:inline]"
 
-    echo "action: Unmount NAS|umount $NAS_MOUNT"
-    echo "action: View Files|ls -lh $NAS_MOUNT"
+    echo "action: [danger,sudo,refresh] Unmount NAS:umount $NAS_MOUNT"
+    echo "action: View Files:ls -lh $NAS_MOUNT"
 else
     echo "row: [red]○[/] NAS Not Mounted"
-    echo "action: Mount NAS|mount -t nfs $NAS_HOST:/volume1/backup $NAS_MOUNT"
+    echo "action: [sudo,refresh] Mount NAS:mount -t nfs $NAS_HOST:/volume1/backup $NAS_MOUNT"
 fi
 
 # Check if NAS host is reachable
@@ -318,13 +318,13 @@ for service in "${SERVICES[@]}"; do
     if systemctl is-active --quiet "$service"; then
         uptime=$(systemctl show "$service" -p ActiveEnterTimestamp --value)
         echo "row: [green]●[/] $service - [status:ok] Running"
-        echo "action: Restart $service|systemctl restart $service|danger|sudo"
-        echo "action: Stop $service|systemctl stop $service|danger|sudo"
-        echo "action: Logs: $service|journalctl -u $service -n 50 --no-pager"
+        echo "action: [danger,sudo,refresh] Restart $service:systemctl restart $service"
+        echo "action: [danger,sudo,refresh] Stop $service:systemctl stop $service"
+        echo "action: Logs $service:journalctl -u $service -n 50 --no-pager"
     else
         echo "row: [red]●[/] $service - [status:error] Stopped"
-        echo "action: Start $service|systemctl start $service|sudo"
-        echo "action: Status: $service|systemctl status $service"
+        echo "action: [sudo,refresh] Start $service:systemctl start $service"
+        echo "action: Status $service:systemctl status $service"
     fi
 done
 
@@ -332,7 +332,7 @@ echo "row: "
 echo "row: [grey70]Last check: $(date '+%H:%M:%S')[/]"
 
 # Emergency action
-echo "action: Restart All Services|systemctl restart nginx postgresql redis|danger|sudo"
+echo "action: [danger,sudo,refresh] Restart All Services:systemctl restart nginx postgresql redis"
 ```
 
 ---
@@ -375,9 +375,9 @@ tail -n 100 "$LOG_FILE" | grep "ERROR" | tail -n 3 | while read -r line; do
 done
 
 # Actions
-echo "action: View Full Log|tail -n 100 $LOG_FILE"
-echo "action: Clear Old Logs|find /var/log/myapp -name '*.log' -mtime +7 -delete|danger|sudo"
-echo "action: Watch Live|tail -f $LOG_FILE"
+echo "action: View Full Log:tail -n 100 $LOG_FILE"
+echo "action: [danger,sudo,refresh] Clear Old Logs:find /var/log/myapp -name '*.log' -mtime +7 -delete"
+echo "action: [timeout=0] Watch Live:tail -f $LOG_FILE"
 ```
 
 ---
@@ -388,19 +388,29 @@ echo "action: Watch Live|tail -f $LOG_FILE"
 2. **Handle errors** - Check if commands exist before using them
 3. **Use timeouts** - Don't let network calls hang indefinitely
 4. **Context-aware actions** - Export different actions based on current state
-5. **Mark dangerous actions** - Use `|danger` flag for destructive operations
-6. **Use sudo flag** - Add `|sudo` when action needs elevated privileges
-7. **Test thoroughly** - Run widget manually before adding to config
+5. **Mark dangerous actions** - Use `[danger]` flag for destructive operations
+6. **Use sudo flag** - Add `[sudo]` when action needs elevated privileges
+7. **Use refresh flag** - Add `[refresh]` to auto-refresh widget after action completes
+8. **Test thoroughly** - Run widget manually before adding to config
 
 ## Action Protocol Syntax
 
 ```bash
-echo "action: Label|command"                    # Basic action
-echo "action: Label|command|danger"             # Destructive action (shows warning)
-echo "action: Label|command|sudo"               # Requires sudo authentication
-echo "action: Label|command|danger|sudo"        # Both flags
-echo "action: Label|command|timeout:120"        # Custom timeout (seconds)
-echo "action: Label|command|timeout:0"          # No timeout (infinite)
+echo "action: Label:command"                         # Basic action
+echo "action: [danger] Label:command"                # Destructive action (shows warning)
+echo "action: [sudo] Label:command"                  # Requires sudo authentication
+echo "action: [danger,sudo] Label:command"           # Both flags
+echo "action: [refresh] Label:command"               # Refresh widget after completion
+echo "action: [timeout=120] Label:command"           # Custom timeout (seconds)
+echo "action: [timeout=0] Label:command"             # No timeout (infinite)
+echo "action: [danger,sudo,refresh] Label:command"   # Multiple flags
+```
+
+**Flags:**
+- `danger` - Shows warning, requires confirmation
+- `sudo` - Prompts for password if needed
+- `refresh` - Auto-refreshes widget after action completes
+- `timeout=N` - Custom timeout in seconds (default: 60, use 0 for infinite)
 ```
 
 ## Getting Help
