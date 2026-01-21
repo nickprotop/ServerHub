@@ -12,6 +12,8 @@ ServerHub is a terminal control panel for servers and homelabs. Monitor your sys
 
 ![ServerHub Screenshot](.github/Screenshot.png)
 
+**[View more screenshots →](docs/SCREENSHOTS.md)**
+
 ## What Makes ServerHub Different
 
 **Extensible by design** - Write a script in any language (C#, Python, bash, Node.js, Go, Rust, or compiled binaries). If it outputs to stdout, it's a widget. Monitor anything: custom services, APIs, hardware you built yourself, scripts you already have. Widgets support expanded views - press Enter for full details beyond the dashboard summary.

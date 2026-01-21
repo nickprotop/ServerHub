@@ -58,7 +58,7 @@ async Task RunAsync()
             sw.Stop();
 
             if (response.IsSuccessStatusCode) {
-                Console.WriteLine($"row: [green]●[/] {name} - [status:ok] Healthy");
+                Console.WriteLine($"row: [status:ok] {name} - Healthy");
 
                 // Extended mode: show response time and details
                 if (extended) {
@@ -67,13 +67,13 @@ async Task RunAsync()
                     Console.WriteLine($"row:   [grey70]Content-Type: {response.Content.Headers.ContentType}[/]");
                 }
             } else {
-                Console.WriteLine($"row: [yellow]●[/] {name} - [status:warning] HTTP {(int)response.StatusCode}");
+                Console.WriteLine($"row: [status:warning] {name} - HTTP {(int)response.StatusCode}");
                 if (extended) {
                     Console.WriteLine($"row:   [grey70]Response time: {sw.ElapsedMilliseconds}ms[/]");
                 }
             }
         } catch (Exception ex) {
-            Console.WriteLine($"row: [red]●[/] {name} - [status:error] Unreachable");
+            Console.WriteLine($"row: [status:error] {name} - Unreachable");
             if (extended) {
                 Console.WriteLine($"row:   [grey70]Error: {ex.Message}[/]");
             }
@@ -145,11 +145,11 @@ for url, name in endpoints:
     try:
         response = requests.get(url, timeout=3)
         if response.status_code == 200:
-            print(f"row: [green]●[/] {name} - [status:ok] Healthy")
+            print(f"row: [status:ok] {name} - Healthy")
         else:
-            print(f"row: [yellow]●[/] {name} - [status:warning] HTTP {response.status_code}")
+            print(f"row: [status:warning] {name} - HTTP {response.status_code}")
     except:
-        print(f"row: [red]●[/] {name} - [status:error] Unreachable")
+        print(f"row: [status:error] {name} - Unreachable")
 
 print("row: ")
 print(f"row: [grey70]Last check: {datetime.now().strftime('%H:%M:%S')}[/]")
@@ -193,19 +193,19 @@ async function checkEndpoint(url, name) {
     return new Promise((resolve) => {
         const client = url.startsWith('https') ? https : http;
         const timeout = setTimeout(() => {
-            resolve(`row: [red]●[/] ${name} - [status:error] Timeout`);
+            resolve(`row: [status:error] ${name} - Timeout`);
         }, 3000);
 
         client.get(url, (res) => {
             clearTimeout(timeout);
             if (res.statusCode === 200) {
-                resolve(`row: [green]●[/] ${name} - [status:ok] Healthy`);
+                resolve(`row: [status:ok] ${name} - Healthy`);
             } else {
-                resolve(`row: [yellow]●[/] ${name} - [status:warning] HTTP ${res.statusCode}`);
+                resolve(`row: [status:warning] ${name} - HTTP ${res.statusCode}`);
             }
         }).on('error', () => {
             clearTimeout(timeout);
-            resolve(`row: [red]●[/] ${name} - [status:error] Unreachable`);
+            resolve(`row: [status:error] ${name} - Unreachable`);
         });
     });
 }
@@ -232,71 +232,6 @@ chmod +x api-health.js
 
 ---
 
-### Go (Compiled Binary)
-
-High performance, single binary deployment.
-
-**File:** `~/.config/serverhub/widgets/api-health.go`
-
-```go
-package main
-
-import (
-    "fmt"
-    "net/http"
-    "time"
-)
-
-type Endpoint struct {
-    URL  string
-    Name string
-}
-
-func main() {
-    fmt.Println("title: API Health")
-
-    endpoints := []Endpoint{
-        {"https://api.myapp.com/health", "Main API"},
-        {"https://api-staging.myapp.com/health", "Staging API"},
-        {"http://localhost:3000/health", "Local API"},
-    }
-
-    client := &http.Client{Timeout: 3 * time.Second}
-
-    for _, ep := range endpoints {
-        resp, err := client.Get(ep.URL)
-        if err != nil {
-            fmt.Printf("row: [red]●[/] %s - [status:error] Unreachable\n", ep.Name)
-            continue
-        }
-        resp.Body.Close()
-
-        if resp.StatusCode == 200 {
-            fmt.Printf("row: [green]●[/] %s - [status:ok] Healthy\n", ep.Name)
-        } else {
-            fmt.Printf("row: [yellow]●[/] %s - [status:warning] HTTP %d\n", ep.Name, resp.StatusCode)
-        }
-    }
-
-    fmt.Println("row: ")
-    fmt.Printf("row: [grey70]Last check: %s[/]\n", time.Now().Format("15:04:05"))
-
-    fmt.Println("action: [danger,sudo,refresh] Restart Main:systemctl restart myapp-api")
-    fmt.Println("action: View Logs:journalctl -u myapp-api -n 50 --no-pager")
-}
-```
-
-**Setup:**
-```bash
-# Compile once
-go build -o api-health api-health.go
-chmod +x api-health
-```
-
-**Why Go:** Blazing fast, single binary, excellent for performance-critical widgets.
-
----
-
 ### Bash
 
 Lightweight, zero dependencies, perfect for system commands.
@@ -315,11 +250,11 @@ check_api() {
     response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 "$url" 2>/dev/null)
 
     if [ "$response" = "200" ]; then
-        echo "row: [green]●[/] $name - [status:ok] Healthy"
+        echo "row: [status:ok] $name - Healthy"
     elif [ -z "$response" ]; then
-        echo "row: [red]●[/] $name - [status:error] Unreachable"
+        echo "row: [status:error] $name - Unreachable"
     else
-        echo "row: [yellow]●[/] $name - [status:warning] HTTP $response"
+        echo "row: [status:warning] $name - HTTP $response"
     fi
 }
 
@@ -349,7 +284,6 @@ chmod +x api-health.sh
 - C# - Full .NET ecosystem, modern syntax, type safety
 - Python - Data processing, scientific computing, rich libraries
 - Node.js - Async operations, web APIs, npm packages
-- Go/Rust - High performance, compiled binaries
 - Bash - System commands, lightweight, zero setup
 
 All work equally well with ServerHub - just output text following the protocol.
@@ -387,11 +321,11 @@ check_api() {
     response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 "$url" 2>/dev/null)
 
     if [ "$response" = "200" ]; then
-        echo "row: [green]●[/] $name - [status:ok] Healthy"
+        echo "row: [status:ok] $name - Healthy"
     elif [ -z "$response" ]; then
-        echo "row: [red]●[/] $name - [status:error] Unreachable"
+        echo "row: [status:error] $name - Unreachable"
     else
-        echo "row: [yellow]●[/] $name - [status:warning] HTTP $response"
+        echo "row: [status:warning] $name - HTTP $response"
     fi
 }
 
@@ -453,13 +387,13 @@ stopped=0
 
 echo "$containers" | while IFS='|' read -r name state status; do
     if [ "$state" = "running" ]; then
-        echo "row: [green]●[/] $name - [status:ok] Running"
+        echo "row: [status:ok] $name - Running"
         echo "action: [danger,refresh] Restart $name:docker restart $name"
         echo "action: [danger,refresh] Stop $name:docker stop $name"
         echo "action: Logs $name:docker logs --tail 50 $name"
         ((running++))
     else
-        echo "row: [red]●[/] $name - [status:error] Stopped"
+        echo "row: [status:error] $name - Stopped"
         echo "action: [refresh] Start $name:docker start $name"
         ((stopped++))
     fi
@@ -623,7 +557,7 @@ if mountpoint -q "$NAS_MOUNT"; then
     total=$(df -h "$NAS_MOUNT" | awk 'NR==2 {print $2}')
     percent=$(df "$NAS_MOUNT" | awk 'NR==2 {print $5}' | tr -d '%')
 
-    echo "row: [green]●[/] NAS Mounted - [status:ok] Healthy"
+    echo "row: [status:ok] NAS Mounted - Healthy"
     echo "row: [cyan1]Space:[/] $used / $total"
     echo "row: [progress:$percent:inline]"
 
@@ -663,12 +597,12 @@ SERVICES=("nginx" "postgresql" "redis")
 for service in "${SERVICES[@]}"; do
     if systemctl is-active --quiet "$service"; then
         uptime=$(systemctl show "$service" -p ActiveEnterTimestamp --value)
-        echo "row: [green]●[/] $service - [status:ok] Running"
+        echo "row: [status:ok] $service - Running"
         echo "action: [danger,sudo,refresh] Restart $service:systemctl restart $service"
         echo "action: [danger,sudo,refresh] Stop $service:systemctl stop $service"
         echo "action: Logs $service:journalctl -u $service -n 50 --no-pager"
     else
-        echo "row: [red]●[/] $service - [status:error] Stopped"
+        echo "row: [status:error] $service - Stopped"
         echo "action: [sudo,refresh] Start $service:systemctl start $service"
         echo "action: Status $service:systemctl status $service"
     fi
