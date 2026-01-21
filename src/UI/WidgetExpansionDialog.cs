@@ -28,13 +28,15 @@ public static class WidgetExpansionDialog
     /// <param name="renderer">Widget renderer for creating content</param>
     /// <param name="refreshService">Service to handle widget refresh</param>
     /// <param name="onClose">Callback when modal closes</param>
+    /// <param name="onMainWidgetRefresh">Callback to refresh main dashboard widget immediately after action completion</param>
     public static void Show(
         string widgetId,
         WidgetData widgetData,
         ConsoleWindowSystem windowSystem,
         WidgetRenderer renderer,
         WidgetRefreshService refreshService,
-        Action? onClose = null)
+        Action? onClose = null,
+        Func<Task>? onMainWidgetRefresh = null)
     {
         // Calculate modal size: 90% of screen with reasonable max constraints
         int screenWidth = Console.WindowWidth;
@@ -252,7 +254,8 @@ public static class WidgetExpansionDialog
                         currentData = data;
                         UpdateModalContent(updateContext, data);
                         isRefreshing = false;
-                    });
+                    },
+                    onMainWidgetRefresh: onMainWidgetRefresh);
             }
         };
 
@@ -288,7 +291,8 @@ public static class WidgetExpansionDialog
                             currentData = data;
                             UpdateModalContent(updateContext, data);
                             isRefreshing = false;
-                        });
+                        },
+                        onMainWidgetRefresh: onMainWidgetRefresh);
                     e.Handled = true;
                 }
             }
@@ -599,7 +603,8 @@ public static class WidgetExpansionDialog
         WidgetAction action,
         ConsoleWindowSystem windowSystem,
         Window parentModal,
-        Func<Task>? onRefreshRequested)
+        Func<Task>? onRefreshRequested,
+        Func<Task>? onMainWidgetRefresh = null)
     {
         // Show unified dialog (confirm → execute → results in one dialog)
         ActionExecutionDialog.Show(
@@ -608,10 +613,14 @@ public static class WidgetExpansionDialog
             parentModal,
             onComplete: (result) =>
             {
-                // If action succeeded and refresh flag is set, trigger widget refresh
-                if (result.IsSuccess && action.RefreshAfterSuccess)
+                // If refresh flag is set, trigger widget refresh (on any completion: success, failure, or termination)
+                if (action.RefreshAfterSuccess)
                 {
+                    // Refresh the expansion dialog content
                     onRefreshRequested?.Invoke();
+
+                    // Refresh the main dashboard widget box
+                    onMainWidgetRefresh?.Invoke();
                 }
             },
             onCancel: () =>

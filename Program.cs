@@ -1031,6 +1031,15 @@ class Program
                         _ = RefreshWidgetAsync(closedWidgetId, widgetConfig);
                     }
                 }
+            },
+            onMainWidgetRefresh: async () =>
+            {
+                // Refresh main dashboard widget immediately after action completes
+                var widgetConfig = _config?.Widgets.GetValueOrDefault(widgetId);
+                if (widgetConfig != null)
+                {
+                    await RefreshWidgetAsync(widgetId, widgetConfig);
+                }
             }
         );
     }
