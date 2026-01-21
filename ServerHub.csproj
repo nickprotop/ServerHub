@@ -7,6 +7,13 @@
     <Nullable>enable</Nullable>
     <RootNamespace>ServerHub</RootNamespace>
 
+    <!-- Single-file self-contained publish -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
+    <PublishTrimmed>true</PublishTrimmed>
+    <PublishReadyToRun>true</PublishReadyToRun>
+
     <!-- NativeAOT settings (for future) -->
     <!-- <PublishAot>true</PublishAot> -->
     <!-- <InvariantGlobalization>true</InvariantGlobalization> -->
@@ -20,13 +27,13 @@
     <PackageReference Include="YamlDotNet" Version="16.2.0" />
   </ItemGroup>
 
-  <!-- Generate bundled widget checksums before build -->
-  <Target Name="GenerateChecksums" BeforeTargets="BeforeBuild">
+  <!-- Generate bundled widget checksums before compilation -->
+  <Target Name="GenerateChecksums" BeforeTargets="BeforeCompile">
     <Exec Command="bash $(ProjectDir)generate-checksums.sh" />
   </Target>
 
-  <!-- Generate default config from config.yaml before build -->
-  <Target Name="GenerateDefaultConfig" BeforeTargets="BeforeBuild">
+  <!-- Generate default config from config.yaml before compilation -->
+  <Target Name="GenerateDefaultConfig" BeforeTargets="BeforeCompile">
     <Exec Command="bash $(ProjectDir)generate-default-config.sh" />
   </Target>
 
