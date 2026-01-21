@@ -10,13 +10,8 @@
     <!-- Single-file self-contained publish -->
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
-    <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
     <PublishTrimmed>true</PublishTrimmed>
-    <PublishReadyToRun>true</PublishReadyToRun>
-
-    <!-- NativeAOT settings (for future) -->
-    <!-- <PublishAot>true</PublishAot> -->
-    <!-- <InvariantGlobalization>true</InvariantGlobalization> -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
 
   <ItemGroup>
@@ -34,20 +29,15 @@
     <PackageReference Include="SharpConsoleUI" Version="2.4.0" />
   </ItemGroup>
 
+
   <!-- Generate bundled widget checksums before compilation -->
-  <Target Name="GenerateChecksums" BeforeTargets="CoreCompile">
+  <Target Name="GenerateChecksums" BeforeTargets="BeforeBuild">
     <Exec Command="bash $(ProjectDir)generate-checksums.sh" />
-    <ItemGroup>
-      <Compile Include="src/Config/BundledWidgets.g.cs" />
-    </ItemGroup>
   </Target>
 
   <!-- Generate default config from config.yaml before compilation -->
-  <Target Name="GenerateDefaultConfig" BeforeTargets="CoreCompile">
+  <Target Name="GenerateDefaultConfig" BeforeTargets="BeforeBuild">
     <Exec Command="bash $(ProjectDir)generate-default-config.sh" />
-    <ItemGroup>
-      <Compile Include="src/Config/DefaultConfig.g.cs" />
-    </ItemGroup>
   </Target>
 
 </Project>

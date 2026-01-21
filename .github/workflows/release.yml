@@ -24,21 +24,21 @@ jobs:
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
-      - name: Build NativeAOT for linux-x64
+      - name: Build self-contained binary for linux-x64
         run: |
           dotnet publish -c Release \
             -r linux-x64 \
-            -p:PublishAot=true \
-            -p:StripSymbols=true \
+            --self-contained true \
+            -p:PublishSingleFile=true \
             -p:PublishTrimmed=true \
             -o ./publish/linux-x64
 
-      - name: Build NativeAOT for linux-arm64
+      - name: Build self-contained binary for linux-arm64
         run: |
           dotnet publish -c Release \
             -r linux-arm64 \
-            -p:PublishAot=true \
-            -p:StripSymbols=true \
+            --self-contained true \
+            -p:PublishSingleFile=true \
             -p:PublishTrimmed=true \
             -o ./publish/linux-arm64
 
