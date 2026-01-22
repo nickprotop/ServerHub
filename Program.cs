@@ -37,6 +37,7 @@ class Program
     private static string? _openModalWidgetId = null;
     private static WidgetRefreshService? _refreshService;
     private static bool _devMode = false;
+    private static string? _configPath;
 
     static async Task<int> Main(string[] args)
     {
@@ -86,6 +87,10 @@ class Program
 
             // Load configuration
             var configPath = options.ConfigPath ?? ConfigManager.GetDefaultConfigPath();
+
+            // Store path for later use (widget reordering)
+            _configPath = configPath;
+
             var configMgr = new ConfigManager();
 
             if (!File.Exists(configPath))
@@ -543,6 +548,10 @@ class Program
   [grey]─────────────────────────────────────────────────────────────────────[/]
     [cyan1]Tab / Shift+Tab[/]      [white]Move between widgets[/]
     [cyan1]Arrow keys[/]           [white]Scroll within widget[/]
+    [cyan1]Ctrl+←/→[/]             [white]Swap widget left/right in row[/]
+    [cyan1]Ctrl+↑/↓[/]             [white]Swap widget with row above/below[/]
+    [cyan1]Ctrl+Shift+←/→[/]       [white]Decrease/increase widget width[/]
+    [cyan1]Ctrl+Shift+↑/↓[/]       [white]Decrease/increase widget height[/]
 
   [bold cyan1]Actions[/]
   [grey]─────────────────────────────────────────────────────────────────────[/]
@@ -720,20 +729,72 @@ class Program
             return;
         }
 
-        // ===== PRIORITY 2: Reserved for Future Features =====
-        // Ctrl+Arrow keys reserved for widget reordering
-        if (e.KeyInfo.Modifiers.HasFlag(ConsoleModifiers.Control))
+        // ===== PRIORITY 2: Widget Reordering =====
+        // Ctrl+Arrow keys for visual widget reordering
+        if (e.KeyInfo.Modifiers.HasFlag(ConsoleModifiers.Control) && !e.KeyInfo.Modifiers.HasFlag(ConsoleModifiers.Shift))
         {
+            FocusManager.VisualReorderDirection? direction = null;
+
             switch (e.KeyInfo.Key)
             {
-                case ConsoleKey.UpArrow:
-                case ConsoleKey.DownArrow:
                 case ConsoleKey.LeftArrow:
+                    direction = FocusManager.VisualReorderDirection.VisualLeft;
+                    break;
+
                 case ConsoleKey.RightArrow:
-                    // Future: _focusManager?.ReorderWidget(direction);
-                    e.Handled = true; // Reserve keybinding
-                    return;
+                    direction = FocusManager.VisualReorderDirection.VisualRight;
+                    break;
+
+                case ConsoleKey.UpArrow:
+                    direction = FocusManager.VisualReorderDirection.VisualUp;
+                    break;
+
+                case ConsoleKey.DownArrow:
+                    direction = FocusManager.VisualReorderDirection.VisualDown;
+                    break;
             }
+
+            if (direction.HasValue && _focusManager != null && _config != null && _configPath != null)
+            {
+                HandleWidgetReorderVisual(direction.Value);
+            }
+
+            e.Handled = true;
+            return;
+        }
+
+        // ===== PRIORITY 2.5: Widget Resizing =====
+        // Ctrl+Shift+Arrow keys for widget resizing
+        if (e.KeyInfo.Modifiers.HasFlag(ConsoleModifiers.Control) && e.KeyInfo.Modifiers.HasFlag(ConsoleModifiers.Shift))
+        {
+            FocusManager.ResizeDirection? direction = null;
+
+            switch (e.KeyInfo.Key)
+            {
+                case ConsoleKey.LeftArrow:
+                    direction = FocusManager.ResizeDirection.WidthDecrease;
+                    break;
+
+                case ConsoleKey.RightArrow:
+                    direction = FocusManager.ResizeDirection.WidthIncrease;
+                    break;
+
+                case ConsoleKey.UpArrow:
+                    direction = FocusManager.ResizeDirection.HeightDecrease;
+                    break;
+
+                case ConsoleKey.DownArrow:
+                    direction = FocusManager.ResizeDirection.HeightIncrease;
+                    break;
+            }
+
+            if (direction.HasValue && _focusManager != null && _config != null && _configPath != null)
+            {
+                HandleWidgetResize(direction.Value);
+            }
+
+            e.Handled = true;
+            return;
         }
 
         // ===== PRIORITY 3: Existing Application Shortcuts =====
@@ -760,6 +821,149 @@ class Program
             ShowHelpOverlay();
             e.Handled = true;
         }
+    }
+
+    /// <summary>
+    /// Handles visual widget reordering and persistence
+    /// </summary>
+    private static void HandleWidgetReorderVisual(FocusManager.VisualReorderDirection direction)
+    {
+        if (_focusManager == null || _config == null || _configPath == null)
+            return;
+
+        // Get current focused widget before reorder
+        var focusedWidgetId = _focusManager.GetFocusedWidgetId();
+        if (focusedWidgetId == null)
+            return;
+
+        // Attempt reorder
+        bool moved = _focusManager.ReorderWidgetVisual(
+            direction,
+            _config,
+            onReorder: (widgetId, dir) =>
+            {
+                // Save config immediately
+                var configMgr = new ConfigManager();
+                try
+                {
+                    configMgr.SaveConfig(_config!, _configPath!);
+
+                    // Update status bar with feedback
+                    var directionText = dir switch
+                    {
+                        FocusManager.VisualReorderDirection.VisualLeft => "left",
+                        FocusManager.VisualReorderDirection.VisualRight => "right",
+                        FocusManager.VisualReorderDirection.VisualUp => "up",
+                        FocusManager.VisualReorderDirection.VisualDown => "down",
+                        _ => "unknown"
+                    };
+
+                    if (_windowSystem != null)
+                    {
+                        _windowSystem.BottomStatus = $"Swapped '{widgetId}' {directionText}";
+                    }
+
+                    // Restore normal status after 3 seconds
+                    Task.Delay(3000).ContinueWith(_ => UpdateStatusBar());
+                }
+                catch (Exception ex)
+                {
+                    if (_windowSystem != null)
+                    {
+                        _windowSystem.BottomStatus = $"Failed to save config: {ex.Message}";
+                    }
+                }
+            }
+        );
+
+        if (!moved)
+        {
+            // At boundary or other issue - provide feedback
+            if (_windowSystem != null)
+            {
+                var message = direction switch
+                {
+                    FocusManager.VisualReorderDirection.VisualLeft => "No widget to the left",
+                    FocusManager.VisualReorderDirection.VisualRight => "No widget to the right",
+                    FocusManager.VisualReorderDirection.VisualUp => "No widget above",
+                    FocusManager.VisualReorderDirection.VisualDown => "No widget below",
+                    _ => "Cannot reorder"
+                };
+
+                _windowSystem.BottomStatus = message;
+                Task.Delay(2000).ContinueWith(_ => UpdateStatusBar());
+            }
+            return;
+        }
+
+        // Rebuild layout to reflect new order
+        RebuildLayout();
+    }
+
+    /// <summary>
+    /// Handles widget resizing and persistence
+    /// </summary>
+    private static void HandleWidgetResize(FocusManager.ResizeDirection direction)
+    {
+        if (_focusManager == null || _config == null || _configPath == null)
+            return;
+
+        var focusedWidgetId = _focusManager.GetFocusedWidgetId();
+        if (focusedWidgetId == null)
+            return;
+
+        bool resized = _focusManager.ResizeWidget(
+            direction,
+            _config,
+            onResize: (widgetId, dir, newValue) =>
+            {
+                var configMgr = new ConfigManager();
+                try
+                {
+                    configMgr.SaveConfig(_config!, _configPath!);
+
+                    var propertyName = (dir == FocusManager.ResizeDirection.WidthDecrease ||
+                                        dir == FocusManager.ResizeDirection.WidthIncrease)
+                        ? "width"
+                        : "height";
+
+                    if (_windowSystem != null)
+                    {
+                        _windowSystem.BottomStatus = $"Resized '{widgetId}' {propertyName} to {newValue}";
+                    }
+
+                    Task.Delay(3000).ContinueWith(_ => UpdateStatusBar());
+                }
+                catch (Exception ex)
+                {
+                    if (_windowSystem != null)
+                    {
+                        _windowSystem.BottomStatus = $"Failed to save config: {ex.Message}";
+                    }
+                }
+            }
+        );
+
+        if (!resized)
+        {
+            if (_windowSystem != null)
+            {
+                var message = direction switch
+                {
+                    FocusManager.ResizeDirection.WidthDecrease => "Minimum width reached",
+                    FocusManager.ResizeDirection.WidthIncrease => "Maximum width reached",
+                    FocusManager.ResizeDirection.HeightDecrease => "Minimum height reached",
+                    FocusManager.ResizeDirection.HeightIncrease => "Maximum height reached",
+                    _ => "Cannot resize"
+                };
+
+                _windowSystem.BottomStatus = message;
+                Task.Delay(2000).ContinueWith(_ => UpdateStatusBar());
+            }
+            return;
+        }
+
+        RebuildLayout();
     }
 
     private static void StartWidgetRefreshTimers()
