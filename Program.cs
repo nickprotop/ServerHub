@@ -555,6 +555,7 @@ class Program
 
   [bold cyan1]Actions[/]
   [grey]─────────────────────────────────────────────────────────────────────[/]
+    [cyan1]F2[/]                   [white]Configure widgets (add/remove/edit)[/]
     [cyan1]F5[/]                   [white]Refresh all widgets[/]
     [cyan1]Space[/]                [white]Pause / resume widget refresh[/]
     [cyan1]? or F1[/]              [white]Show this help dialog[/]
@@ -821,6 +822,47 @@ class Program
             ShowHelpOverlay();
             e.Handled = true;
         }
+        else if (e.KeyInfo.Key == ConsoleKey.F2)
+        {
+            // Show widget configuration dialog
+            ShowConfigDialog();
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// Shows the widget configuration dialog for adding, removing, editing, and reordering widgets.
+    /// </summary>
+    private static void ShowConfigDialog()
+    {
+        if (_windowSystem == null || _config == null || _configPath == null)
+            return;
+
+        WidgetConfigDialog.Show(
+            _windowSystem,
+            _configPath,
+            _config,
+            onConfigChanged: () =>
+            {
+                // Reload configuration after changes
+                var configMgr = new ConfigManager();
+                _config = configMgr.LoadConfig(_configPath);
+
+                // Restart widget timers with new configuration
+                StopWidgetRefreshTimers();
+                StartWidgetRefreshTimers();
+
+                // Rebuild the layout
+                RebuildLayout();
+
+                // Update status
+                if (_windowSystem != null)
+                {
+                    _windowSystem.BottomStatus = "Configuration saved and reloaded";
+                    Task.Delay(3000).ContinueWith(_ => UpdateStatusBar());
+                }
+            }
+        );
     }
 
     /// <summary>
