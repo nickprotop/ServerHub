@@ -1050,13 +1050,13 @@ class Program
         }
     }
 
-    private static async Task RefreshWidgetAsync(string widgetId, WidgetConfig widgetConfig)
+    private static async Task RefreshWidgetAsync(string widgetId, WidgetConfig widgetConfig, bool force = false)
     {
         if (_executor == null || _parser == null || _mainWindow == null)
             return;
 
-        // Skip refresh when paused
-        if (_isPaused)
+        // Skip refresh when paused (unless forced)
+        if (!force && _isPaused)
             return;
 
         // Skip all widget refreshes when sudo password dialog is open
@@ -1065,7 +1065,8 @@ class Program
             return;
 
         // Skip if modal is open for this widget - modal handles its own refresh
-        if (_openModalWidgetId == widgetId)
+        // UNLESS this is a forced refresh (e.g., after action completion)
+        if (!force && _openModalWidgetId == widgetId)
             return;
 
         // Mark as refreshing
@@ -1281,10 +1282,11 @@ class Program
             onMainWidgetRefresh: async () =>
             {
                 // Refresh main dashboard widget immediately after action completes
+                // Use force=true to bypass the modal-open check
                 var widgetConfig = _config?.Widgets.GetValueOrDefault(widgetId);
                 if (widgetConfig != null)
                 {
-                    await RefreshWidgetAsync(widgetId, widgetConfig);
+                    await RefreshWidgetAsync(widgetId, widgetConfig, force: true);
                 }
             }
         );
