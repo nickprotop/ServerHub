@@ -8,42 +8,50 @@ widgets:
     path: alerts.sh
     refresh: 30
     priority: 1
+    location: bundled
 
   cpu:
     path: cpu.sh
     refresh: 2
     priority: 1
+    location: bundled
 
   memory:
     path: memory.sh
     refresh: 2
     priority: 1
+    location: bundled
 
   disk:
     path: disk.sh
     refresh: 10
     priority: 1
+    location: bundled
 
   network:
     path: network.sh
     refresh: 2
     priority: 2
+    location: bundled
 
   processes:
     path: processes.sh
     refresh: 3
     priority: 2
+    location: bundled
 
   docker:
     path: docker.sh
     refresh: 5
     priority: 2
     full_row: true  # Option 3: Docker takes full width
+    location: bundled
 
   updates:
     path: updates.sh
     refresh: 3600
     priority: 2
+    location: bundled
 
 layout:
   order:

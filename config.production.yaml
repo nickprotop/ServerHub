@@ -1,194 +1,152 @@
+# ServerHub Configuration
+# Layout: 3-4 column responsive grid (adjusts to terminal width)
+
+default_refresh: 5
+
+# Widget line limits (optional)
+max_lines_per_widget: 20        # Global default max lines per widget
+show_truncation_indicator: true # Show "Press Enter to expand..." when truncated
+
 widgets:
+  # Critical widgets (priority 1 - always visible)
   alerts:
     path: alerts.sh
-    sha256: 
     refresh: 30
-    pinned: false
     priority: 1
     min_height: 8
     max_height: 15
-    max_lines: 
-    expandable: true
-    full_row: false
-    column_span: 
+    location: bundled
+
   cpu:
     path: cpu.sh
-    sha256: 
     refresh: 2
-    pinned: false
     priority: 1
     min_height: 5
     max_height: 10
-    max_lines: 
-    expandable: true
-    full_row: false
-    column_span: 
+    location: bundled
+
   memory:
     path: memory.sh
-    sha256: 
     refresh: 2
-    pinned: false
     priority: 1
     min_height: 5
     max_height: 10
-    max_lines: 
-    expandable: true
-    full_row: false
-    column_span: 
+    location: bundled
+
   disk:
     path: disk.sh
-    sha256: 
     refresh: 10
-    pinned: false
     priority: 1
     min_height: 5
     max_height: 12
-    max_lines: 
-    expandable: true
-    full_row: false
-    column_span: 
+    location: bundled
+
+  # System info and monitoring (priority 2 - normal)
   sysinfo:
     path: sysinfo.sh
-    sha256: 
     refresh: 30
-    pinned: false
     priority: 2
     min_height: 8
     max_height: 15
-    max_lines: 
-    expandable: true
-    full_row: false
-    column_span: 
+    location: bundled
+
   network:
     path: network.sh
-    sha256: 
     refresh: 2
-    pinned: false
     priority: 2
     min_height: 6
     max_height: 12
-    max_lines: 
-    expandable: true
-    full_row: false
-    column_span: 
+    location: bundled
+
   processes:
     path: processes.sh
-    sha256: 
     refresh: 3
-    pinned: false
     priority: 2
     min_height: 10
     max_height: 20
-    max_lines: 
-    expandable: true
-    full_row: false
-    column_span: 
+    location: bundled
+
+  # Services and infrastructure (priority 2)
   services:
     path: services.sh
-    sha256: 
     refresh: 5
-    pinned: false
     priority: 2
     min_height: 8
     max_height: 20
-    max_lines: 
-    expandable: true
-    full_row: false
-    column_span: 
+    location: bundled
+
   docker:
     path: docker.sh
-    sha256: 
     refresh: 5
-    pinned: false
     priority: 2
     min_height: 8
     max_height: 20
-    max_lines: 
-    expandable: true
-    full_row: false
     column_span: 2
+    location: bundled
+
+  # Network and logs (priority 3 - low, hidden on narrow terminals)
   netstat:
     path: netstat.sh
-    sha256: 
     refresh: 5
-    pinned: false
     priority: 3
     min_height: 10
     max_height: 18
-    max_lines: 
-    expandable: true
-    full_row: false
-    column_span: 
+    location: bundled
+
   sensors:
     path: sensors.sh
-    sha256: 
     refresh: 5
-    pinned: false
     priority: 3
     min_height: 8
     max_height: 15
-    max_lines: 
-    expandable: true
-    full_row: false
-    column_span: 
+    location: bundled
+
   logs:
     path: logs.sh
-    sha256: 
     refresh: 10
-    pinned: false
     priority: 3
     min_height: 10
     max_height: 20
-    max_lines: 
-    expandable: true
-    full_row: false
-    column_span: 
+    location: bundled
+
   ssl-certs:
     path: ssl-certs.sh
-    sha256: 
-    refresh: 3600
-    pinned: false
+    refresh: 3600  # Check once per hour
     priority: 3
     min_height: 8
     max_height: 15
-    max_lines: 
-    expandable: true
-    full_row: false
-    column_span: 
+    location: bundled
+
   updates:
     path: updates.sh
-    sha256: 
-    refresh: 3600
-    pinned: false
+    refresh: 3600  # Check once per hour
     priority: 2
     min_height: 8
     max_height: 15
-    max_lines: 
-    expandable: true
-    full_row: false
-    column_span: 
+    location: bundled
+
+
+# Layout order (left to right, top to bottom)
 layout:
   order:
-  - alerts
-  - cpu
-  - memory
-  - disk
-  - sysinfo
-  - network
-  - processes
-  - services
-  - docker
-  - netstat
-  - sensors
-  - logs
-  - ssl-certs
-  - updates
-  rows: 
-default_refresh: 5
-max_lines_per_widget: 20
-show_truncation_indicator: true
+    - alerts
+    - cpu
+    - memory
+    - disk
+    - sysinfo
+    - network
+    - processes
+    - services
+    - docker
+    - netstat
+    - sensors
+    - logs
+    - ssl-certs
+    - updates
+
+# Responsive breakpoints
 breakpoints:
-  single: 0
-  double: 100
-  triple: 160
-  quad: 220
+  single: 0      # < 100 cols: 1 column (only priority 1 widgets)
+  double: 100    # 100-160 cols: 2 columns
+  triple: 160    # 160-220 cols: 3 columns
+  quad: 220      # 220+ cols: 4 columns

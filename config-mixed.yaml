@@ -7,32 +7,39 @@ widgets:
   cpu:
     path: cpu.sh
     refresh: 2
+    location: bundled
 
   memory:
     path: memory.sh
     refresh: 2
+    location: bundled
 
   disk:
     path: disk.sh
     refresh: 10
+    location: bundled
 
   docker:
     path: docker.sh
     refresh: 5
     column_span: 2  # Option 2: Spans 2 columns
+    location: bundled
 
   processes:
     path: processes.sh
     refresh: 3
     full_row: true  # Option 3: Takes full row
+    location: bundled
 
   services:
     path: services.sh
     refresh: 5
+    location: bundled
 
   logs:
     path: logs.sh
     refresh: 10
+    location: bundled
 
 # Option 4: Explicit rows with column spanning
 layout:

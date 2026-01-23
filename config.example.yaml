@@ -20,6 +20,9 @@ widgets:
     refresh: 2
     priority: 1  # 1=critical, 2=normal, 3=low
     pinned: false
+    # Optional: Specify where to search for widget
+    # location: bundled  # bundled, custom, or auto (default)
+    # Use this when same widget exists in multiple locations
 
   memory:
     path: memory.sh
