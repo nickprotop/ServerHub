@@ -103,6 +103,7 @@ widgets:
     path: cpu.sh
     refresh: 2
     priority: 1
+    location: bundled  # Optional: bundled, custom, or auto (default)
 
   memory:
     path: memory.sh
@@ -120,6 +121,16 @@ breakpoints:
   triple: 160    # 3 columns at 160+ chars
   quad: 220      # 4 columns at 220+ chars
 ```
+
+### Widget Path Resolution
+
+When a widget with the same filename exists in multiple locations (e.g., `cpu.sh` in both bundled and custom directories), you can use the `location` field to explicitly specify where to search:
+
+- `location: bundled` - Search only in `~/.local/share/serverhub/widgets/`
+- `location: custom` - Search only in `~/.config/serverhub/widgets/` and `--widgets-path`
+- `location: auto` (or omit) - Search all directories with priority: custom > user > bundled (default)
+
+This is useful when you want to override a bundled widget with a custom version, or explicitly use the bundled version when both exist.
 
 See [config.example.yaml](config.example.yaml) for full configuration options.
 
