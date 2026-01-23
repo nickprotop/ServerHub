@@ -60,19 +60,14 @@ public static class WidgetConfigDialog
     // Detail panel controls
     private static PromptControl? _refreshInput;
     private static CheckboxControl? _pinnedCheckbox;
-    private static CheckboxControl? _fullRowCheckbox;
     private static DropdownControl? _columnSpanDropdown;
     private static PromptControl? _maxLinesInput;
-    private static PromptControl? _maxHeightInput;
-    private static PromptControl? _minHeightInput;
-    private static DropdownControl? _priorityDropdown;
     private static DropdownControl? _locationDropdown;
 
     // Global settings controls
     private static PromptControl? _defaultRefreshInput;
     private static PromptControl? _globalMaxLinesInput;
     private static CheckboxControl? _showTruncationCheckbox;
-    private static PromptControl? _breakpointSingleInput;
     private static PromptControl? _breakpointDoubleInput;
     private static PromptControl? _breakpointTripleInput;
     private static PromptControl? _breakpointQuadInput;
@@ -404,9 +399,6 @@ public static class WidgetConfigDialog
         _pinnedCheckbox = new CheckboxControl("Pinned to top", false);
         _pinnedCheckbox.CheckedChanged += (s, isChecked) => OnSettingChanged();
 
-        _fullRowCheckbox = new CheckboxControl("Full row width", false);
-        _fullRowCheckbox.CheckedChanged += (s, isChecked) => OnSettingChanged();
-
         _columnSpanDropdown = new DropdownControl("Column Span:");
         _columnSpanDropdown.AddItem("1");
         _columnSpanDropdown.AddItem("2");
@@ -417,20 +409,8 @@ public static class WidgetConfigDialog
         _maxLinesInput = new PromptControl { Prompt = "Max Lines:", InputWidth = 8 };
         _maxLinesInput.InputChanged += (s, text) => OnSettingChanged();
 
-        _maxHeightInput = new PromptControl { Prompt = "Max Height:", InputWidth = 8 };
-        _maxHeightInput.InputChanged += (s, text) => OnSettingChanged();
-
-        _minHeightInput = new PromptControl { Prompt = "Min Height:", InputWidth = 8 };
-        _minHeightInput.InputChanged += (s, text) => OnSettingChanged();
-
-        _priorityDropdown = new DropdownControl("Priority:");
-        _priorityDropdown.AddItem("1 - Critical");
-        _priorityDropdown.AddItem("2 - Normal");
-        _priorityDropdown.AddItem("3 - Low");
-        _priorityDropdown.SelectedIndexChanged += (s, idx) => OnSettingChanged();
-
         _locationDropdown = new DropdownControl("Location:");
-        _locationDropdown.AddItem("Auto (priority order)");   // Index 0 = Auto
+        _locationDropdown.AddItem("Auto (search order)");     // Index 0 = Auto
         _locationDropdown.AddItem("Custom widgets");          // Index 1 = Custom
         _locationDropdown.AddItem("Bundled widgets");         // Index 2 = Bundled
         _locationDropdown.SelectedIndexChanged += (s, idx) => OnSettingChanged();
@@ -444,9 +424,6 @@ public static class WidgetConfigDialog
 
         _showTruncationCheckbox = new CheckboxControl("Show truncation indicator", true);
         _showTruncationCheckbox.CheckedChanged += (s, isChecked) => OnSettingChanged();
-
-        _breakpointSingleInput = new PromptControl { Prompt = "1 Column (chars):", InputWidth = 8 };
-        _breakpointSingleInput.InputChanged += (s, text) => OnSettingChanged();
 
         _breakpointDoubleInput = new PromptControl { Prompt = "2 Columns (chars):", InputWidth = 8 };
         _breakpointDoubleInput.InputChanged += (s, text) => OnSettingChanged();
@@ -526,16 +503,12 @@ public static class WidgetConfigDialog
         // Breakpoints section
         var breakpointHeader = Controls.Markup()
             .AddLine("")
-            .AddLine("[grey70]Responsive Breakpoints (columns):[/]")
+            .AddLine("[grey70]Responsive Breakpoints (terminal width):[/]")
             .WithMargin(1, 1, 1, 0)
             .Build();
         _detailPanel.AddControl(breakpointHeader);
 
         var breakpoints = _workingConfig.Breakpoints ?? new BreakpointConfig();
-
-        _breakpointSingleInput!.Input = breakpoints.Single.ToString();
-        _breakpointSingleInput.Margin = new Margin(1, 0, 1, 0);
-        _detailPanel.AddControl(_breakpointSingleInput);
 
         _breakpointDoubleInput!.Input = breakpoints.Double.ToString();
         _breakpointDoubleInput.Margin = new Margin(1, 0, 1, 0);
@@ -777,11 +750,6 @@ public static class WidgetConfigDialog
         _locationDropdown.Margin = new Margin(1, 1, 1, 0);
         _detailPanel.AddControl(_locationDropdown);
 
-        // Full row
-        _fullRowCheckbox!.Checked = config.FullRow;
-        _fullRowCheckbox.Margin = new Margin(1, 0, 1, 0);
-        _detailPanel.AddControl(_fullRowCheckbox);
-
         // Column span
         int columnSpanIdx = (config.ColumnSpan ?? 1) - 1;
         _columnSpanDropdown!.SelectedIndex = Math.Clamp(columnSpanIdx, 0, 3);
@@ -792,21 +760,6 @@ public static class WidgetConfigDialog
         _maxLinesInput!.Input = config.MaxLines?.ToString() ?? "";
         _maxLinesInput.Margin = new Margin(1, 1, 1, 0);
         _detailPanel.AddControl(_maxLinesInput);
-
-        // Max height
-        _maxHeightInput!.Input = config.MaxHeight?.ToString() ?? "";
-        _maxHeightInput.Margin = new Margin(1, 1, 1, 0);
-        _detailPanel.AddControl(_maxHeightInput);
-
-        // Min height
-        _minHeightInput!.Input = config.MinHeight?.ToString() ?? "";
-        _minHeightInput.Margin = new Margin(1, 1, 1, 0);
-        _detailPanel.AddControl(_minHeightInput);
-
-        // Priority
-        _priorityDropdown!.SelectedIndex = Math.Clamp(config.Priority - 1, 0, 2);
-        _priorityDropdown.Margin = new Margin(1, 1, 1, 0);
-        _detailPanel.AddControl(_priorityDropdown);
     }
 
     private static void ShowAvailableWidgetPreview()
@@ -1035,8 +988,6 @@ public static class WidgetConfigDialog
         // Breakpoints
         _workingConfig.Breakpoints ??= new BreakpointConfig();
 
-        if (int.TryParse(_breakpointSingleInput?.Input, out int single))
-            _workingConfig.Breakpoints.Single = single;
         if (int.TryParse(_breakpointDoubleInput?.Input, out int @double))
             _workingConfig.Breakpoints.Double = @double;
         if (int.TryParse(_breakpointTripleInput?.Input, out int triple))
@@ -1055,18 +1006,10 @@ public static class WidgetConfigDialog
         if (_pinnedCheckbox != null)
             config.Pinned = _pinnedCheckbox.Checked;
 
-        if (_fullRowCheckbox != null)
-            config.FullRow = _fullRowCheckbox.Checked;
-
         if (_columnSpanDropdown != null)
             config.ColumnSpan = _columnSpanDropdown.SelectedIndex + 1;
 
         config.MaxLines = ParseNullableInt(_maxLinesInput?.Input);
-        config.MaxHeight = ParseNullableInt(_maxHeightInput?.Input);
-        config.MinHeight = ParseNullableInt(_minHeightInput?.Input);
-
-        if (_priorityDropdown != null)
-            config.Priority = _priorityDropdown.SelectedIndex + 1;
 
         if (_locationDropdown != null)
         {
@@ -1154,7 +1097,6 @@ public static class WidgetConfigDialog
             Path = _selectedEntry.Path,
             Sha256 = checksum,
             Refresh = _workingConfig.DefaultRefresh,
-            Priority = 2,
             Pinned = false
         };
 

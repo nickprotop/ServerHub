@@ -352,7 +352,6 @@ widgets:
     path: api-health.sh
     sha256: <checksum>
     refresh: 10
-    priority: 1
 ```
 
 ---
@@ -414,7 +413,6 @@ widgets:
     path: docker-services.sh
     sha256: <checksum>
     refresh: 5
-    priority: 1
 ```
 
 ---
@@ -482,7 +480,6 @@ widgets:
     path: git-deploy.sh
     sha256: <checksum>
     refresh: 30
-    priority: 1
 ```
 
 ---

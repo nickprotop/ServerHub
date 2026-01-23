@@ -1390,7 +1390,6 @@ class Program
             _config?.Breakpoints
             ?? new BreakpointConfig
             {
-                Single = 0,
                 Double = 100,
                 Triple = 160,
                 Quad = 220,

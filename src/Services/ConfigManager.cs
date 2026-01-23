@@ -105,11 +105,6 @@ public class ConfigManager
             {
                 throw new InvalidOperationException($"Widget '{widgetId}' has invalid refresh interval: {widgetConfig.Refresh}");
             }
-
-            if (widgetConfig.Priority < 1 || widgetConfig.Priority > 3)
-            {
-                throw new InvalidOperationException($"Widget '{widgetId}' has invalid priority: {widgetConfig.Priority}. Must be 1-3.");
-            }
         }
 
         // Validate layout order references existing widgets

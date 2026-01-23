@@ -7,7 +7,7 @@ namespace ServerHub.Services;
 
 /// <summary>
 /// Calculates responsive widget layout based on terminal dimensions
-/// Supports breakpoint-based column layout, explicit row layouts, full-row widgets, and column spanning
+/// Supports breakpoint-based column layout, explicit row layouts, and column spanning
 /// </summary>
 public class LayoutEngine
 {
@@ -19,8 +19,7 @@ public class LayoutEngine
         int Column,
         int Row,
         int ColumnSpan,
-        bool IsPinned,
-        int Priority
+        bool IsPinned
     );
 
     /// <summary>
@@ -44,7 +43,7 @@ public class LayoutEngine
             return CalculateExplicitRowLayout(config, columnCount);
         }
 
-        // Use automatic flow layout with full_row and column_span support
+        // Use automatic flow layout with column_span support
         return CalculateFlowLayout(config, columnCount);
     }
 
@@ -64,15 +63,14 @@ public class LayoutEngine
 
         foreach (var widgetId in pinnedWidgets)
         {
-            if (config.Widgets.TryGetValue(widgetId, out var widgetConfig))
+            if (config.Widgets.TryGetValue(widgetId, out _))
             {
                 placements.Add(new WidgetPlacement(
                     WidgetId: widgetId,
                     Column: 0,
                     Row: currentRow++,
                     ColumnSpan: columnCount,
-                    IsPinned: true,
-                    Priority: widgetConfig.Priority
+                    IsPinned: true
                 ));
             }
         }
@@ -98,8 +96,7 @@ public class LayoutEngine
                         Column: currentColumn,
                         Row: currentRow,
                         ColumnSpan: widgetColumnSpan,
-                        IsPinned: false,
-                        Priority: widgetConfig.Priority
+                        IsPinned: false
                     ));
 
                     currentColumn += widgetColumnSpan;
@@ -117,7 +114,7 @@ public class LayoutEngine
     }
 
     /// <summary>
-    /// Calculates automatic flow layout with full_row and column_span support
+    /// Calculates automatic flow layout with column_span support
     /// </summary>
     private List<WidgetPlacement> CalculateFlowLayout(ServerHubConfig config, int columnCount)
     {
@@ -147,15 +144,14 @@ public class LayoutEngine
         }
 
         // Place pinned widgets first (they appear as top tiles)
-        foreach (var (widgetId, widgetConfig) in pinnedWidgets)
+        foreach (var (widgetId, _) in pinnedWidgets)
         {
             placements.Add(new WidgetPlacement(
                 WidgetId: widgetId,
                 Column: 0,
                 Row: currentRow++,
                 ColumnSpan: columnCount,
-                IsPinned: true,
-                Priority: widgetConfig.Priority
+                IsPinned: true
             ));
         }
 
@@ -178,8 +174,7 @@ public class LayoutEngine
                 Column: currentColumn,
                 Row: currentRow,
                 ColumnSpan: widgetColumnSpan,
-                IsPinned: false,
-                Priority: widgetConfig.Priority
+                IsPinned: false
             ));
 
             currentColumn += widgetColumnSpan;
@@ -206,13 +201,7 @@ public class LayoutEngine
             return Math.Min(widgetConfig.ColumnSpan.Value, columnCount);
         }
 
-        // Priority 2: full_row flag
-        if (widgetConfig.FullRow)
-        {
-            return columnCount;
-        }
-
-        // Priority 3: If in explicit row with only one widget, take full row
+        // Priority 2: If in explicit row with only one widget, take full row
         if (widgetsInRow == 1)
         {
             return columnCount;
@@ -254,24 +243,4 @@ public class LayoutEngine
         return config.Widgets.Keys.ToList();
     }
 
-    /// <summary>
-    /// Calculates optimal heights for widgets based on content
-    /// </summary>
-    public int CalculateWidgetHeight(WidgetData widgetData, WidgetConfig widgetConfig, bool isPinned)
-    {
-        // Pinned widgets are compact (single row tiles)
-        if (isPinned)
-        {
-            return 1;
-        }
-
-        // Calculate height based on row count
-        var contentHeight = widgetData.Rows.Count + 2; // +2 for widget header and padding
-
-        // Apply min/max constraints from config
-        var minHeight = widgetConfig.MinHeight ?? 5;
-        var maxHeight = widgetConfig.MaxHeight ?? 30;
-
-        return Math.Clamp(contentHeight, minHeight, maxHeight);
-    }
 }

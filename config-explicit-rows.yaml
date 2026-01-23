@@ -1,4 +1,4 @@
-# Explicit Row Layout Example (Option 4)
+# Explicit Row Layout Example
 # Complete control over widget placement in rows
 
 default_refresh: 5
@@ -49,7 +49,7 @@ widgets:
     refresh: 10
     location: bundled
 
-# Option 4: Explicit row-based layout
+# Explicit row-based layout
 layout:
   rows:
     # Row 1: Three equal columns (critical metrics)

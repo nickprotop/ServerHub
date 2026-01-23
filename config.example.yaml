@@ -10,7 +10,6 @@ widgets:
   alerts:
     path: alerts.sh
     refresh: 30
-    priority: 1  # High priority - shows system health issues
     pinned: false
     # Optional: SHA256 checksum for security validation
     # sha256: abc123...
@@ -18,7 +17,6 @@ widgets:
   cpu:
     path: cpu.sh
     refresh: 2
-    priority: 1  # 1=critical, 2=normal, 3=low
     pinned: false
     # Optional: Specify where to search for widget
     # location: bundled  # bundled, custom, or auto (default)
@@ -27,21 +25,16 @@ widgets:
   memory:
     path: memory.sh
     refresh: 2
-    priority: 1
     pinned: false
 
   disk:
     path: disk.sh
     refresh: 10
-    priority: 2
     pinned: false
-    min_height: 5
-    max_height: 15
 
   updates:
     path: updates.sh
     refresh: 3600  # Check every hour
-    priority: 2
     pinned: false
 
 # Layout configuration
@@ -52,18 +45,15 @@ layout:
     - cpu
     - memory
     - disk
-    - updates     # Package updates (lower priority)
+    - updates     # Package updates
 
   # Alternative: Explicit grid layout (advanced)
   # rows:
   #   - widgets: [alerts, cpu, memory]
-  #     height: 10
   #   - widgets: [disk, updates]
-  #     height: 8
 
 # Optional: Custom breakpoints for responsive layout
 breakpoints:
-  single: 0    # < 100 cols: 1 column
-  double: 100  # 100-160 cols: 2 columns
-  triple: 160  # 160-220 cols: 3 columns
+  double: 100  # 100+ cols: 2 columns
+  triple: 160  # 160+ cols: 3 columns
   quad: 220    # 220+ cols: 4 columns

@@ -102,13 +102,11 @@ widgets:
   cpu:
     path: cpu.sh
     refresh: 2
-    priority: 1
     location: bundled  # Optional: bundled, custom, or auto (default)
 
   memory:
     path: memory.sh
     refresh: 2
-    priority: 1
 
 layout:
   order:
@@ -116,7 +114,6 @@ layout:
     - memory
 
 breakpoints:
-  single: 0      # 1 column
   double: 100    # 2 columns at 100+ chars
   triple: 160    # 3 columns at 160+ chars
   quad: 220      # 4 columns at 220+ chars
@@ -128,7 +125,7 @@ When a widget with the same filename exists in multiple locations (e.g., `cpu.sh
 
 - `location: bundled` - Search only in `~/.local/share/serverhub/widgets/`
 - `location: custom` - Search only in `~/.config/serverhub/widgets/` and `--widgets-path`
-- `location: auto` (or omit) - Search all directories with priority: custom > user > bundled (default)
+- `location: auto` (or omit) - Search all directories in order: custom → user → bundled (default)
 
 This is useful when you want to override a bundled widget with a custom version, or explicitly use the bundled version when both exist.
 

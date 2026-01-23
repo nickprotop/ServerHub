@@ -1,5 +1,5 @@
 # Mixed Layout Example
-# Combining Options 2, 3, and 4 together!
+# Combining column_span with explicit rows
 
 default_refresh: 5
 
@@ -22,13 +22,13 @@ widgets:
   docker:
     path: docker.sh
     refresh: 5
-    column_span: 2  # Option 2: Spans 2 columns
+    column_span: 2  # Spans 2 columns
     location: bundled
 
   processes:
     path: processes.sh
     refresh: 3
-    full_row: true  # Option 3: Takes full row
+    column_span: 3  # Takes most of the row
     location: bundled
 
   services:
@@ -41,7 +41,7 @@ widgets:
     refresh: 10
     location: bundled
 
-# Option 4: Explicit rows with column spanning
+# Explicit rows with column spanning
 layout:
   rows:
     # Row 1: Three single columns
@@ -50,7 +50,7 @@ layout:
     # Row 2: docker spans 2 cols, leaving room for 1 widget
     - widgets: [docker, services]
 
-    # Row 3: processes takes full row (due to full_row: true)
+    # Row 3: processes takes most of the row
     - widgets: [processes]
 
     # Row 4: Single widget takes full row by default

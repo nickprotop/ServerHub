@@ -109,46 +109,13 @@ public class WidgetConfig
     public bool Pinned { get; set; } = false;
 
     /// <summary>
-    /// Widget priority for responsive layout
-    /// 1 = Critical (always visible)
-    /// 2 = Normal (default)
-    /// 3 = Low (hidden on narrow terminals)
-    /// </summary>
-    [YamlMember(Alias = "priority")]
-    public int Priority { get; set; } = 2;
-
-    /// <summary>
-    /// Minimum height for this widget (in rows)
-    /// </summary>
-    [YamlMember(Alias = "min_height")]
-    public int? MinHeight { get; set; }
-
-    /// <summary>
-    /// Maximum height for this widget (in rows)
-    /// </summary>
-    [YamlMember(Alias = "max_height")]
-    public int? MaxHeight { get; set; }
-
-    /// <summary>
     /// Maximum lines for this specific widget (overrides global max_lines_per_widget)
     /// </summary>
     [YamlMember(Alias = "max_lines")]
     public int? MaxLines { get; set; }
 
     /// <summary>
-    /// Whether this widget can be expanded via Enter key or double-click
-    /// </summary>
-    [YamlMember(Alias = "expandable")]
-    public bool Expandable { get; set; } = true;
-
-    /// <summary>
-    /// Whether this widget should take the full row width
-    /// </summary>
-    [YamlMember(Alias = "full_row")]
-    public bool FullRow { get; set; } = false;
-
-    /// <summary>
-    /// Number of columns this widget should span (overrides full_row)
+    /// Number of columns this widget should span
     /// </summary>
     [YamlMember(Alias = "column_span")]
     public int? ColumnSpan { get; set; }
@@ -184,12 +151,6 @@ public class LayoutRow
     /// </summary>
     [YamlMember(Alias = "widgets")]
     public List<string> Widgets { get; set; } = new();
-
-    /// <summary>
-    /// Height of this row (in terminal rows)
-    /// </summary>
-    [YamlMember(Alias = "height")]
-    public int? Height { get; set; }
 }
 
 /// <summary>
@@ -198,13 +159,8 @@ public class LayoutRow
 public class BreakpointConfig
 {
     /// <summary>
-    /// Minimum width for 1 column layout (default: 0)
-    /// </summary>
-    [YamlMember(Alias = "single")]
-    public int Single { get; set; } = 0;
-
-    /// <summary>
     /// Minimum width for 2 column layout (default: 100)
+    /// Below this threshold: 1 column (only priority 1 widgets shown)
     /// </summary>
     [YamlMember(Alias = "double")]
     public int Double { get; set; } = 100;

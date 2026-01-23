@@ -8,121 +8,79 @@ max_lines_per_widget: 20        # Global default max lines per widget
 show_truncation_indicator: true # Show "Press Enter to expand..." when truncated
 
 widgets:
-  # Critical widgets (priority 1 - always visible)
+  # Core system widgets
   alerts:
     path: alerts.sh
     refresh: 30
-    priority: 1
-    min_height: 8
-    max_height: 15
     location: bundled
 
   cpu:
     path: cpu.sh
     refresh: 2
-    priority: 1
-    min_height: 5
-    max_height: 10
     location: bundled
 
   memory:
     path: memory.sh
     refresh: 2
-    priority: 1
-    min_height: 5
-    max_height: 10
     location: bundled
 
   disk:
     path: disk.sh
     refresh: 10
-    priority: 1
-    min_height: 5
-    max_height: 12
     location: bundled
 
-  # System info and monitoring (priority 2 - normal)
+  # System info and monitoring
   sysinfo:
     path: sysinfo.sh
     refresh: 30
-    priority: 2
-    min_height: 8
-    max_height: 15
     location: bundled
 
   network:
     path: network.sh
     refresh: 2
-    priority: 2
-    min_height: 6
-    max_height: 12
     location: bundled
 
   processes:
     path: processes.sh
     refresh: 3
-    priority: 2
-    min_height: 10
-    max_height: 20
     location: bundled
 
-  # Services and infrastructure (priority 2)
+  # Services and infrastructure
   services:
     path: services.sh
     refresh: 5
-    priority: 2
-    min_height: 8
-    max_height: 20
     location: bundled
 
   docker:
     path: docker.sh
     refresh: 5
-    priority: 2
-    min_height: 8
-    max_height: 20
     column_span: 2
     location: bundled
 
-  # Network and logs (priority 3 - low, hidden on narrow terminals)
+  # Network and logs
   netstat:
     path: netstat.sh
     refresh: 5
-    priority: 3
-    min_height: 10
-    max_height: 18
     location: bundled
 
   sensors:
     path: sensors.sh
     refresh: 5
-    priority: 3
-    min_height: 8
-    max_height: 15
     location: bundled
 
   logs:
     path: logs.sh
     refresh: 10
-    priority: 3
-    min_height: 10
-    max_height: 20
     location: bundled
 
   ssl-certs:
     path: ssl-certs.sh
     refresh: 3600  # Check once per hour
-    priority: 3
-    min_height: 8
-    max_height: 15
     location: bundled
 
   updates:
     path: updates.sh
     refresh: 3600  # Check once per hour
-    priority: 2
-    min_height: 8
-    max_height: 15
     location: bundled
 
 
@@ -144,9 +102,8 @@ layout:
     - ssl-certs
     - updates
 
-# Responsive breakpoints
+# Responsive breakpoints (terminal width thresholds)
 breakpoints:
-  single: 0      # < 100 cols: 1 column (only priority 1 widgets)
-  double: 100    # 100-160 cols: 2 columns
-  triple: 160    # 160-220 cols: 3 columns
+  double: 100    # 100+ cols: 2 columns
+  triple: 160    # 160+ cols: 3 columns
   quad: 220      # 220+ cols: 4 columns

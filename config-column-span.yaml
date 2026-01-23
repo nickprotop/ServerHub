@@ -1,4 +1,4 @@
-# Column Spanning Example (Option 2)
+# Column Spanning Example
 # Widgets can span multiple columns for more space
 
 default_refresh: 5
@@ -7,45 +7,38 @@ widgets:
   cpu:
     path: cpu.sh
     refresh: 2
-    priority: 1
     location: bundled
 
   memory:
     path: memory.sh
     refresh: 2
-    priority: 1
     location: bundled
 
   disk:
     path: disk.sh
     refresh: 10
-    priority: 1
     location: bundled
 
   docker:
     path: docker.sh
     refresh: 5
-    priority: 2
-    column_span: 2  # Option 2: Docker spans 2 columns
+    column_span: 2  # Docker spans 2 columns
     location: bundled
 
   processes:
     path: processes.sh
     refresh: 3
-    priority: 2
     column_span: 2  # Processes also spans 2 columns
     location: bundled
 
   network:
     path: network.sh
     refresh: 2
-    priority: 2
     location: bundled
 
   services:
     path: services.sh
     refresh: 5
-    priority: 2
     column_span: 3  # Services spans 3 columns
     location: bundled
 

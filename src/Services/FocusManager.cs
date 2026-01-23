@@ -32,8 +32,8 @@ public class FocusManager
     {
         WidthDecrease,  // Decrease column span
         WidthIncrease,  // Increase column span
-        HeightDecrease, // Decrease max height
-        HeightIncrease  // Increase max height
+        HeightDecrease, // Decrease max lines
+        HeightIncrease  // Increase max lines
     }
 
     // Ordered placements from LayoutEngine (Row ASC, Column ASC)
@@ -459,19 +459,19 @@ public class FocusManager
                 break;
 
             case ResizeDirection.HeightDecrease:
-                newValue = Math.Max(widgetConfig.MinHeight ?? 5, (widgetConfig.MaxHeight ?? 20) - 2);
-                if (newValue != (widgetConfig.MaxHeight ?? 20))
+                newValue = Math.Max(5, (widgetConfig.MaxLines ?? 20) - 5);
+                if (newValue != (widgetConfig.MaxLines ?? 20))
                 {
-                    widgetConfig.MaxHeight = newValue;
+                    widgetConfig.MaxLines = newValue;
                     changed = true;
                 }
                 break;
 
             case ResizeDirection.HeightIncrease:
-                newValue = Math.Min(50, (widgetConfig.MaxHeight ?? 20) + 2);
-                if (newValue != (widgetConfig.MaxHeight ?? 20))
+                newValue = Math.Min(100, (widgetConfig.MaxLines ?? 20) + 5);
+                if (newValue != (widgetConfig.MaxLines ?? 20))
                 {
-                    widgetConfig.MaxHeight = newValue;
+                    widgetConfig.MaxLines = newValue;
                     changed = true;
                 }
                 break;
