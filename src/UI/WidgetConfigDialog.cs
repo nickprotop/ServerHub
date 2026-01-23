@@ -125,6 +125,9 @@ public static class WidgetConfigDialog
         // Build the UI
         BuildUI(_dialogWindow, modalWidth, modalHeight, onConfigChanged);
 
+        // Update detail panel to show initial selection
+        UpdateDetailPanel();
+
         // Handle keyboard shortcuts
         _dialogWindow.KeyPressed += (s, e) =>
         {
@@ -795,20 +798,25 @@ public static class WidgetConfigDialog
                 _detailPanel.AddControl(previewHeader);
 
                 var lines = File.ReadLines(_selectedEntry.FullPath).Take(20);
+                var highlightedLines = ApplySyntaxHighlighting(lines);
+
                 var previewBuilder = Controls.Markup()
                     .WithMargin(1, 0, 1, 0)
                     .WithBackgroundColor(Color.Grey19);
 
-                int lineNum = 1;
-                foreach (var line in lines)
+                foreach (var line in highlightedLines)
                 {
-                    // Escape any Spectre markup in the script content
-                    var escapedLine = Markup.Escape(line);
-                    previewBuilder.AddLine($"[grey50]{lineNum,3}[/] {escapedLine}");
-                    lineNum++;
+                    previewBuilder.AddLine(line);
                 }
 
                 _detailPanel.AddControl(previewBuilder.Build());
+
+                // View Full File button
+                var viewFullFileButton = Controls.Button(" View Full File ")
+                    .WithMargin(1, 1, 1, 0)
+                    .OnClick((s, e) => ShowFullFileViewer(_selectedEntry.FullPath!))
+                    .Build();
+                _detailPanel.AddControl(viewFullFileButton);
             }
             catch (Exception ex)
             {
@@ -906,16 +914,16 @@ public static class WidgetConfigDialog
         bool isMissing = _selectedEntry.Status == WidgetStatus.Missing;
         bool isGlobal = _selectedEntry.IsGlobalSettings;
 
-        // Up/Down buttons only for configured widgets
+        // Up/Down buttons only for configured widgets (not global settings)
         if (_upButton != null)
         {
-            _upButton.IsEnabled = isConfigured;
-            _upButton.Visible = isConfigured;
+            _upButton.IsEnabled = isConfigured && !isGlobal;
+            _upButton.Visible = isConfigured && !isGlobal;
         }
         if (_downButton != null)
         {
-            _downButton.IsEnabled = isConfigured;
-            _downButton.Visible = isConfigured;
+            _downButton.IsEnabled = isConfigured && !isGlobal;
+            _downButton.Visible = isConfigured && !isGlobal;
         }
 
         // Add/Remove button
@@ -1433,6 +1441,182 @@ public static class WidgetConfigDialog
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// Applies syntax highlighting to file lines with line numbers.
+    /// </summary>
+    /// <param name="lines">Lines to highlight</param>
+    /// <param name="startLineNumber">Starting line number (default: 1)</param>
+    /// <returns>List of formatted markup strings</returns>
+    private static List<string> ApplySyntaxHighlighting(IEnumerable<string> lines, int startLineNumber = 1)
+    {
+        var result = new List<string>();
+        int lineNum = startLineNumber;
+
+        foreach (var line in lines)
+        {
+            var escapedLine = Markup.Escape(line);
+            result.Add($"[grey50]{lineNum,3}[/] {escapedLine}");
+            lineNum++;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Shows a modal window displaying the complete file contents.
+    /// </summary>
+    /// <param name="filePath">Full path to the file to display</param>
+    private static void ShowFullFileViewer(string filePath)
+    {
+        if (_windowSystem == null || _dialogWindow == null || !File.Exists(filePath)) return;
+
+        var fileName = Path.GetFileName(filePath);
+        int modalWidth = Math.Min((int)(Console.WindowWidth * 0.9), 150);
+        int modalHeight = Math.Min((int)(Console.WindowHeight * 0.9), 45);
+
+        // Create modal window
+        var modal = new WindowBuilder(_windowSystem)
+            .WithTitle(fileName)
+            .WithSize(modalWidth, modalHeight)
+            .Centered()
+            .AsModal()
+            .WithParent(_dialogWindow)
+            .WithBorderStyle(BorderStyle.Single)
+            .WithBorderColor(Color.Grey35)
+            .Resizable(false)
+            .Movable(false)
+            .Minimizable(false)
+            .Maximizable(false)
+            .WithColors(Color.Grey15, Color.Grey93)
+            .Build();
+
+        try
+        {
+            // Header with file path
+            var header = Controls.Markup()
+                .AddLine($"[grey70]Full path: {Markup.Escape(filePath)}[/]")
+                .WithMargin(1, 1, 1, 0)
+                .Build();
+            modal.AddControl(header);
+
+            // Separator
+            modal.AddControl(Controls.RuleBuilder()
+                .WithColor(Color.Grey23)
+                .Build());
+
+            // Read and highlight all lines
+            var allLines = File.ReadLines(filePath);
+            var highlightedLines = ApplySyntaxHighlighting(allLines);
+
+            // Create scrollable content
+            var contentBuilder = Controls.Markup()
+                .WithBackgroundColor(Color.Grey19);
+
+            foreach (var line in highlightedLines)
+            {
+                contentBuilder.AddLine(line);
+            }
+
+            var scrollPanel = Controls.ScrollablePanel()
+                .WithVerticalScroll(ScrollMode.Scroll)
+                .WithScrollbar(true)
+                .WithScrollbarPosition(ScrollbarPosition.Right)
+                .WithMouseWheel(true)
+                .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Stretch)
+                .WithVerticalAlignment(SharpConsoleUI.Layout.VerticalAlignment.Fill)
+                .WithBackgroundColor(Color.Grey15)
+                .AddControl(contentBuilder.Build())
+                .Build();
+
+            modal.AddControl(scrollPanel);
+
+            // Footer separator
+            modal.AddControl(Controls.RuleBuilder()
+                .WithColor(Color.Grey23)
+                .StickyBottom()
+                .Build());
+
+            // Footer with instructions
+            modal.AddControl(Controls.Markup()
+                .AddLine("[grey70]↑↓: Scroll | Mouse Wheel: Scroll | Esc/Enter: Close[/]")
+                .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Center)
+                .StickyBottom()
+                .Build());
+
+            // Handle keyboard shortcuts
+            modal.KeyPressed += (s, e) =>
+            {
+                if (e.KeyInfo.Key == ConsoleKey.Escape || e.KeyInfo.Key == ConsoleKey.Enter)
+                {
+                    _windowSystem.CloseWindow(modal);
+                    e.Handled = true;
+                }
+            };
+
+            _windowSystem.AddWindow(modal);
+            _windowSystem.SetActiveWindow(modal);
+            scrollPanel.SetFocus(true, FocusReason.Programmatic);
+        }
+        catch (Exception ex)
+        {
+            // Close the modal if it was created
+            if (modal != null)
+            {
+                _windowSystem.CloseWindow(modal);
+            }
+            ShowFileViewerErrorDialog(ex.Message, fileName);
+        }
+    }
+
+    /// <summary>
+    /// Shows an error dialog when file viewing fails.
+    /// </summary>
+    /// <param name="errorMessage">Error message to display</param>
+    /// <param name="fileName">Name of the file that failed to load</param>
+    private static void ShowFileViewerErrorDialog(string errorMessage, string fileName)
+    {
+        if (_windowSystem == null) return;
+
+        var errorDialog = new WindowBuilder(_windowSystem)
+            .WithTitle("Error Opening File")
+            .WithSize(70, 10)
+            .Centered()
+            .AsModal()
+            .WithBorderStyle(BorderStyle.Single)
+            .WithBorderColor(Color.Red)
+            .WithColors(Color.Grey15, Color.Grey93)
+            .Build();
+
+        errorDialog.AddControl(Controls.Markup()
+            .AddLine("")
+            .AddLine($"  [red bold]Failed to open file: {Markup.Escape(fileName)}[/]")
+            .AddLine("")
+            .AddLine($"  [grey70]{Markup.Escape(errorMessage)}[/]")
+            .AddLine("")
+            .Build());
+
+        var okButton = Controls.Button("  OK  ")
+            .OnClick((s, e) => _windowSystem.CloseWindow(errorDialog))
+            .Build();
+
+        var buttonGrid = HorizontalGridControl.ButtonRow(okButton);
+        buttonGrid.HorizontalAlignment = SharpConsoleUI.Layout.HorizontalAlignment.Center;
+        buttonGrid.StickyPosition = StickyPosition.Bottom;
+        errorDialog.AddControl(buttonGrid);
+
+        // Handle Esc key
+        errorDialog.KeyPressed += (s, e) =>
+        {
+            if (e.KeyInfo.Key == ConsoleKey.Escape || e.KeyInfo.Key == ConsoleKey.Enter)
+            {
+                _windowSystem.CloseWindow(errorDialog);
+                e.Handled = true;
+            }
+        };
+
+        _windowSystem.AddWindow(errorDialog);
     }
 
 }
