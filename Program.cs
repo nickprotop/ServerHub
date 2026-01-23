@@ -669,7 +669,7 @@ class Program
         var configuredPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var widget in _config.Widgets.Values)
         {
-            var resolved = WidgetPaths.ResolveWidgetPath(widget.Path, widget.Location);
+            var resolved = WidgetPaths.ResolveWidgetPath(widget.Path);
             if (resolved != null)
                 configuredPaths.Add(Path.GetFullPath(resolved));
         }
@@ -1074,7 +1074,7 @@ class Program
         try
         {
             // Resolve widget path
-            var scriptPath = WidgetPaths.ResolveWidgetPath(widgetConfig.Path, widgetConfig.Location);
+            var scriptPath = WidgetPaths.ResolveWidgetPath(widgetConfig.Path);
             if (scriptPath == null)
             {
                 _consecutiveErrors.TryGetValue(widgetId, out var errorCount);
@@ -1084,23 +1084,16 @@ class Program
                     ? $"Last update: {FormatRelativeTime(lastTime)}"
                     : "Never updated successfully";
 
-                var locationHint = widgetConfig.Location switch
-                {
-                    WidgetLocation.Bundled => " in bundled widgets directory",
-                    WidgetLocation.Custom => " in custom widgets directories",
-                    _ => ""
-                };
-
                 var errorData = new WidgetData
                 {
                     Title = widgetId,
-                    Error = $"Widget script not found{locationHint}: {widgetConfig.Path}",
+                    Error = $"Widget script not found: {widgetConfig.Path}",
                     Timestamp = DateTime.Now,
                     Rows = new List<WidgetRow>
                     {
                         new()
                         {
-                            Content = $"[red]Error:[/] Widget script not found{locationHint}",
+                            Content = $"[red]Error:[/] Widget script not found",
                             Status = new() { State = StatusState.Error },
                         },
                         new() { Content = $"[grey70]Path: {widgetConfig.Path}[/]" },
@@ -1479,7 +1472,7 @@ class Program
                 config = configManager.LoadConfig(configPath);
                 foreach (var widget in config.Widgets.Values)
                 {
-                    var resolved = WidgetPaths.ResolveWidgetPath(widget.Path, widget.Location);
+                    var resolved = WidgetPaths.ResolveWidgetPath(widget.Path);
                     if (resolved != null)
                     {
                         configuredPaths.Add(Path.GetFullPath(resolved));
@@ -1640,17 +1633,11 @@ class Program
 
         foreach (var (id, widget) in config.Widgets)
         {
-            var resolved = WidgetPaths.ResolveWidgetPath(widget.Path, widget.Location);
+            var resolved = WidgetPaths.ResolveWidgetPath(widget.Path);
 
             if (resolved == null || !File.Exists(resolved))
             {
-                var locationHint = widget.Location switch
-                {
-                    WidgetLocation.Bundled => " (bundled)",
-                    WidgetLocation.Custom => " (custom)",
-                    _ => ""
-                };
-                AnsiConsole.MarkupLine($"  {id,-20} [red]NOT FOUND{locationHint}[/]");
+                AnsiConsole.MarkupLine($"  {id,-20} [red]NOT FOUND[/]");
                 missing++;
                 continue;
             }
