@@ -66,6 +66,7 @@ public static class WidgetConfigDialog
     private static PromptControl? _maxHeightInput;
     private static PromptControl? _minHeightInput;
     private static DropdownControl? _priorityDropdown;
+    private static DropdownControl? _locationDropdown;
 
     // Global settings controls
     private static PromptControl? _defaultRefreshInput;
@@ -98,8 +99,8 @@ public static class WidgetConfigDialog
         _configPath = configPath;
         _isDirty = false;
 
-        // Create a working copy of the config
-        _workingConfig = CloneConfig(currentConfig);
+        // Create a working copy of the config using deep cloning
+        _workingConfig = DeepCloner.Clone(currentConfig);
 
         // Discover all widgets
         _allEntries = DiscoverWidgets(_workingConfig);
@@ -275,14 +276,38 @@ public static class WidgetConfigDialog
         // Separator
         _widgetList.AddItem(new ListItem("[grey35]───────────────────[/]") { IsEnabled = false });
 
+        // Missing widgets FIRST (in config but script not found)
+        var missing = _allEntries.Where(e => !e.IsGlobalSettings && e.Status == WidgetStatus.Missing).ToList();
+        if (missing.Any())
+        {
+            _widgetList.AddItem(new ListItem("[red bold]⚠ MISSING:[/]") { IsEnabled = false });
+            foreach (var entry in missing)
+            {
+                var locationHint = entry.Config?.Location switch
+                {
+                    WidgetLocation.Bundled => " [grey50](bundled)[/]",
+                    WidgetLocation.Custom => " [grey50](custom)[/]",
+                    _ => ""
+                };
+                var item = new ListItem($"[red]✗[/] {entry.Id}{locationHint}") { Tag = entry };
+                _widgetList.AddItem(item);
+            }
+        }
+
         // Configured widgets
         var configured = _allEntries.Where(e => !e.IsGlobalSettings && e.Status == WidgetStatus.Configured).ToList();
         if (configured.Any())
         {
-            _widgetList.AddItem(new ListItem("[grey50]CONFIGURED:[/]") { IsEnabled = false });
+            _widgetList.AddItem(new ListItem("[green bold]✓ CONFIGURED:[/]") { IsEnabled = false });
             foreach (var entry in configured)
             {
-                var item = new ListItem($"[green]✓[/] {entry.Id}") { Tag = entry };
+                var locationHint = entry.Config?.Location switch
+                {
+                    WidgetLocation.Bundled => " [grey50](bundled)[/]",
+                    WidgetLocation.Custom => " [grey50](custom)[/]",
+                    _ => ""
+                };
+                var item = new ListItem($"[green]✓[/] {entry.Id}{locationHint}") { Tag = entry };
                 _widgetList.AddItem(item);
             }
         }
@@ -291,22 +316,11 @@ public static class WidgetConfigDialog
         var available = _allEntries.Where(e => !e.IsGlobalSettings && e.Status == WidgetStatus.Available).ToList();
         if (available.Any())
         {
-            _widgetList.AddItem(new ListItem("[grey50]AVAILABLE:[/]") { IsEnabled = false });
+            _widgetList.AddItem(new ListItem("[cyan1 bold]+ AVAILABLE:[/]") { IsEnabled = false });
             foreach (var entry in available)
             {
-                var item = new ListItem($"[grey50]+[/] {entry.Id}") { Tag = entry };
-                _widgetList.AddItem(item);
-            }
-        }
-
-        // Missing widgets (in config but script not found)
-        var missing = _allEntries.Where(e => !e.IsGlobalSettings && e.Status == WidgetStatus.Missing).ToList();
-        if (missing.Any())
-        {
-            _widgetList.AddItem(new ListItem("[grey50]MISSING:[/]") { IsEnabled = false });
-            foreach (var entry in missing)
-            {
-                var item = new ListItem($"[red]⚠[/] {entry.Id}") { Tag = entry };
+                // Available widgets already have location in their ID from discovery
+                var item = new ListItem($"[cyan1]+[/] {entry.Id}") { Tag = entry };
                 _widgetList.AddItem(item);
             }
         }
@@ -414,6 +428,12 @@ public static class WidgetConfigDialog
         _priorityDropdown.AddItem("2 - Normal");
         _priorityDropdown.AddItem("3 - Low");
         _priorityDropdown.SelectedIndexChanged += (s, idx) => OnSettingChanged();
+
+        _locationDropdown = new DropdownControl("Location:");
+        _locationDropdown.AddItem("Auto (priority order)");   // Index 0 = Auto
+        _locationDropdown.AddItem("Custom widgets");          // Index 1 = Custom
+        _locationDropdown.AddItem("Bundled widgets");         // Index 2 = Bundled
+        _locationDropdown.SelectedIndexChanged += (s, idx) => OnSettingChanged();
 
         // Global settings
         _defaultRefreshInput = new PromptControl { Prompt = "Default Refresh (sec):", InputWidth = 8 };
@@ -537,12 +557,27 @@ public static class WidgetConfigDialog
         var config = _selectedEntry.Config;
         if (config == null) return;
 
-        // Determine if this is a bundled widget
-        var bundledPath = WidgetPaths.GetBundledWidgetsDirectory();
-        bool isBundled = _selectedEntry.FullPath?.StartsWith(bundledPath, StringComparison.Ordinal) ?? false;
+        // Determine widget type based on location setting (not resolved path)
+        bool isBundled = config.Location == WidgetLocation.Bundled;
 
-        // Get the expected checksum based on widget type
+        // Build header with status
+        var headerBuilder = Controls.Markup()
+            .AddLine($"[cyan1 bold]{_selectedEntry.Id}[/]")
+            .AddLine($"[grey70]Path: {config.Path}[/]");
+
+        // Show location
+        var locationText = config.Location switch
+        {
+            WidgetLocation.Bundled => "bundled",
+            WidgetLocation.Custom => "custom",
+            _ => "auto"
+        };
+        headerBuilder.AddLine($"[grey70]Location: {locationText}[/]");
+
+        // Get checksums
         string? expectedChecksum = null;
+        string? actualChecksum = null;
+        bool checksumMismatch = false;
 
         if (isBundled)
         {
@@ -556,17 +591,12 @@ public static class WidgetConfigDialog
             expectedChecksum = config.Sha256;
         }
 
-        // Calculate current checksum and compare
-        string? actualChecksum = null;
-        bool checksumMismatch = false;
-        bool checksumMissing = string.IsNullOrEmpty(expectedChecksum);
-
         if (_selectedEntry.FullPath != null && File.Exists(_selectedEntry.FullPath))
         {
             try
             {
                 actualChecksum = ScriptValidator.CalculateChecksum(_selectedEntry.FullPath);
-                if (!checksumMissing)
+                if (!string.IsNullOrEmpty(expectedChecksum))
                 {
                     checksumMismatch = !string.Equals(actualChecksum, expectedChecksum, StringComparison.OrdinalIgnoreCase);
                 }
@@ -577,24 +607,21 @@ public static class WidgetConfigDialog
             }
         }
 
-        // Build header with status
-        var headerBuilder = Controls.Markup()
-            .AddLine($"[cyan1 bold]{_selectedEntry.Id}[/]")
-            .AddLine($"[grey70]Path: {config.Path}[/]");
-
+        // Add status line
         if (isBundled)
         {
             if (checksumMismatch)
             {
-                headerBuilder.AddLine($"[red]Status: BUNDLED - TAMPERED![/]");
+                headerBuilder.AddLine($"[red bold]Status: BUNDLED - TAMPERED![/]");
             }
             else
             {
-                headerBuilder.AddLine($"[cyan1]Status: Bundled (verified)[/]");
+                headerBuilder.AddLine($"[green]Status: Bundled (verified)[/]");
             }
         }
         else
         {
+            bool checksumMissing = string.IsNullOrEmpty(expectedChecksum);
             if (checksumMismatch)
             {
                 headerBuilder.AddLine($"[yellow]Status: Configured (checksum outdated)[/]");
@@ -640,77 +667,95 @@ public static class WidgetConfigDialog
             }
             else
             {
-                // Bundled widget verified
+                // Bundled widget verified - show hardcoded checksum
                 var infoBuilder = Controls.Markup()
-                    .AddLine($"[grey70]SHA256: {expectedChecksum}[/]")
-                    .AddLine($"[cyan1]Source: Hardcoded (bundled with ServerHub)[/]")
+                    .AddLine($"[grey70]Hardcoded SHA256: {expectedChecksum}[/]")
+                    .AddLine($"[cyan1]Source: Verified at build time[/]")
                     .WithMargin(1, 0, 1, 0)
                     .Build();
                 _detailPanel.AddControl(infoBuilder);
             }
         }
-        else if (checksumMismatch || checksumMissing)
+        else
         {
-            // Custom widget with checksum issue
-            var warningBuilder = Controls.Markup()
-                .WithMargin(1, 0, 1, 0)
-                .WithBackgroundColor(Color.Grey19);
+            // Custom widget - show checksum status
+            bool checksumMissing = string.IsNullOrEmpty(expectedChecksum);
 
-            if (checksumMismatch)
+            if (checksumMismatch || checksumMissing)
             {
-                warningBuilder.AddLine("[yellow]⚠ Script has been modified since last trust![/]");
-                warningBuilder.AddLine($"[grey70]Stored:  {expectedChecksum}[/]");
-                warningBuilder.AddLine($"[grey70]Current: {actualChecksum}[/]");
-                warningBuilder.AddLine("");
-                warningBuilder.AddLine("[grey70]Review the script changes before updating.[/]");
+                // Custom widget with checksum issue
+                var warningBuilder = Controls.Markup()
+                    .WithMargin(1, 0, 1, 0)
+                    .WithBackgroundColor(Color.Grey19);
+
+                if (checksumMismatch)
+                {
+                    warningBuilder.AddLine("[yellow]⚠ Script has been modified since last trust![/]");
+                    warningBuilder.AddLine($"[grey70]Stored:  {expectedChecksum}[/]");
+                    warningBuilder.AddLine($"[grey70]Current: {actualChecksum}[/]");
+                    warningBuilder.AddLine("");
+                    warningBuilder.AddLine("[grey70]Review the script changes before updating.[/]");
+                }
+                else
+                {
+                    warningBuilder.AddLine("[yellow]⚠ No checksum stored for this widget![/]");
+                    if (actualChecksum != null)
+                    {
+                        warningBuilder.AddLine($"[grey70]Current: {actualChecksum}[/]");
+                    }
+                    warningBuilder.AddLine("");
+                    warningBuilder.AddLine("[grey70]Widget will fail validation without checksum.[/]");
+                }
+
+                _detailPanel.AddControl(warningBuilder.Build());
+
+                // Update checksum button (only for custom widgets with actual file)
+                if (actualChecksum != null)
+                {
+                    var updateChecksumButton = Controls.Button(" Update Checksum ")
+                        .WithMargin(1, 1, 1, 0)
+                        .OnClick((s, e) =>
+                        {
+                            if (actualChecksum != null && config != null)
+                            {
+                                config.Sha256 = actualChecksum;
+                                _isDirty = true;
+                                UpdateTitle();
+                                // Refresh to show updated status
+                                UpdateDetailPanel();
+                            }
+                        })
+                        .Build();
+                    _detailPanel.AddControl(updateChecksumButton);
+                }
+
+                _detailPanel.AddControl(Controls.RuleBuilder()
+                    .WithColor(Color.Grey23)
+                    .WithMargin(1, 1, 1, 0)
+                    .Build());
             }
             else
             {
-                warningBuilder.AddLine("[yellow]⚠ No checksum stored for this widget![/]");
-                warningBuilder.AddLine($"[grey70]Current: {actualChecksum}[/]");
-                warningBuilder.AddLine("");
-                warningBuilder.AddLine("[grey70]Widget will fail validation without checksum.[/]");
+                // Custom widget with valid checksum
+                var checksumInfo = Controls.Markup()
+                    .AddLine($"[grey70]SHA256: {config.Sha256}[/]")
+                    .AddLine($"[green]Status: Verified[/]")
+                    .WithMargin(1, 0, 1, 0)
+                    .Build();
+                _detailPanel.AddControl(checksumInfo);
             }
-
-            _detailPanel.AddControl(warningBuilder.Build());
-
-            // Update checksum button (only for custom widgets)
-            var updateChecksumButton = Controls.Button(" Update Checksum ")
-                .WithMargin(1, 1, 1, 0)
-                .OnClick((s, e) =>
-                {
-                    if (actualChecksum != null && config != null)
-                    {
-                        config.Sha256 = actualChecksum;
-                        _isDirty = true;
-                        UpdateTitle();
-                        // Refresh to show updated status
-                        UpdateDetailPanel();
-                    }
-                })
-                .Build();
-            _detailPanel.AddControl(updateChecksumButton);
-
-            _detailPanel.AddControl(Controls.RuleBuilder()
-                .WithColor(Color.Grey23)
-                .WithMargin(1, 1, 1, 0)
-                .Build());
-        }
-        else
-        {
-            // Custom widget with valid checksum
-            var checksumInfo = Controls.Markup()
-                .AddLine($"[grey70]SHA256: {config.Sha256}[/]")
-                .WithMargin(1, 0, 1, 0)
-                .Build();
-            _detailPanel.AddControl(checksumInfo);
         }
 
+        ShowWidgetSettingsControls(config);
+    }
+
+    private static void ShowWidgetSettingsControls(WidgetConfig config)
+    {
         var settingsHeader = Controls.Markup()
             .AddLine("[grey70]Settings:[/]")
             .WithMargin(1, 1, 1, 0)
             .Build();
-        _detailPanel.AddControl(settingsHeader);
+        _detailPanel!.AddControl(settingsHeader);
 
         // Refresh
         _refreshInput!.Input = config.Refresh.ToString();
@@ -721,6 +766,16 @@ public static class WidgetConfigDialog
         _pinnedCheckbox!.Checked = config.Pinned;
         _pinnedCheckbox.Margin = new Margin(1, 1, 1, 0);
         _detailPanel.AddControl(_pinnedCheckbox);
+
+        // Location
+        _locationDropdown!.SelectedIndex = config.Location switch
+        {
+            WidgetLocation.Custom => 1,
+            WidgetLocation.Bundled => 2,
+            _ => 0  // Auto or null
+        };
+        _locationDropdown.Margin = new Margin(1, 1, 1, 0);
+        _detailPanel.AddControl(_locationDropdown);
 
         // Full row
         _fullRowCheckbox!.Checked = config.FullRow;
@@ -824,18 +879,69 @@ public static class WidgetConfigDialog
     {
         if (_detailPanel == null || _selectedEntry == null) return;
 
-        var header = Controls.Markup()
+        var config = _selectedEntry.Config;
+        if (config == null) return;
+
+        // Determine widget type based on location setting
+        bool isBundled = config.Location == WidgetLocation.Bundled;
+
+        // Build header
+        var headerBuilder = Controls.Markup()
             .AddLine($"[cyan1 bold]{_selectedEntry.Id}[/]")
-            .AddLine($"[grey70]Path: {_selectedEntry.Path}[/]")
-            .AddLine($"[red]Status: Missing (script not found)[/]")
-            .AddLine("")
-            .AddLine("[red]The script file for this widget could not be found.[/]")
-            .AddLine("[grey70]It may have been deleted or moved.[/]")
-            .AddLine("")
-            .AddLine("[grey70]Click 'Remove' to remove this widget from config.[/]")
+            .AddLine($"[grey70]Path: {config.Path}[/]");
+
+        // Show location
+        var locationText = config.Location switch
+        {
+            WidgetLocation.Bundled => "bundled",
+            WidgetLocation.Custom => "custom",
+            _ => "auto"
+        };
+        headerBuilder.AddLine($"[grey70]Location: {locationText}[/]");
+
+        var locationHint = config.Location switch
+        {
+            WidgetLocation.Bundled => "bundled widgets directory",
+            WidgetLocation.Custom => "custom widgets directories",
+            _ => "any widget directory"
+        };
+        headerBuilder.AddLine($"[red bold]Status: MISSING[/]");
+        headerBuilder.AddLine("");
+        var missingHeader = headerBuilder.WithMargin(1, 0, 1, 0).Build();
+        _detailPanel.AddControl(missingHeader);
+
+        // Show error message
+        var errorBuilder = Controls.Markup()
             .WithMargin(1, 0, 1, 0)
-            .Build();
-        _detailPanel.AddControl(header);
+            .WithBackgroundColor(Color.Maroon);
+        errorBuilder.AddLine($"[white bold]⚠ Widget script not found in {locationHint}[/]");
+        errorBuilder.AddLine("");
+        errorBuilder.AddLine($"[white]Expected: {config.Path}[/]");
+        errorBuilder.AddLine("");
+
+        if (isBundled)
+        {
+            errorBuilder.AddLine("[yellow]This is a bundled widget. Solutions:[/]");
+            errorBuilder.AddLine("[grey70]1. Install bundled widgets (run install script)[/]");
+            errorBuilder.AddLine("[grey70]2. Change location to 'custom' or 'auto'[/]");
+            errorBuilder.AddLine("[grey70]3. Remove this widget from configuration[/]");
+        }
+        else
+        {
+            errorBuilder.AddLine("[yellow]Solutions:[/]");
+            errorBuilder.AddLine($"[grey70]1. Add {config.Path} to the widget directory[/]");
+            errorBuilder.AddLine("[grey70]2. Change location setting[/]");
+            errorBuilder.AddLine("[grey70]3. Remove this widget from configuration[/]");
+        }
+
+        _detailPanel.AddControl(errorBuilder.Build());
+        _detailPanel.AddControl(Controls.RuleBuilder()
+            .WithColor(Color.Grey23)
+            .WithMargin(1, 1, 1, 0)
+            .Build());
+
+        // Show settings even for missing widgets (allow changing location)
+        ShowWidgetSettingsControls(config);
     }
 
     private static void UpdateButtons()
@@ -961,6 +1067,16 @@ public static class WidgetConfigDialog
 
         if (_priorityDropdown != null)
             config.Priority = _priorityDropdown.SelectedIndex + 1;
+
+        if (_locationDropdown != null)
+        {
+            config.Location = _locationDropdown.SelectedIndex switch
+            {
+                1 => WidgetLocation.Custom,
+                2 => WidgetLocation.Bundled,
+                _ => null  // Auto (omit from YAML)
+            };
+        }
     }
 
     private static int? ParseNullableInt(string? input)
@@ -1219,7 +1335,11 @@ public static class WidgetConfigDialog
     private static List<WidgetListEntry> DiscoverWidgets(ServerHubConfig config)
     {
         var entries = new List<WidgetListEntry>();
-        var configuredPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // Track configured (path, location) pairs to avoid showing them as available
+        var configuredPathLocations = new HashSet<(string path, WidgetLocation? location)>(
+            new PathLocationComparer()
+        );
 
         // First, add all configured widgets in layout order
         var orderedWidgets = new List<string>();
@@ -1243,7 +1363,7 @@ public static class WidgetConfigDialog
             if (!config.Widgets.TryGetValue(widgetId, out var widgetConfig))
                 continue;
 
-            var fullPath = WidgetPaths.ResolveWidgetPath(widgetConfig.Path);
+            var fullPath = WidgetPaths.ResolveWidgetPath(widgetConfig.Path, widgetConfig.Location);
             var status = fullPath != null && File.Exists(fullPath)
                 ? WidgetStatus.Configured
                 : WidgetStatus.Missing;
@@ -1257,41 +1377,97 @@ public static class WidgetConfigDialog
                 Config = widgetConfig
             });
 
-            if (fullPath != null)
+            // Track this path+location as configured (even if missing)
+            configuredPathLocations.Add((widgetConfig.Path, widgetConfig.Location));
+        }
+
+        // Discover available widgets from bundled directory
+        var bundledPath = WidgetPaths.GetBundledWidgetsDirectory();
+        if (Directory.Exists(bundledPath))
+        {
+            foreach (var file in Directory.GetFiles(bundledPath))
             {
-                configuredPaths.Add(Path.GetFullPath(fullPath));
+                if (!IsExecutable(file)) continue;
+
+                var fileName = Path.GetFileName(file);
+                var fullPath = Path.GetFullPath(file);
+
+                // Skip if this path+bundled combination is already configured
+                if (configuredPathLocations.Contains((fileName, WidgetLocation.Bundled)))
+                    continue;
+
+                var widgetId = Path.GetFileNameWithoutExtension(file);
+
+                entries.Add(new WidgetListEntry
+                {
+                    Id = $"{widgetId} (bundled)",
+                    Path = fileName,
+                    FullPath = fullPath,
+                    Status = WidgetStatus.Available,
+                    Config = new WidgetConfig
+                    {
+                        Path = fileName,
+                        Location = WidgetLocation.Bundled
+                    }
+                });
             }
         }
 
-        // Find available scripts (in widget paths but not configured)
+        // Discover available widgets from custom directories
         foreach (var searchPath in WidgetPaths.GetSearchPaths())
         {
             if (!Directory.Exists(searchPath)) continue;
 
-            // Skip bundled widgets directory for discovery
-            if (searchPath == WidgetPaths.GetBundledWidgetsDirectory()) continue;
+            // Skip bundled directory (already processed above)
+            if (searchPath == bundledPath) continue;
 
             foreach (var file in Directory.GetFiles(searchPath))
             {
                 if (!IsExecutable(file)) continue;
 
-                var fullPath = Path.GetFullPath(file);
-                if (configuredPaths.Contains(fullPath)) continue;
-
                 var fileName = Path.GetFileName(file);
+                var fullPath = Path.GetFullPath(file);
+
+                // Skip if this path+custom combination is already configured
+                if (configuredPathLocations.Contains((fileName, WidgetLocation.Custom)))
+                    continue;
+
                 var widgetId = Path.GetFileNameWithoutExtension(file);
 
                 entries.Add(new WidgetListEntry
                 {
-                    Id = widgetId,
+                    Id = $"{widgetId} (custom)",
                     Path = fileName,
                     FullPath = fullPath,
-                    Status = WidgetStatus.Available
+                    Status = WidgetStatus.Available,
+                    Config = new WidgetConfig
+                    {
+                        Path = fileName,
+                        Location = WidgetLocation.Custom
+                    }
                 });
             }
         }
 
         return entries;
+    }
+
+    // Custom comparer for (path, location) tuples
+    private class PathLocationComparer : IEqualityComparer<(string path, WidgetLocation? location)>
+    {
+        public bool Equals((string path, WidgetLocation? location) x, (string path, WidgetLocation? location) y)
+        {
+            return string.Equals(x.path, y.path, StringComparison.OrdinalIgnoreCase)
+                && x.location == y.location;
+        }
+
+        public int GetHashCode((string path, WidgetLocation? location) obj)
+        {
+            return HashCode.Combine(
+                obj.path.ToLowerInvariant(),
+                obj.location
+            );
+        }
     }
 
     private static bool IsExecutable(string path)
@@ -1317,66 +1493,4 @@ public static class WidgetConfigDialog
         }
     }
 
-    private static ServerHubConfig CloneConfig(ServerHubConfig source)
-    {
-        // Deep clone the config
-        var clone = new ServerHubConfig
-        {
-            DefaultRefresh = source.DefaultRefresh,
-            MaxLinesPerWidget = source.MaxLinesPerWidget,
-            ShowTruncationIndicator = source.ShowTruncationIndicator,
-            Widgets = new Dictionary<string, WidgetConfig>()
-        };
-
-        // Clone widgets
-        foreach (var (id, widget) in source.Widgets)
-        {
-            clone.Widgets[id] = new WidgetConfig
-            {
-                Path = widget.Path,
-                Sha256 = widget.Sha256,
-                Refresh = widget.Refresh,
-                Pinned = widget.Pinned,
-                Priority = widget.Priority,
-                MinHeight = widget.MinHeight,
-                MaxHeight = widget.MaxHeight,
-                MaxLines = widget.MaxLines,
-                Expandable = widget.Expandable,
-                FullRow = widget.FullRow,
-                ColumnSpan = widget.ColumnSpan
-            };
-        }
-
-        // Clone layout
-        if (source.Layout != null)
-        {
-            clone.Layout = new LayoutConfig
-            {
-                Order = source.Layout.Order?.ToList()
-            };
-
-            if (source.Layout.Rows != null)
-            {
-                clone.Layout.Rows = source.Layout.Rows.Select(r => new LayoutRow
-                {
-                    Widgets = r.Widgets.ToList(),
-                    Height = r.Height
-                }).ToList();
-            }
-        }
-
-        // Clone breakpoints
-        if (source.Breakpoints != null)
-        {
-            clone.Breakpoints = new BreakpointConfig
-            {
-                Single = source.Breakpoints.Single,
-                Double = source.Breakpoints.Double,
-                Triple = source.Breakpoints.Triple,
-                Quad = source.Breakpoints.Quad
-            };
-        }
-
-        return clone;
-    }
 }

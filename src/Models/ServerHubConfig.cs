@@ -52,6 +52,27 @@ public class ServerHubConfig
 }
 
 /// <summary>
+/// Specifies where to search for a widget
+/// </summary>
+public enum WidgetLocation
+{
+    /// <summary>
+    /// Auto-resolve using priority order: custom → user → bundled (default)
+    /// </summary>
+    Auto = 0,
+
+    /// <summary>
+    /// Search only bundled widgets directory (~/.local/share/serverhub/widgets)
+    /// </summary>
+    Bundled = 1,
+
+    /// <summary>
+    /// Search only custom widgets directories (--widgets-path and ~/.config/serverhub/widgets)
+    /// </summary>
+    Custom = 2
+}
+
+/// <summary>
 /// Configuration for a single widget
 /// </summary>
 public class WidgetConfig
@@ -61,6 +82,13 @@ public class WidgetConfig
     /// </summary>
     [YamlMember(Alias = "path")]
     public string Path { get; set; } = "";
+
+    /// <summary>
+    /// Optional location constraint for widget path resolution
+    /// Controls where to search for the widget script
+    /// </summary>
+    [YamlMember(Alias = "location", DefaultValuesHandling = DefaultValuesHandling.OmitDefaults)]
+    public WidgetLocation? Location { get; set; }
 
     /// <summary>
     /// Optional SHA256 checksum for security validation

@@ -37,10 +37,16 @@ public class WidgetRefreshService
             return CreateErrorData(widgetId, "Widget not configured");
         }
 
-        var scriptPath = WidgetPaths.ResolveWidgetPath(widgetConfig.Path);
+        var scriptPath = WidgetPaths.ResolveWidgetPath(widgetConfig.Path, widgetConfig.Location);
         if (scriptPath == null)
         {
-            return CreateErrorData(widgetId, $"Widget script not found: {widgetConfig.Path}");
+            var locationHint = widgetConfig.Location switch
+            {
+                WidgetLocation.Bundled => " in bundled widgets directory",
+                WidgetLocation.Custom => " in custom widgets directories",
+                _ => ""
+            };
+            return CreateErrorData(widgetId, $"Widget script not found{locationHint}: {widgetConfig.Path}");
         }
 
         try

@@ -1,6 +1,8 @@
 // Copyright (c) Nikolaos Protopapas. All rights reserved.
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
+using ServerHub.Models;
+
 namespace ServerHub.Utils;
 
 /// <summary>
@@ -54,6 +56,39 @@ public static class WidgetPaths
     }
 
     /// <summary>
+    /// Gets only bundled widget search paths
+    /// </summary>
+    /// <returns>Enumerable of bundled search paths</returns>
+    private static IEnumerable<string> GetBundledSearchPaths()
+    {
+        var bundledPath = GetBundledWidgetsDirectory();
+        if (Directory.Exists(bundledPath))
+        {
+            yield return bundledPath;
+        }
+    }
+
+    /// <summary>
+    /// Gets only custom widget search paths (custom path + user widgets)
+    /// </summary>
+    /// <returns>Enumerable of custom search paths</returns>
+    private static IEnumerable<string> GetCustomSearchPaths()
+    {
+        // Custom path from --widgets-path (highest priority)
+        if (!string.IsNullOrEmpty(_customWidgetsPath) && Directory.Exists(_customWidgetsPath))
+        {
+            yield return _customWidgetsPath;
+        }
+
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var userWidgetsPath = Path.Combine(home, ".config", "serverhub", "widgets");
+        if (Directory.Exists(userWidgetsPath))
+        {
+            yield return userWidgetsPath;
+        }
+    }
+
+    /// <summary>
     /// Resolves a widget path by searching all search paths in priority order
     /// </summary>
     /// <param name="relativePath">Relative path to the widget script</param>
@@ -61,6 +96,33 @@ public static class WidgetPaths
     public static string? ResolveWidgetPath(string relativePath)
     {
         foreach (var searchPath in GetSearchPaths())
+        {
+            var fullPath = Path.Combine(searchPath, relativePath);
+            if (File.Exists(fullPath))
+            {
+                return fullPath;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Resolves a widget path with optional location constraint
+    /// </summary>
+    /// <param name="relativePath">Relative path to the widget script</param>
+    /// <param name="location">Optional location constraint (bundled/custom/auto)</param>
+    /// <returns>Full path to the widget script, or null if not found</returns>
+    public static string? ResolveWidgetPath(string relativePath, WidgetLocation? location)
+    {
+        var searchPaths = location switch
+        {
+            WidgetLocation.Bundled => GetBundledSearchPaths(),
+            WidgetLocation.Custom => GetCustomSearchPaths(),
+            _ => GetSearchPaths() // Auto/null = all paths
+        };
+
+        foreach (var searchPath in searchPaths)
         {
             var fullPath = Path.Combine(searchPath, relativePath);
             if (File.Exists(fullPath))

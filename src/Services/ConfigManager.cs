@@ -21,11 +21,13 @@ public class ConfigManager
     {
         _deserializer = new DeserializerBuilder()
             .WithNamingConvention(UnderscoredNamingConvention.Instance)
+            .WithTypeConverter(new WidgetLocationTypeConverter())
             .IgnoreUnmatchedProperties()
             .Build();
 
         _serializer = new SerializerBuilder()
             .WithNamingConvention(UnderscoredNamingConvention.Instance)
+            .WithTypeConverter(new WidgetLocationTypeConverter())
             .Build();
     }
 
