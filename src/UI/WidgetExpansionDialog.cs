@@ -7,6 +7,7 @@ using SharpConsoleUI;
 using SharpConsoleUI.Builders;
 using SharpConsoleUI.Controls;
 using Spectre.Console;
+using Point = System.Drawing.Point;
 
 namespace ServerHub.UI;
 
@@ -298,9 +299,30 @@ public static class WidgetExpansionDialog
             }
         };
 
+        // Subscribe to screen resize event to maintain centering and 90% sizing
+        EventHandler<SharpConsoleUI.Helpers.Size>? resizeHandler = null;
+        resizeHandler = (sender, size) =>
+        {
+            // Recalculate modal dimensions with 90% sizing and max constraints
+            int newModalWidth = Math.Min((int)(size.Width * 0.9), 150);
+            int newModalHeight = Math.Min((int)(size.Height * 0.9), 40);
+
+            // Resize the modal
+            modal.SetSize(newModalWidth, newModalHeight);
+
+            // Re-center manually (no Center() method exists)
+            int centerX = (size.Width - newModalWidth) / 2;
+            int centerY = (size.Height - newModalHeight) / 2;
+            modal.SetPosition(new Point(centerX, centerY));
+        };
+        windowSystem.ConsoleDriver.ScreenResized += resizeHandler;
+
         // Handle modal close
         modal.OnClosed += (s, e) =>
         {
+            // Unsubscribe from resize event to prevent memory leaks
+            windowSystem.ConsoleDriver.ScreenResized -= resizeHandler;
+
             cts.Cancel();
             onClose?.Invoke();
         };
@@ -606,6 +628,10 @@ public static class WidgetExpansionDialog
         Func<Task>? onRefreshRequested,
         Func<Task>? onMainWidgetRefresh = null)
     {
+        // Minimize parent expanded dialog to avoid resize/position conflicts with action executor
+        // Use force=true since dialog is built with Minimizable(false)
+        parentModal.Minimize(force: true);
+
         // Show unified dialog (confirm → execute → results in one dialog)
         ActionExecutionDialog.Show(
             action,
@@ -613,6 +639,9 @@ public static class WidgetExpansionDialog
             parentModal,
             onComplete: (result) =>
             {
+                // Restore parent expanded dialog
+                parentModal.Restore();
+
                 // If refresh flag is set, trigger widget refresh (on any completion: success, failure, or termination)
                 if (action.RefreshAfterSuccess)
                 {
@@ -625,6 +654,9 @@ public static class WidgetExpansionDialog
             },
             onCancel: () =>
             {
+                // Restore parent expanded dialog
+                parentModal.Restore();
+
                 // User cancelled, do nothing
             });
     }

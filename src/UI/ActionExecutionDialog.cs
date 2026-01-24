@@ -8,6 +8,7 @@ using SharpConsoleUI.Builders;
 using SharpConsoleUI.Controls;
 using SharpConsoleUI.Core;
 using Spectre.Console;
+using Point = System.Drawing.Point;
 
 namespace ServerHub.UI;
 
@@ -433,9 +434,30 @@ public static class ActionExecutionDialog
             }
         };
 
+        // Subscribe to screen resize event to maintain centering and 90% sizing
+        EventHandler<SharpConsoleUI.Helpers.Size>? resizeHandler = null;
+        resizeHandler = (sender, size) =>
+        {
+            // Recalculate modal dimensions with 90% sizing and max constraints
+            int newModalWidth = Math.Min((int)(size.Width * 0.9), 150);
+            int newModalHeight = Math.Min((int)(size.Height * 0.9), 40);
+
+            // Resize the modal
+            modal.SetSize(newModalWidth, newModalHeight);
+
+            // Re-center manually (no Center() method exists)
+            int centerX = (size.Width - newModalWidth) / 2;
+            int centerY = (size.Height - newModalHeight) / 2;
+            modal.SetPosition(new Point(centerX, centerY));
+        };
+        windowSystem.ConsoleDriver.ScreenResized += resizeHandler;
+
         // Handle modal close - cleanup and callbacks
         modal.OnClosed += (s, e) =>
         {
+            // Unsubscribe from resize event to prevent memory leaks
+            windowSystem.ConsoleDriver.ScreenResized -= resizeHandler;
+
             // Mark as disposed to prevent orphaned callbacks
             _disposedDialogs.Add(modal);
 
