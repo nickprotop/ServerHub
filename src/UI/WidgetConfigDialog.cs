@@ -14,19 +14,6 @@ using Spectre.Console;
 namespace ServerHub.UI;
 
 /// <summary>
-/// Represents a widget item in the configuration dialog with its status.
-/// </summary>
-public enum WidgetStatus
-{
-    /// <summary>Widget is in config and script exists</summary>
-    Configured,
-    /// <summary>Script exists but not in config</summary>
-    Available,
-    /// <summary>In config but script not found</summary>
-    Missing
-}
-
-/// <summary>
 /// Represents a widget entry in the dialog's list.
 /// </summary>
 public class WidgetListEntry
@@ -34,7 +21,7 @@ public class WidgetListEntry
     public string Id { get; set; } = "";
     public string Path { get; set; } = "";
     public string? FullPath { get; set; }
-    public WidgetStatus Status { get; set; }
+    public WidgetConfigStatus Status { get; set; }
     public WidgetConfig? Config { get; set; }
     public bool IsGlobalSettings { get; set; }
 }
@@ -277,7 +264,7 @@ public static class WidgetConfigDialog
         _widgetList.AddItem(new ListItem("[grey35]───────────────────[/]") { IsEnabled = false });
 
         // Missing widgets FIRST (in config but script not found)
-        var missing = _allEntries.Where(e => !e.IsGlobalSettings && e.Status == WidgetStatus.Missing).ToList();
+        var missing = _allEntries.Where(e => !e.IsGlobalSettings && e.Status == WidgetConfigStatus.Missing).ToList();
         if (missing.Any())
         {
             _widgetList.AddItem(new ListItem("[red bold]⚠ MISSING:[/]") { IsEnabled = false });
@@ -296,7 +283,7 @@ public static class WidgetConfigDialog
 
         // Configured widgets (enabled only)
         var configured = _allEntries.Where(e => !e.IsGlobalSettings
-                                               && e.Status == WidgetStatus.Configured
+                                               && e.Status == WidgetConfigStatus.Configured
                                                && e.Config?.Enabled == true).ToList();
         if (configured.Any())
         {
@@ -316,7 +303,7 @@ public static class WidgetConfigDialog
 
         // Disabled widgets (configured but disabled)
         var disabled = _allEntries.Where(e => !e.IsGlobalSettings
-                                             && e.Status == WidgetStatus.Configured
+                                             && e.Status == WidgetConfigStatus.Configured
                                              && e.Config?.Enabled == false).ToList();
         if (disabled.Any())
         {
@@ -335,7 +322,7 @@ public static class WidgetConfigDialog
         }
 
         // Available widgets (scripts not in config)
-        var available = _allEntries.Where(e => !e.IsGlobalSettings && e.Status == WidgetStatus.Available).ToList();
+        var available = _allEntries.Where(e => !e.IsGlobalSettings && e.Status == WidgetConfigStatus.Available).ToList();
         if (available.Any())
         {
             _widgetList.AddItem(new ListItem("[cyan1 bold]+ AVAILABLE:[/]") { IsEnabled = false });
@@ -487,15 +474,15 @@ public static class WidgetConfigDialog
         {
             ShowGlobalSettings();
         }
-        else if (_selectedEntry.Status == WidgetStatus.Configured)
+        else if (_selectedEntry.Status == WidgetConfigStatus.Configured)
         {
             ShowConfiguredWidgetSettings();
         }
-        else if (_selectedEntry.Status == WidgetStatus.Available)
+        else if (_selectedEntry.Status == WidgetConfigStatus.Available)
         {
             ShowAvailableWidgetPreview();
         }
-        else if (_selectedEntry.Status == WidgetStatus.Missing)
+        else if (_selectedEntry.Status == WidgetConfigStatus.Missing)
         {
             ShowMissingWidgetInfo();
         }
@@ -1028,9 +1015,9 @@ public static class WidgetConfigDialog
     {
         if (_selectedEntry == null) return;
 
-        bool isConfigured = _selectedEntry.Status == WidgetStatus.Configured;
-        bool isAvailable = _selectedEntry.Status == WidgetStatus.Available;
-        bool isMissing = _selectedEntry.Status == WidgetStatus.Missing;
+        bool isConfigured = _selectedEntry.Status == WidgetConfigStatus.Configured;
+        bool isAvailable = _selectedEntry.Status == WidgetConfigStatus.Available;
+        bool isMissing = _selectedEntry.Status == WidgetConfigStatus.Missing;
         bool isGlobal = _selectedEntry.IsGlobalSettings;
 
         // Up/Down buttons only for configured widgets (not global settings)
@@ -1084,7 +1071,7 @@ public static class WidgetConfigDialog
         {
             ApplyGlobalSettings();
         }
-        else if (_selectedEntry.Status == WidgetStatus.Configured && _selectedEntry.Config != null)
+        else if (_selectedEntry.Status == WidgetConfigStatus.Configured && _selectedEntry.Config != null)
         {
             ApplyWidgetSettings(_selectedEntry.Config);
         }
@@ -1182,7 +1169,7 @@ public static class WidgetConfigDialog
 
     private static void MoveWidgetUp()
     {
-        if (_selectedEntry == null || _workingConfig == null || _selectedEntry.Status != WidgetStatus.Configured)
+        if (_selectedEntry == null || _workingConfig == null || _selectedEntry.Status != WidgetConfigStatus.Configured)
             return;
 
         var order = _workingConfig.Layout?.Order;
@@ -1207,7 +1194,7 @@ public static class WidgetConfigDialog
 
     private static void MoveWidgetDown()
     {
-        if (_selectedEntry == null || _workingConfig == null || _selectedEntry.Status != WidgetStatus.Configured)
+        if (_selectedEntry == null || _workingConfig == null || _selectedEntry.Status != WidgetConfigStatus.Configured)
             return;
 
         var order = _workingConfig.Layout?.Order;
@@ -1234,11 +1221,11 @@ public static class WidgetConfigDialog
     {
         if (_selectedEntry == null || _workingConfig == null) return;
 
-        if (_selectedEntry.Status == WidgetStatus.Available)
+        if (_selectedEntry.Status == WidgetConfigStatus.Available)
         {
             AddWidget();
         }
-        else if (_selectedEntry.Status == WidgetStatus.Configured || _selectedEntry.Status == WidgetStatus.Missing)
+        else if (_selectedEntry.Status == WidgetConfigStatus.Configured || _selectedEntry.Status == WidgetConfigStatus.Missing)
         {
             RemoveWidget();
         }
@@ -1527,187 +1514,20 @@ public static class WidgetConfigDialog
 
     private static List<WidgetListEntry> DiscoverWidgets(ServerHubConfig config)
     {
-        var entries = new List<WidgetListEntry>();
+        var discovered = WidgetConfigurationHelper.DiscoverAllWidgets(config);
 
-        // Track configured (path, location) pairs to avoid showing them as available
-        var configuredPathLocations = new HashSet<(string path, WidgetLocation? location)>(
-            new PathLocationComparer()
-        );
-
-        // First, add all configured widgets in layout order
-        var orderedWidgets = new List<string>();
-        if (config.Layout?.Order != null)
+        // Convert to UI-specific WidgetListEntry
+        return discovered.Select(d => new WidgetListEntry
         {
-            orderedWidgets.AddRange(config.Layout.Order);
-        }
-
-        // Add any widgets not in the order list
-        foreach (var widgetId in config.Widgets.Keys)
-        {
-            if (!orderedWidgets.Contains(widgetId))
-            {
-                orderedWidgets.Add(widgetId);
-            }
-        }
-
-        // Process configured widgets
-        foreach (var widgetId in orderedWidgets)
-        {
-            if (!config.Widgets.TryGetValue(widgetId, out var widgetConfig))
-                continue;
-
-            // Resolve with actual location detection for Auto widgets
-            var (fullPath, actualLocation) = WidgetPaths.ResolveWidgetPathWithLocation(
-                widgetConfig.Path,
-                widgetConfig.Location);
-
-            var status = fullPath != null && File.Exists(fullPath)
-                ? WidgetStatus.Configured
-                : WidgetStatus.Missing;
-
-            // For Auto location, show where it resolved to in the widget list
-            var displayId = widgetId;
-            if (widgetConfig.Location == null && actualLocation != null)
-            {
-                var locationText = actualLocation switch
-                {
-                    WidgetLocation.Bundled => "auto: bundled",
-                    WidgetLocation.Custom => "auto: custom",
-                    _ => "auto"
-                };
-                displayId = $"{widgetId} ({locationText})";
-            }
-
-            entries.Add(new WidgetListEntry
-            {
-                Id = displayId,
-                Path = widgetConfig.Path,
-                FullPath = fullPath,
-                Status = status,
-                Config = widgetConfig
-            });
-
-            // Track using ACTUAL location for Auto widgets (prevents duplicates)
-            // If configured location is explicit, use that; otherwise use actual resolved location
-            var trackingLocation = widgetConfig.Location ?? actualLocation;
-            configuredPathLocations.Add((widgetConfig.Path, trackingLocation));
-        }
-
-        // Discover available widgets from bundled directory
-        var bundledPath = WidgetPaths.GetBundledWidgetsDirectory();
-        if (Directory.Exists(bundledPath))
-        {
-            foreach (var file in Directory.GetFiles(bundledPath))
-            {
-                if (!IsExecutable(file)) continue;
-
-                var fileName = Path.GetFileName(file);
-                var fullPath = Path.GetFullPath(file);
-
-                // Skip if this path+bundled combination is already configured
-                // OR if the path is configured with Auto (null) location
-                if (configuredPathLocations.Contains((fileName, WidgetLocation.Bundled)) ||
-                    configuredPathLocations.Contains((fileName, null)))
-                    continue;
-
-                var widgetId = Path.GetFileNameWithoutExtension(file);
-
-                entries.Add(new WidgetListEntry
-                {
-                    Id = $"{widgetId} (bundled)",
-                    Path = fileName,
-                    FullPath = fullPath,
-                    Status = WidgetStatus.Available,
-                    Config = new WidgetConfig
-                    {
-                        Path = fileName,
-                        Location = WidgetLocation.Bundled
-                    }
-                });
-            }
-        }
-
-        // Discover available widgets from custom directories
-        foreach (var searchPath in WidgetPaths.GetSearchPaths())
-        {
-            if (!Directory.Exists(searchPath)) continue;
-
-            // Skip bundled directory (already processed above)
-            if (searchPath == bundledPath) continue;
-
-            foreach (var file in Directory.GetFiles(searchPath))
-            {
-                if (!IsExecutable(file)) continue;
-
-                var fileName = Path.GetFileName(file);
-                var fullPath = Path.GetFullPath(file);
-
-                // Skip if this path+custom combination is already configured
-                // OR if the path is configured with Auto (null) location
-                if (configuredPathLocations.Contains((fileName, WidgetLocation.Custom)) ||
-                    configuredPathLocations.Contains((fileName, null)))
-                    continue;
-
-                var widgetId = Path.GetFileNameWithoutExtension(file);
-
-                entries.Add(new WidgetListEntry
-                {
-                    Id = $"{widgetId} (custom)",
-                    Path = fileName,
-                    FullPath = fullPath,
-                    Status = WidgetStatus.Available,
-                    Config = new WidgetConfig
-                    {
-                        Path = fileName,
-                        Location = WidgetLocation.Custom
-                    }
-                });
-            }
-        }
-
-        return entries;
+            Id = d.DisplayId,
+            Path = d.RelativePath,
+            FullPath = d.FullPath,
+            Status = d.Status,
+            Config = d.Config,
+            IsGlobalSettings = false
+        }).ToList();
     }
 
-    // Custom comparer for (path, location) tuples
-    private class PathLocationComparer : IEqualityComparer<(string path, WidgetLocation? location)>
-    {
-        public bool Equals((string path, WidgetLocation? location) x, (string path, WidgetLocation? location) y)
-        {
-            return string.Equals(x.path, y.path, StringComparison.OrdinalIgnoreCase)
-                && x.location == y.location;
-        }
-
-        public int GetHashCode((string path, WidgetLocation? location) obj)
-        {
-            return HashCode.Combine(
-                obj.path.ToLowerInvariant(),
-                obj.location
-            );
-        }
-    }
-
-    private static bool IsExecutable(string path)
-    {
-        try
-        {
-            var file = new FileInfo(path);
-            if (!file.Exists || (file.Attributes & FileAttributes.Directory) != 0)
-                return false;
-
-            if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-            {
-                return (file.UnixFileMode & UnixFileMode.UserExecute) != 0;
-            }
-
-            // Windows: check extension
-            var ext = Path.GetExtension(path).ToLowerInvariant();
-            return ext is ".sh" or ".bash" or ".exe" or ".cmd" or ".bat";
-        }
-        catch
-        {
-            return false;
-        }
-    }
 
     /// <summary>
     /// Applies syntax highlighting to file lines with line numbers.

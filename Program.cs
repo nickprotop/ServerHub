@@ -723,7 +723,7 @@ class Program
 
             foreach (var file in Directory.GetFiles(searchPath))
             {
-                if (IsExecutable(file) && !configuredPaths.Contains(Path.GetFullPath(file)))
+                if (WidgetConfigurationHelper.IsExecutable(file) && !configuredPaths.Contains(Path.GetFullPath(file)))
                 {
                     unconfigured.Add(Path.GetFileName(file));
                 }
@@ -1638,21 +1638,12 @@ Select a disabled widget and check 'Enabled' to show it on the dashboard.";
         // Load or create config
         var configManager = new ConfigManager();
         ServerHubConfig? config = null;
-        var configuredPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         if (File.Exists(configPath))
         {
             try
             {
                 config = configManager.LoadConfig(configPath);
-                foreach (var widget in config.Widgets.Values)
-                {
-                    var resolved = WidgetPaths.ResolveWidgetPath(widget.Path, widget.Location);
-                    if (resolved != null)
-                    {
-                        configuredPaths.Add(Path.GetFullPath(resolved));
-                    }
-                }
             }
             catch (Exception ex)
             {
@@ -1661,46 +1652,43 @@ Select a disabled widget and check 'Enabled' to show it on the dashboard.";
             }
         }
 
-        // Find all executables in custom widgets directory
-        var files = Directory
-            .GetFiles(customWidgetsPath)
-            .Where(f => IsExecutable(f) && !configuredPaths.Contains(Path.GetFullPath(f)))
-            .ToList();
+        // Discover unconfigured widgets
+        var discoveredWidgets = WidgetConfigurationHelper.DiscoverUnconfiguredWidgets(customWidgetsPath, config);
 
-        if (files.Count == 0)
+        if (discoveredWidgets.Count == 0)
         {
             Console.WriteLine("No unconfigured widgets found.");
             return Task.FromResult(0);
         }
 
-        Console.WriteLine($"Found {files.Count} unconfigured widget(s):\n");
+        Console.WriteLine($"Found {discoveredWidgets.Count} unconfigured widget(s):\n");
 
         bool configModified = false;
         int addedCount = 0;
 
-        foreach (var file in files)
+        foreach (var widget in discoveredWidgets)
         {
-            var filename = Path.GetFileName(file);
-            var fileInfo = new FileInfo(file);
-            var checksum = ScriptValidator.CalculateChecksum(file);
+            var filename = widget.RelativePath;
+            var fileInfo = new FileInfo(widget.FullPath!);
+            var checksum = widget.Config.Sha256!;
 
             Console.WriteLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
             Console.WriteLine($"Widget: {filename}");
-            Console.WriteLine($"Path:   {file}");
+            Console.WriteLine($"Path:   {widget.FullPath}");
             Console.WriteLine($"Size:   {fileInfo.Length} bytes");
             Console.WriteLine($"SHA256: {checksum}");
             Console.WriteLine();
 
             // Show preview (first 50 lines for text files)
-            if (IsTextFile(file))
+            if (IsTextFile(widget.FullPath!))
             {
                 Console.WriteLine("Preview:");
-                var lines = File.ReadLines(file).Take(50).ToArray();
+                var lines = File.ReadLines(widget.FullPath!).Take(50).ToArray();
                 for (int i = 0; i < lines.Length; i++)
                 {
                     Console.WriteLine($"    {i + 1, 3}  {lines[i]}");
                 }
-                if (File.ReadLines(file).Count() > 50)
+                if (File.ReadLines(widget.FullPath!).Count() > 50)
                     Console.WriteLine("    ... (truncated)");
             }
             else
@@ -1724,7 +1712,7 @@ Select a disabled widget and check 'Enabled' to show it on the dashboard.";
                     };
                 }
 
-                var id = Path.GetFileNameWithoutExtension(file);
+                var id = Path.GetFileNameWithoutExtension(widget.FullPath!);
 
                 // Ensure unique ID
                 var baseId = id;
@@ -1734,19 +1722,8 @@ Select a disabled widget and check 'Enabled' to show it on the dashboard.";
                     id = $"{baseId}_{suffix++}";
                 }
 
-                // Add to config
-                config.Widgets[id] = new WidgetConfig
-                {
-                    Path = filename,
-                    Sha256 = checksum,
-                    Refresh = 5
-                };
-
-                // Add to layout order if it exists
-                if (config.Layout?.Order != null && !config.Layout.Order.Contains(id))
-                {
-                    config.Layout.Order.Add(id);
-                }
+                // Add to config using helper
+                WidgetConfigurationHelper.AddWidget(config, id, widget.Config, addToLayout: true);
 
                 AnsiConsole.MarkupLine($"[green]Added '{id}' to config[/]");
                 configModified = true;
@@ -1825,18 +1802,15 @@ Select a disabled widget and check 'Enabled' to show it on the dashboard.";
         {
             foreach (var file in Directory.GetFiles(userCustomDir).OrderBy(f => f))
             {
-                if (IsExecutable(file))
+                if (WidgetConfigurationHelper.IsExecutable(file))
                 {
                     var filename = Path.GetFileName(file);
                     var id = GenerateUniqueId(Path.GetFileNameWithoutExtension(filename), config.Widgets);
-                    config.Widgets[id] = new WidgetConfig
-                    {
-                        Path = filename,
-                        Location = WidgetLocation.Custom,
-                        Sha256 = null,  // SECURITY: No checksum - requires --dev-mode or --discover
-                        Refresh = 5
-                    };
-                    config.Layout?.Order?.Add(id);
+                    var widgetConfig = WidgetConfigurationHelper.CreateWidgetConfig(
+                        filename,
+                        WidgetLocation.Custom,
+                        includeChecksum: false);  // SECURITY: No checksum - requires --dev-mode or --discover
+                    WidgetConfigurationHelper.AddWidget(config, id, widgetConfig, addToLayout: true);
                     customCount++;
                 }
             }
@@ -1847,18 +1821,15 @@ Select a disabled widget and check 'Enabled' to show it on the dashboard.";
         {
             foreach (var file in Directory.GetFiles(customPath).OrderBy(f => f))
             {
-                if (IsExecutable(file))
+                if (WidgetConfigurationHelper.IsExecutable(file))
                 {
                     var filename = Path.GetFileName(file);
                     var id = GenerateUniqueId(Path.GetFileNameWithoutExtension(filename), config.Widgets);
-                    config.Widgets[id] = new WidgetConfig
-                    {
-                        Path = filename,
-                        Location = WidgetLocation.Custom,
-                        Sha256 = null,  // SECURITY: No checksum - requires --dev-mode or --discover
-                        Refresh = 5
-                    };
-                    config.Layout?.Order?.Add(id);
+                    var widgetConfig = WidgetConfigurationHelper.CreateWidgetConfig(
+                        filename,
+                        WidgetLocation.Custom,
+                        includeChecksum: false);  // SECURITY: No checksum - requires --dev-mode or --discover
+                    WidgetConfigurationHelper.AddWidget(config, id, widgetConfig, addToLayout: true);
                     customCount++;
                 }
             }
@@ -2010,32 +1981,6 @@ Select a disabled widget and check 'Enabled' to show it on the dashboard.";
         return Task.FromResult(failed > 0 ? 1 : 0);
     }
 
-    private static bool IsExecutable(string path)
-    {
-#if WINDOWS
-        var ext = Path.GetExtension(path).ToLowerInvariant();
-        return ext is ".exe" or ".cmd" or ".bat" or ".sh";
-#else
-        try
-        {
-            var file = new FileInfo(path);
-            if (!file.Exists || (file.Attributes & FileAttributes.Directory) != 0)
-                return false;
-
-            // Check if file has execute permission
-            if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-            {
-                return (file.UnixFileMode & UnixFileMode.UserExecute) != 0;
-            }
-
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-#endif
-    }
 
     private static bool IsTextFile(string path)
     {
