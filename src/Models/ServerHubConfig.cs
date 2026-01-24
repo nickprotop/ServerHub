@@ -119,6 +119,13 @@ public class WidgetConfig
     /// </summary>
     [YamlMember(Alias = "column_span")]
     public int? ColumnSpan { get; set; }
+
+    /// <summary>
+    /// Whether this widget is enabled and should be displayed/refreshed
+    /// Default: true (for backward compatibility)
+    /// </summary>
+    [YamlMember(Alias = "enabled", DefaultValuesHandling = DefaultValuesHandling.OmitDefaults)]
+    public bool Enabled { get; set; } = true;
 }
 
 /// <summary>
