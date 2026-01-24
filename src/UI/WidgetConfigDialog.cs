@@ -705,6 +705,49 @@ public static class WidgetConfigDialog
                     _detailPanel.AddControl(updateChecksumButton);
                 }
 
+                // Show script preview for widgets needing review
+                if (_selectedEntry.FullPath != null && File.Exists(_selectedEntry.FullPath))
+                {
+                    try
+                    {
+                        var previewHeader = Controls.Markup()
+                            .AddLine("")
+                            .AddLine("[grey70]Script Preview (first 20 lines):[/]")
+                            .WithMargin(1, 0, 1, 0)
+                            .Build();
+                        _detailPanel.AddControl(previewHeader);
+
+                        var lines = File.ReadLines(_selectedEntry.FullPath).Take(20);
+                        var highlightedLines = ApplySyntaxHighlighting(lines);
+
+                        var previewBuilder = Controls.Markup()
+                            .WithMargin(1, 0, 1, 0)
+                            .WithBackgroundColor(Color.Grey19);
+
+                        foreach (var line in highlightedLines)
+                        {
+                            previewBuilder.AddLine(line);
+                        }
+
+                        _detailPanel.AddControl(previewBuilder.Build());
+
+                        // View Full File button
+                        var viewFullFileButton = Controls.Button(" View Full File ")
+                            .WithMargin(1, 1, 1, 0)
+                            .OnClick((s, e) => ShowFullFileViewer(_selectedEntry.FullPath!))
+                            .Build();
+                        _detailPanel.AddControl(viewFullFileButton);
+                    }
+                    catch (Exception ex)
+                    {
+                        var error = Controls.Markup()
+                            .AddLine($"[red]Error reading script: {ex.Message}[/]")
+                            .WithMargin(1, 0, 1, 0)
+                            .Build();
+                        _detailPanel.AddControl(error);
+                    }
+                }
+
                 _detailPanel.AddControl(Controls.RuleBuilder()
                     .WithColor(Color.Grey23)
                     .WithMargin(1, 1, 1, 0)
@@ -719,6 +762,21 @@ public static class WidgetConfigDialog
                     .WithMargin(1, 0, 1, 0)
                     .Build();
                 _detailPanel.AddControl(checksumInfo);
+
+                // View Full File button for verified widgets (optional viewing)
+                if (_selectedEntry.FullPath != null && File.Exists(_selectedEntry.FullPath))
+                {
+                    var viewFullFileButton = Controls.Button(" View Full File ")
+                        .WithMargin(1, 1, 1, 0)
+                        .OnClick((s, e) => ShowFullFileViewer(_selectedEntry.FullPath!))
+                        .Build();
+                    _detailPanel.AddControl(viewFullFileButton);
+                }
+
+                _detailPanel.AddControl(Controls.RuleBuilder()
+                    .WithColor(Color.Grey23)
+                    .WithMargin(1, 1, 1, 0)
+                    .Build());
             }
         }
 
