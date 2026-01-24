@@ -64,17 +64,52 @@ public static class WidgetExpansionDialog
         // Get refresh interval from service
         int refreshInterval = refreshService.GetRefreshInterval(widgetId);
 
-        // Header section (AgentStudio pattern) - show loading initially
+        // Header section with refresh button (hybrid approach)
         var headerLine2 = $"[grey50]Refresh: {refreshInterval}s  •  Loading extended data...[/]";
 
+        // HEADER GRID: Text (left) + Button (right)
+        var headerGrid = Controls.HorizontalGrid()
+            .WithName("header_grid")
+            .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Stretch)
+            .WithMargin(1, 0, 1, 0)
+            .Build();
+
+        // LEFT COLUMN - Title and metadata (fills available space)
+        var headerTextColumn = new ColumnContainer(headerGrid)
+        {
+            VerticalAlignment = SharpConsoleUI.Layout.VerticalAlignment.Top
+        };
+
         var headerControl = Controls.Markup()
-            .WithName("modal_header")
+            .WithName("modal_header_text")
             .AddLine($"[cyan1 bold]{widgetData.Title}[/]")
             .AddLine(headerLine2)
             .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Left)
-            .WithMargin(1, 0, 1, 0)
             .Build();
-        modal.AddControl(headerControl);
+
+        headerTextColumn.AddContent(headerControl);
+        headerGrid.AddColumn(headerTextColumn);
+
+        // RIGHT COLUMN - Refresh button (fixed width, hidden on narrow terminals)
+        var headerButtonColumn = new ColumnContainer(headerGrid)
+        {
+            Width = 18,  // Fixed width to accommodate focus indicators: "> ↻  Refresh <"
+            VerticalAlignment = SharpConsoleUI.Layout.VerticalAlignment.Top,
+            Visible = modalWidth >= 60  // Hide on narrow terminals
+        };
+
+        ButtonControl? refreshButton = null;
+
+        // Create refresh button (click handler will be wired up after state initialization)
+        if (headerButtonColumn.Visible)
+        {
+            refreshButton = Controls.Button(" ↻  Refresh ")
+                .Build();
+            headerButtonColumn.AddContent(refreshButton);
+        }
+
+        headerGrid.AddColumn(headerButtonColumn);
+        modal.AddControl(headerGrid);
 
         // Separator rule
         modal.AddControl(Controls.RuleBuilder()
@@ -202,10 +237,10 @@ public static class WidgetExpansionDialog
             .StickyBottom()
             .Build());
 
-        // Footer with instructions (AgentStudio pattern)
+        // Footer with instructions (AgentStudio pattern) - include F5 refresh hint
         var footerInstructions = widgetData.HasActions
-            ? "[grey70]↑↓/Click: Select  •  Enter/Dbl-click: Execute  •  Esc: Close[/]"
-            : "[grey70]Escape/Enter: Close  •  Arrows/Mouse Wheel: Scroll[/]";
+            ? "[grey70]↑↓/Click: Select  •  Enter/Dbl-click: Execute  •  F5/↻: Refresh  •  Esc: Close[/]"
+            : "[grey70]↑↓/Mouse Wheel: Scroll  •  F5/↻: Refresh  •  Esc/Enter: Close[/]";
 
         modal.AddControl(Controls.Markup()
             .AddLine(footerInstructions)
@@ -214,10 +249,10 @@ public static class WidgetExpansionDialog
             .StickyBottom()
             .Build());
 
-        // State for refresh loop
+        // State for refresh loop - use wrapper class for shared state
         var cts = new CancellationTokenSource();
         var currentData = widgetData;
-        var isRefreshing = false;
+        var refreshState = new RefreshState();
 
         // Create update context to share state with refresh loop
         var updateContext = new ModalUpdateContext
@@ -231,12 +266,32 @@ public static class WidgetExpansionDialog
             ActionsSeparator = actionsSeparator,
             ActionsColumn = actionsColumn,
             ActionsHeader = actionsHeader,
+            RefreshButton = refreshButton,
             RefreshInterval = refreshInterval,
             Renderer = renderer,
             CurrentTitle = widgetData.Title,
             LastUpdated = widgetData.Timestamp,
             ActionCount = widgetData.Actions.Count
         };
+
+        // Wire up refresh button click handler now that context exists
+        if (refreshButton != null)
+        {
+            refreshButton.Click += (s, e) =>
+            {
+                if (!refreshState.IsRefreshing)
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        refreshState.IsRefreshing = true;
+                        var data = await refreshService.RefreshAsync(widgetId, extended: true);
+                        currentData = data;
+                        UpdateModalContent(updateContext, data);
+                        refreshState.IsRefreshing = false;
+                    });
+                }
+            };
+        }
 
         // Handle action activation (Enter or double-click)
         actionsList.ItemActivated += (s, item) =>
@@ -250,11 +305,11 @@ public static class WidgetExpansionDialog
                     onRefreshRequested: async () =>
                     {
                         // Trigger immediate refresh with extended data
-                        isRefreshing = true;
+                        refreshState.IsRefreshing = true;
                         var data = await refreshService.RefreshAsync(widgetId, extended: true);
                         currentData = data;
                         UpdateModalContent(updateContext, data);
-                        isRefreshing = false;
+                        refreshState.IsRefreshing = false;
                     },
                     onMainWidgetRefresh: onMainWidgetRefresh);
             }
@@ -274,6 +329,22 @@ public static class WidgetExpansionDialog
                 modal.Close();
                 e.Handled = true;
             }
+            // F5: Force refresh (hybrid approach - works with button)
+            else if (e.KeyInfo.Key == ConsoleKey.F5)
+            {
+                if (!refreshState.IsRefreshing)
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        refreshState.IsRefreshing = true;
+                        var data = await refreshService.RefreshAsync(widgetId, extended: true);
+                        currentData = data;
+                        UpdateModalContent(updateContext, data);
+                        refreshState.IsRefreshing = false;
+                    });
+                }
+                e.Handled = true;
+            }
             // Quick action execution via number keys (1-9)
             else if (currentData.HasActions && e.KeyInfo.Key >= ConsoleKey.D1 && e.KeyInfo.Key <= ConsoleKey.D9)
             {
@@ -287,11 +358,11 @@ public static class WidgetExpansionDialog
                         modal,
                         onRefreshRequested: async () =>
                         {
-                            isRefreshing = true;
+                            refreshState.IsRefreshing = true;
                             var data = await refreshService.RefreshAsync(widgetId, extended: true);
                             currentData = data;
                             UpdateModalContent(updateContext, data);
-                            isRefreshing = false;
+                            refreshState.IsRefreshing = false;
                         },
                         onMainWidgetRefresh: onMainWidgetRefresh);
                     e.Handled = true;
@@ -333,8 +404,7 @@ public static class WidgetExpansionDialog
             refreshService,
             updateContext,
             refreshInterval,
-            () => isRefreshing,
-            (refreshing) => isRefreshing = refreshing,
+            refreshState,
             (data) => currentData = data,
             cts.Token);
 
@@ -358,6 +428,7 @@ public static class WidgetExpansionDialog
         public SeparatorControl? ActionsSeparator { get; init; }
         public ColumnContainer? ActionsColumn { get; init; }
         public MarkupControl? ActionsHeader { get; init; }
+        public ButtonControl? RefreshButton { get; init; }
         public int RefreshInterval { get; init; }
         public WidgetRenderer? Renderer { get; init; }
         public string CurrentTitle { get; set; } = "";
@@ -374,14 +445,12 @@ public static class WidgetExpansionDialog
         WidgetRefreshService refreshService,
         ModalUpdateContext context,
         int refreshInterval,
-        Func<bool> getIsRefreshing,
-        Action<bool> setIsRefreshing,
+        RefreshState refreshState,
         Action<WidgetData> setCurrentData,
         CancellationToken ct)
     {
         int spinnerFrame = 0;
         bool firstLoad = true;
-        bool isCurrentlyRefreshing = false;
 
         // Start spinner animation task that runs continuously
         var spinnerTask = Task.Run(async () =>
@@ -390,9 +459,13 @@ public static class WidgetExpansionDialog
             {
                 try
                 {
-                    if (isCurrentlyRefreshing)
+                    if (refreshState.IsRefreshing)
                     {
                         UpdateHeaderSpinner(context, spinnerFrame, true);
+                    }
+                    else
+                    {
+                        UpdateHeaderSpinner(context, spinnerFrame, false);
                     }
                     spinnerFrame++;
                     await Task.Delay(250, ct);
@@ -409,16 +482,14 @@ public static class WidgetExpansionDialog
             while (!ct.IsCancellationRequested)
             {
                 // Mark as refreshing
-                isCurrentlyRefreshing = true;
-                setIsRefreshing(true);
+                refreshState.IsRefreshing = true;
 
                 // Fetch extended data (spinner animates concurrently)
                 var newData = await refreshService.RefreshAsync(widgetId, extended: true);
                 setCurrentData(newData);
 
                 // Mark as not refreshing
-                isCurrentlyRefreshing = false;
-                setIsRefreshing(false);
+                refreshState.IsRefreshing = false;
 
                 // Update modal content
                 UpdateModalContent(context, newData);
@@ -477,6 +548,13 @@ public static class WidgetExpansionDialog
             title,
             headerLine2
         });
+
+        // Update refresh button state
+        if (context.RefreshButton != null)
+        {
+            context.RefreshButton.IsEnabled = !showSpinner;
+            context.RefreshButton.Text = showSpinner ? " Wait " : " ↻  Refresh ";
+        }
     }
 
     /// <summary>
@@ -498,6 +576,13 @@ public static class WidgetExpansionDialog
             title,
             headerLine2
         });
+
+        // Update refresh button state
+        if (context.RefreshButton != null)
+        {
+            context.RefreshButton.IsEnabled = !isRefreshing;
+            context.RefreshButton.Text = isRefreshing ? " Wait " : " ↻  Refresh ";
+        }
     }
 
     /// <summary>
@@ -659,5 +744,13 @@ public static class WidgetExpansionDialog
 
                 // User cancelled, do nothing
             });
+    }
+
+    /// <summary>
+    /// Shared state wrapper for refresh status - allows passing by reference
+    /// </summary>
+    private class RefreshState
+    {
+        public bool IsRefreshing { get; set; }
     }
 }
