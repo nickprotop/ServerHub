@@ -2,10 +2,10 @@
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
 using ServerHub.Config;
+using ServerHub.Exceptions;
 using ServerHub.Models;
 using ServerHub.Services;
 using ServerHub.Utils;
-using ServerHub.Exceptions;
 using SharpConsoleUI;
 using SharpConsoleUI.Builders;
 using SharpConsoleUI.Controls;
@@ -77,7 +77,8 @@ public static class WidgetConfigDialog
         ConsoleWindowSystem windowSystem,
         string configPath,
         ServerHubConfig currentConfig,
-        Action? onConfigChanged = null)
+        Action? onConfigChanged = null
+    )
     {
         _windowSystem = windowSystem;
         _configPath = configPath;
@@ -104,10 +105,10 @@ public static class WidgetConfigDialog
             .AsModal()
             .WithBorderStyle(BorderStyle.Single)
             .WithBorderColor(Color.Grey35)
-            .Resizable(false)
-            .Movable(false)
+            .Resizable(true)
+            .Movable(true)
             .Minimizable(false)
-            .Maximizable(false)
+            .Maximizable(true)
             .WithColors(Color.Grey15, Color.Grey93)
             .Build();
 
@@ -142,7 +143,8 @@ public static class WidgetConfigDialog
     private static void BuildUI(Window dialog, int width, int height, Action? onConfigChanged)
     {
         // Main horizontal grid: left (list) and right (details)
-        var mainGrid = Controls.HorizontalGrid()
+        var mainGrid = Controls
+            .HorizontalGrid()
             .WithName("main_grid")
             .WithVerticalAlignment(SharpConsoleUI.Layout.VerticalAlignment.Fill)
             .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Stretch)
@@ -152,7 +154,7 @@ public static class WidgetConfigDialog
         var listColumn = new ColumnContainer(mainGrid)
         {
             Width = (int)(width * 0.35),
-            VerticalAlignment = SharpConsoleUI.Layout.VerticalAlignment.Fill
+            VerticalAlignment = SharpConsoleUI.Layout.VerticalAlignment.Fill,
         };
 
         BuildWidgetList(listColumn);
@@ -162,12 +164,12 @@ public static class WidgetConfigDialog
         var separatorColumn = new ColumnContainer(mainGrid)
         {
             Width = 1,
-            VerticalAlignment = SharpConsoleUI.Layout.VerticalAlignment.Fill
+            VerticalAlignment = SharpConsoleUI.Layout.VerticalAlignment.Fill,
         };
         var separator = new SeparatorControl
         {
             ForegroundColor = Color.Grey35,
-            VerticalAlignment = SharpConsoleUI.Layout.VerticalAlignment.Fill
+            VerticalAlignment = SharpConsoleUI.Layout.VerticalAlignment.Fill,
         };
         separatorColumn.AddContent(separator);
         mainGrid.AddColumn(separatorColumn);
@@ -175,7 +177,7 @@ public static class WidgetConfigDialog
         // RIGHT COLUMN - Details Panel
         var detailColumn = new ColumnContainer(mainGrid)
         {
-            VerticalAlignment = SharpConsoleUI.Layout.VerticalAlignment.Fill
+            VerticalAlignment = SharpConsoleUI.Layout.VerticalAlignment.Fill,
         };
 
         BuildDetailPanel(detailColumn);
@@ -184,17 +186,16 @@ public static class WidgetConfigDialog
         dialog.AddControl(mainGrid);
 
         // Footer separator
-        dialog.AddControl(Controls.RuleBuilder()
-            .WithColor(Color.Grey23)
-            .StickyBottom()
-            .Build());
+        dialog.AddControl(Controls.RuleBuilder().WithColor(Color.Grey23).StickyBottom().Build());
 
         // Footer with buttons
-        var saveButton = Controls.Button(" Save ")
+        var saveButton = Controls
+            .Button(" Save ")
             .OnClick((s, e) => SaveConfig(onConfigChanged))
             .Build();
 
-        var cancelButton = Controls.Button(" Cancel ")
+        var cancelButton = Controls
+            .Button(" Cancel ")
             .WithMargin(2, 0, 0, 0)
             .OnClick((s, e) => HandleClose(onConfigChanged))
             .Build();
@@ -205,16 +206,20 @@ public static class WidgetConfigDialog
         dialog.AddControl(footerGrid);
 
         // Footer instructions
-        dialog.AddControl(Controls.Markup()
-            .AddLine("[grey70]Tab: Switch panels | ↑↓: Navigate | F2: Save | Esc: Close[/]")
-            .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Center)
-            .StickyBottom()
-            .Build());
+        dialog.AddControl(
+            Controls
+                .Markup()
+                .AddLine("[grey70]Tab: Switch panels | ↑↓: Navigate | F2: Save | Esc: Close[/]")
+                .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Center)
+                .StickyBottom()
+                .Build()
+        );
     }
 
     private static void BuildWidgetList(ColumnContainer container)
     {
-        _widgetList = Controls.List()
+        _widgetList = Controls
+            .List()
             .WithName("widget_list")
             .WithTitle("")
             .SimpleMode()
@@ -246,7 +251,8 @@ public static class WidgetConfigDialog
 
     private static void PopulateWidgetList()
     {
-        if (_widgetList == null) return;
+        if (_widgetList == null)
+            return;
 
         _widgetList.ClearItems();
 
@@ -264,7 +270,9 @@ public static class WidgetConfigDialog
         _widgetList.AddItem(new ListItem("[grey35]───────────────────[/]") { IsEnabled = false });
 
         // Missing widgets FIRST (in config but script not found)
-        var missing = _allEntries.Where(e => !e.IsGlobalSettings && e.Status == WidgetConfigStatus.Missing).ToList();
+        var missing = _allEntries
+            .Where(e => !e.IsGlobalSettings && e.Status == WidgetConfigStatus.Missing)
+            .ToList();
         if (missing.Any())
         {
             _widgetList.AddItem(new ListItem("[red bold]⚠ MISSING:[/]") { IsEnabled = false });
@@ -274,7 +282,7 @@ public static class WidgetConfigDialog
                 {
                     WidgetLocation.Bundled => " [grey50](bundled)[/]",
                     WidgetLocation.Custom => " [grey50](custom)[/]",
-                    _ => ""
+                    _ => "",
                 };
                 var item = new ListItem($"[red]✗[/] {entry.Id}{locationHint}") { Tag = entry };
                 _widgetList.AddItem(item);
@@ -282,9 +290,13 @@ public static class WidgetConfigDialog
         }
 
         // Configured widgets (enabled only)
-        var configured = _allEntries.Where(e => !e.IsGlobalSettings
-                                               && e.Status == WidgetConfigStatus.Configured
-                                               && e.Config?.Enabled == true).ToList();
+        var configured = _allEntries
+            .Where(e =>
+                !e.IsGlobalSettings
+                && e.Status == WidgetConfigStatus.Configured
+                && e.Config?.Enabled == true
+            )
+            .ToList();
         if (configured.Any())
         {
             _widgetList.AddItem(new ListItem("[green bold]✓ CONFIGURED:[/]") { IsEnabled = false });
@@ -294,7 +306,7 @@ public static class WidgetConfigDialog
                 {
                     WidgetLocation.Bundled => " [grey50](bundled)[/]",
                     WidgetLocation.Custom => " [grey50](custom)[/]",
-                    _ => ""
+                    _ => "",
                 };
                 var item = new ListItem($"[green]✓[/] {entry.Id}{locationHint}") { Tag = entry };
                 _widgetList.AddItem(item);
@@ -302,9 +314,13 @@ public static class WidgetConfigDialog
         }
 
         // Disabled widgets (configured but disabled)
-        var disabled = _allEntries.Where(e => !e.IsGlobalSettings
-                                             && e.Status == WidgetConfigStatus.Configured
-                                             && e.Config?.Enabled == false).ToList();
+        var disabled = _allEntries
+            .Where(e =>
+                !e.IsGlobalSettings
+                && e.Status == WidgetConfigStatus.Configured
+                && e.Config?.Enabled == false
+            )
+            .ToList();
         if (disabled.Any())
         {
             _widgetList.AddItem(new ListItem("[grey70 bold]○ DISABLED:[/]") { IsEnabled = false });
@@ -314,7 +330,7 @@ public static class WidgetConfigDialog
                 {
                     WidgetLocation.Bundled => " [grey50](bundled)[/]",
                     WidgetLocation.Custom => " [grey50](custom)[/]",
-                    _ => ""
+                    _ => "",
                 };
                 var item = new ListItem($"[grey70]○[/] {entry.Id}{locationHint}") { Tag = entry };
                 _widgetList.AddItem(item);
@@ -322,7 +338,9 @@ public static class WidgetConfigDialog
         }
 
         // Available widgets (scripts not in config)
-        var available = _allEntries.Where(e => !e.IsGlobalSettings && e.Status == WidgetConfigStatus.Available).ToList();
+        var available = _allEntries
+            .Where(e => !e.IsGlobalSettings && e.Status == WidgetConfigStatus.Available)
+            .ToList();
         if (available.Any())
         {
             _widgetList.AddItem(new ListItem("[cyan1 bold]+ AVAILABLE:[/]") { IsEnabled = false });
@@ -352,7 +370,8 @@ public static class WidgetConfigDialog
     private static void BuildDetailPanel(ColumnContainer container)
     {
         // Detail header
-        _detailHeader = Controls.Markup()
+        _detailHeader = Controls
+            .Markup()
             .WithName("detail_header")
             .AddLine("[cyan1 bold]Widget Details[/]")
             .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Left)
@@ -361,12 +380,11 @@ public static class WidgetConfigDialog
         container.AddContent(_detailHeader);
 
         // Separator
-        container.AddContent(Controls.RuleBuilder()
-            .WithColor(Color.Grey23)
-            .Build());
+        container.AddContent(Controls.RuleBuilder().WithColor(Color.Grey23).Build());
 
         // Scrollable detail panel
-        _detailPanel = Controls.ScrollablePanel()
+        _detailPanel = Controls
+            .ScrollablePanel()
             .WithName("detail_scroll")
             .WithVerticalScroll(ScrollMode.Scroll)
             .WithScrollbar(true)
@@ -383,16 +401,16 @@ public static class WidgetConfigDialog
         container.AddContent(_detailPanel);
 
         // Action buttons row
-        _upButton = Controls.Button(" ▲ Up ")
-            .OnClick((s, e) => MoveWidgetUp())
-            .Build();
+        _upButton = Controls.Button(" ▲ Up ").OnClick((s, e) => MoveWidgetUp()).Build();
 
-        _downButton = Controls.Button(" ▼ Down ")
+        _downButton = Controls
+            .Button(" ▼ Down ")
             .WithMargin(1, 0, 0, 0)
             .OnClick((s, e) => MoveWidgetDown())
             .Build();
 
-        _addRemoveButton = Controls.Button(" Remove ")
+        _addRemoveButton = Controls
+            .Button(" Remove ")
             .WithMargin(2, 0, 0, 0)
             .OnClick((s, e) => HandleAddRemove())
             .Build();
@@ -404,7 +422,8 @@ public static class WidgetConfigDialog
 
     private static void CreateDetailControls()
     {
-        if (_detailPanel == null) return;
+        if (_detailPanel == null)
+            return;
 
         // Widget-specific settings
         _refreshInput = new PromptControl { Prompt = "Refresh (sec):", InputWidth = 8 };
@@ -427,25 +446,41 @@ public static class WidgetConfigDialog
         _maxLinesInput.InputChanged += (s, text) => OnSettingChanged();
 
         _locationDropdown = new DropdownControl("Location:");
-        _locationDropdown.AddItem("Auto (search order)");     // Index 0 = Auto
-        _locationDropdown.AddItem("Custom widgets");          // Index 1 = Custom
-        _locationDropdown.AddItem("Bundled widgets");         // Index 2 = Bundled
+        _locationDropdown.AddItem("Auto (search order)"); // Index 0 = Auto
+        _locationDropdown.AddItem("Custom widgets"); // Index 1 = Custom
+        _locationDropdown.AddItem("Bundled widgets"); // Index 2 = Bundled
         _locationDropdown.SelectedIndexChanged += (s, idx) => OnSettingChanged();
 
         // Global settings
-        _defaultRefreshInput = new PromptControl { Prompt = "Default Refresh (sec):", InputWidth = 8 };
+        _defaultRefreshInput = new PromptControl
+        {
+            Prompt = "Default Refresh (sec):",
+            InputWidth = 8,
+        };
         _defaultRefreshInput.InputChanged += (s, text) => OnSettingChanged();
 
-        _globalMaxLinesInput = new PromptControl { Prompt = "Max Lines per Widget:", InputWidth = 8 };
+        _globalMaxLinesInput = new PromptControl
+        {
+            Prompt = "Max Lines per Widget:",
+            InputWidth = 8,
+        };
         _globalMaxLinesInput.InputChanged += (s, text) => OnSettingChanged();
 
         _showTruncationCheckbox = new CheckboxControl("Show truncation indicator", true);
         _showTruncationCheckbox.CheckedChanged += (s, isChecked) => OnSettingChanged();
 
-        _breakpointDoubleInput = new PromptControl { Prompt = "2 Columns (chars):", InputWidth = 8 };
+        _breakpointDoubleInput = new PromptControl
+        {
+            Prompt = "2 Columns (chars):",
+            InputWidth = 8,
+        };
         _breakpointDoubleInput.InputChanged += (s, text) => OnSettingChanged();
 
-        _breakpointTripleInput = new PromptControl { Prompt = "3 Columns (chars):", InputWidth = 8 };
+        _breakpointTripleInput = new PromptControl
+        {
+            Prompt = "3 Columns (chars):",
+            InputWidth = 8,
+        };
         _breakpointTripleInput.InputChanged += (s, text) => OnSettingChanged();
 
         _breakpointQuadInput = new PromptControl { Prompt = "4 Columns (chars):", InputWidth = 8 };
@@ -454,7 +489,8 @@ public static class WidgetConfigDialog
 
     private static void ClearDetailPanel()
     {
-        if (_detailPanel == null) return;
+        if (_detailPanel == null)
+            return;
 
         // Remove all children from the scrollable panel
         foreach (var child in _detailPanel.Children.ToList())
@@ -465,7 +501,8 @@ public static class WidgetConfigDialog
 
     private static void UpdateDetailPanel()
     {
-        if (_detailPanel == null || _selectedEntry == null || _workingConfig == null) return;
+        if (_detailPanel == null || _selectedEntry == null || _workingConfig == null)
+            return;
 
         // Clear existing controls
         ClearDetailPanel();
@@ -493,9 +530,11 @@ public static class WidgetConfigDialog
 
     private static void ShowGlobalSettings()
     {
-        if (_detailPanel == null || _workingConfig == null) return;
+        if (_detailPanel == null || _workingConfig == null)
+            return;
 
-        var header = Controls.Markup()
+        var header = Controls
+            .Markup()
             .AddLine("[cyan1 bold]Global Settings[/]")
             .AddLine("")
             .WithMargin(1, 0, 1, 0)
@@ -518,7 +557,8 @@ public static class WidgetConfigDialog
         _detailPanel.AddControl(_showTruncationCheckbox);
 
         // Breakpoints section
-        var breakpointHeader = Controls.Markup()
+        var breakpointHeader = Controls
+            .Markup()
             .AddLine("")
             .AddLine("[grey70]Responsive Breakpoints (terminal width):[/]")
             .WithMargin(1, 1, 1, 0)
@@ -542,23 +582,27 @@ public static class WidgetConfigDialog
 
     private static void ShowConfiguredWidgetSettings()
     {
-        if (_detailPanel == null || _selectedEntry == null || _workingConfig == null) return;
+        if (_detailPanel == null || _selectedEntry == null || _workingConfig == null)
+            return;
 
         var config = _selectedEntry.Config;
-        if (config == null) return;
+        if (config == null)
+            return;
 
         // Determine actual widget type for checksum validation
         // For Auto location, resolve to find out if it's actually bundled
         var (resolvedPath, actualLocation) = WidgetPaths.ResolveWidgetPathWithLocation(
             config.Path,
-            config.Location);
+            config.Location
+        );
 
         // If explicit location, use that; if Auto, use actual resolved location
         var effectiveLocation = config.Location ?? actualLocation;
         bool isBundled = effectiveLocation == WidgetLocation.Bundled;
 
         // Build header with status
-        var headerBuilder = Controls.Markup()
+        var headerBuilder = Controls
+            .Markup()
             .AddLine($"[cyan1 bold]{_selectedEntry.Id}[/]")
             .AddLine($"[grey70]Path: {config.Path}[/]");
 
@@ -567,7 +611,7 @@ public static class WidgetConfigDialog
         {
             WidgetLocation.Bundled => "bundled",
             WidgetLocation.Custom => "custom",
-            _ => "auto"
+            _ => "auto",
         };
 
         if (config.Location == null && actualLocation != null)
@@ -576,9 +620,11 @@ public static class WidgetConfigDialog
             {
                 WidgetLocation.Bundled => "bundled",
                 WidgetLocation.Custom => "custom",
-                _ => "unknown"
+                _ => "unknown",
             };
-            headerBuilder.AddLine($"[grey70]Location: {configuredLocationText} (resolved to {actualLocationText})[/]");
+            headerBuilder.AddLine(
+                $"[grey70]Location: {configuredLocationText} (resolved to {actualLocationText})[/]"
+            );
         }
         else
         {
@@ -609,7 +655,11 @@ public static class WidgetConfigDialog
                 actualChecksum = ScriptValidator.CalculateChecksum(_selectedEntry.FullPath);
                 if (!string.IsNullOrEmpty(expectedChecksum))
                 {
-                    checksumMismatch = !string.Equals(actualChecksum, expectedChecksum, StringComparison.OrdinalIgnoreCase);
+                    checksumMismatch = !string.Equals(
+                        actualChecksum,
+                        expectedChecksum,
+                        StringComparison.OrdinalIgnoreCase
+                    );
                 }
             }
             catch
@@ -657,11 +707,14 @@ public static class WidgetConfigDialog
             if (checksumMismatch)
             {
                 // Bundled widget tampered - CRITICAL ERROR
-                var errorBuilder = Controls.Markup()
+                var errorBuilder = Controls
+                    .Markup()
                     .WithMargin(1, 0, 1, 0)
                     .WithBackgroundColor(Color.Maroon);
 
-                errorBuilder.AddLine("[white bold]⛔ SECURITY ALERT: Bundled widget has been modified![/]");
+                errorBuilder.AddLine(
+                    "[white bold]⛔ SECURITY ALERT: Bundled widget has been modified![/]"
+                );
                 errorBuilder.AddLine("");
                 errorBuilder.AddLine($"[white]Expected: {expectedChecksum}[/]");
                 errorBuilder.AddLine($"[white]Actual:   {actualChecksum}[/]");
@@ -671,15 +724,15 @@ public static class WidgetConfigDialog
 
                 _detailPanel.AddControl(errorBuilder.Build());
 
-                _detailPanel.AddControl(Controls.RuleBuilder()
-                    .WithColor(Color.Grey23)
-                    .WithMargin(1, 1, 1, 0)
-                    .Build());
+                _detailPanel.AddControl(
+                    Controls.RuleBuilder().WithColor(Color.Grey23).WithMargin(1, 1, 1, 0).Build()
+                );
             }
             else
             {
                 // Bundled widget verified - show hardcoded checksum
-                var infoBuilder = Controls.Markup()
+                var infoBuilder = Controls
+                    .Markup()
                     .AddLine($"[grey70]Hardcoded SHA256: {expectedChecksum}[/]")
                     .AddLine($"[cyan1]Source: Verified at build time[/]")
                     .WithMargin(1, 0, 1, 0)
@@ -695,13 +748,16 @@ public static class WidgetConfigDialog
             if (checksumMismatch || checksumMissing)
             {
                 // Custom widget with checksum issue
-                var warningBuilder = Controls.Markup()
+                var warningBuilder = Controls
+                    .Markup()
                     .WithMargin(1, 0, 1, 0)
                     .WithBackgroundColor(Color.Grey19);
 
                 if (checksumMismatch)
                 {
-                    warningBuilder.AddLine("[yellow]⚠ Script has been modified since last trust![/]");
+                    warningBuilder.AddLine(
+                        "[yellow]⚠ Script has been modified since last trust![/]"
+                    );
                     warningBuilder.AddLine($"[grey70]Stored:  {expectedChecksum}[/]");
                     warningBuilder.AddLine($"[grey70]Current: {actualChecksum}[/]");
                     warningBuilder.AddLine("");
@@ -715,7 +771,9 @@ public static class WidgetConfigDialog
                         warningBuilder.AddLine($"[grey70]Current: {actualChecksum}[/]");
                     }
                     warningBuilder.AddLine("");
-                    warningBuilder.AddLine("[grey70]Widget will fail validation without checksum.[/]");
+                    warningBuilder.AddLine(
+                        "[grey70]Widget will fail validation without checksum.[/]"
+                    );
                 }
 
                 _detailPanel.AddControl(warningBuilder.Build());
@@ -723,19 +781,22 @@ public static class WidgetConfigDialog
                 // Update checksum button (only for custom widgets with actual file)
                 if (actualChecksum != null)
                 {
-                    var updateChecksumButton = Controls.Button(" Update Checksum ")
+                    var updateChecksumButton = Controls
+                        .Button(" Update Checksum ")
                         .WithMargin(1, 1, 1, 0)
-                        .OnClick((s, e) =>
-                        {
-                            if (actualChecksum != null && config != null)
+                        .OnClick(
+                            (s, e) =>
                             {
-                                config.Sha256 = actualChecksum;
-                                _isDirty = true;
-                                UpdateTitle();
-                                // Refresh to show updated status
-                                UpdateDetailPanel();
+                                if (actualChecksum != null && config != null)
+                                {
+                                    config.Sha256 = actualChecksum;
+                                    _isDirty = true;
+                                    UpdateTitle();
+                                    // Refresh to show updated status
+                                    UpdateDetailPanel();
+                                }
                             }
-                        })
+                        )
                         .Build();
                     _detailPanel.AddControl(updateChecksumButton);
                 }
@@ -745,7 +806,8 @@ public static class WidgetConfigDialog
                 {
                     try
                     {
-                        var previewHeader = Controls.Markup()
+                        var previewHeader = Controls
+                            .Markup()
                             .AddLine("")
                             .AddLine("[grey70]Script Preview (first 20 lines):[/]")
                             .WithMargin(1, 0, 1, 0)
@@ -755,7 +817,8 @@ public static class WidgetConfigDialog
                         var lines = File.ReadLines(_selectedEntry.FullPath).Take(20);
                         var highlightedLines = ApplySyntaxHighlighting(lines);
 
-                        var previewBuilder = Controls.Markup()
+                        var previewBuilder = Controls
+                            .Markup()
                             .WithMargin(1, 0, 1, 0)
                             .WithBackgroundColor(Color.Grey19);
 
@@ -767,7 +830,8 @@ public static class WidgetConfigDialog
                         _detailPanel.AddControl(previewBuilder.Build());
 
                         // View Full File button
-                        var viewFullFileButton = Controls.Button(" View Full File ")
+                        var viewFullFileButton = Controls
+                            .Button(" View Full File ")
                             .WithMargin(1, 1, 1, 0)
                             .OnClick((s, e) => ShowFullFileViewer(_selectedEntry.FullPath!))
                             .Build();
@@ -775,7 +839,8 @@ public static class WidgetConfigDialog
                     }
                     catch (Exception ex)
                     {
-                        var error = Controls.Markup()
+                        var error = Controls
+                            .Markup()
                             .AddLine($"[red]Error reading script: {ex.Message}[/]")
                             .WithMargin(1, 0, 1, 0)
                             .Build();
@@ -783,15 +848,15 @@ public static class WidgetConfigDialog
                     }
                 }
 
-                _detailPanel.AddControl(Controls.RuleBuilder()
-                    .WithColor(Color.Grey23)
-                    .WithMargin(1, 1, 1, 0)
-                    .Build());
+                _detailPanel.AddControl(
+                    Controls.RuleBuilder().WithColor(Color.Grey23).WithMargin(1, 1, 1, 0).Build()
+                );
             }
             else
             {
                 // Custom widget with valid checksum
-                var checksumInfo = Controls.Markup()
+                var checksumInfo = Controls
+                    .Markup()
                     .AddLine($"[grey70]SHA256: {config.Sha256}[/]")
                     .AddLine($"[green]Status: Verified[/]")
                     .WithMargin(1, 0, 1, 0)
@@ -801,17 +866,17 @@ public static class WidgetConfigDialog
                 // View Full File button for verified widgets (optional viewing)
                 if (_selectedEntry.FullPath != null && File.Exists(_selectedEntry.FullPath))
                 {
-                    var viewFullFileButton = Controls.Button(" View Full File ")
+                    var viewFullFileButton = Controls
+                        .Button(" View Full File ")
                         .WithMargin(1, 1, 1, 0)
                         .OnClick((s, e) => ShowFullFileViewer(_selectedEntry.FullPath!))
                         .Build();
                     _detailPanel.AddControl(viewFullFileButton);
                 }
 
-                _detailPanel.AddControl(Controls.RuleBuilder()
-                    .WithColor(Color.Grey23)
-                    .WithMargin(1, 1, 1, 0)
-                    .Build());
+                _detailPanel.AddControl(
+                    Controls.RuleBuilder().WithColor(Color.Grey23).WithMargin(1, 1, 1, 0).Build()
+                );
             }
         }
 
@@ -820,7 +885,8 @@ public static class WidgetConfigDialog
 
     private static void ShowWidgetSettingsControls(WidgetConfig config)
     {
-        var settingsHeader = Controls.Markup()
+        var settingsHeader = Controls
+            .Markup()
             .AddLine("[grey70]Settings:[/]")
             .WithMargin(1, 1, 1, 0)
             .Build();
@@ -831,10 +897,13 @@ public static class WidgetConfigDialog
         _enabledCheckbox.Margin = new Margin(1, 0, 1, 0);
         _detailPanel.AddControl(_enabledCheckbox);
 
-        var enabledHint = Controls.Markup()
-            .AddLine(config.Enabled
-                ? "[grey70]Widget is visible and refreshing[/]"
-                : "[yellow]Widget is hidden and paused[/]")
+        var enabledHint = Controls
+            .Markup()
+            .AddLine(
+                config.Enabled
+                    ? "[grey70]Widget is visible and refreshing[/]"
+                    : "[yellow]Widget is hidden and paused[/]"
+            )
             .WithMargin(1, 0, 1, 1)
             .Build();
         _detailPanel.AddControl(enabledHint);
@@ -854,7 +923,7 @@ public static class WidgetConfigDialog
         {
             WidgetLocation.Custom => 1,
             WidgetLocation.Bundled => 2,
-            _ => 0  // Auto or null
+            _ => 0, // Auto or null
         };
         _locationDropdown.Margin = new Margin(1, 1, 1, 0);
         _detailPanel.AddControl(_locationDropdown);
@@ -873,9 +942,11 @@ public static class WidgetConfigDialog
 
     private static void ShowAvailableWidgetPreview()
     {
-        if (_detailPanel == null || _selectedEntry == null) return;
+        if (_detailPanel == null || _selectedEntry == null)
+            return;
 
-        var header = Controls.Markup()
+        var header = Controls
+            .Markup()
             .AddLine($"[cyan1 bold]{_selectedEntry.Id}[/]")
             .AddLine($"[grey70]Path: {_selectedEntry.Path}[/]")
             .AddLine($"[yellow]Status: Available (not configured)[/]")
@@ -890,14 +961,16 @@ public static class WidgetConfigDialog
             try
             {
                 var checksum = ScriptValidator.CalculateChecksum(_selectedEntry.FullPath);
-                var checksumInfo = Controls.Markup()
+                var checksumInfo = Controls
+                    .Markup()
                     .AddLine($"[grey70]SHA256: {checksum}[/]")
                     .AddLine("")
                     .WithMargin(1, 0, 1, 0)
                     .Build();
                 _detailPanel.AddControl(checksumInfo);
 
-                var previewHeader = Controls.Markup()
+                var previewHeader = Controls
+                    .Markup()
                     .AddLine("[grey70]Script Preview (first 20 lines):[/]")
                     .WithMargin(1, 0, 1, 0)
                     .Build();
@@ -906,7 +979,8 @@ public static class WidgetConfigDialog
                 var lines = File.ReadLines(_selectedEntry.FullPath).Take(20);
                 var highlightedLines = ApplySyntaxHighlighting(lines);
 
-                var previewBuilder = Controls.Markup()
+                var previewBuilder = Controls
+                    .Markup()
                     .WithMargin(1, 0, 1, 0)
                     .WithBackgroundColor(Color.Grey19);
 
@@ -918,7 +992,8 @@ public static class WidgetConfigDialog
                 _detailPanel.AddControl(previewBuilder.Build());
 
                 // View Full File button
-                var viewFullFileButton = Controls.Button(" View Full File ")
+                var viewFullFileButton = Controls
+                    .Button(" View Full File ")
                     .WithMargin(1, 1, 1, 0)
                     .OnClick((s, e) => ShowFullFileViewer(_selectedEntry.FullPath!))
                     .Build();
@@ -926,7 +1001,8 @@ public static class WidgetConfigDialog
             }
             catch (Exception ex)
             {
-                var error = Controls.Markup()
+                var error = Controls
+                    .Markup()
                     .AddLine($"[red]Error reading script: {ex.Message}[/]")
                     .WithMargin(1, 0, 1, 0)
                     .Build();
@@ -934,7 +1010,8 @@ public static class WidgetConfigDialog
             }
         }
 
-        var instructions = Controls.Markup()
+        var instructions = Controls
+            .Markup()
             .AddLine("")
             .AddLine("[grey70]Click 'Add to Config' to configure this widget.[/]")
             .WithMargin(1, 1, 1, 0)
@@ -944,16 +1021,19 @@ public static class WidgetConfigDialog
 
     private static void ShowMissingWidgetInfo()
     {
-        if (_detailPanel == null || _selectedEntry == null) return;
+        if (_detailPanel == null || _selectedEntry == null)
+            return;
 
         var config = _selectedEntry.Config;
-        if (config == null) return;
+        if (config == null)
+            return;
 
         // Determine widget type based on location setting
         bool isBundled = config.Location == WidgetLocation.Bundled;
 
         // Build header
-        var headerBuilder = Controls.Markup()
+        var headerBuilder = Controls
+            .Markup()
             .AddLine($"[cyan1 bold]{_selectedEntry.Id}[/]")
             .AddLine($"[grey70]Path: {config.Path}[/]");
 
@@ -962,7 +1042,7 @@ public static class WidgetConfigDialog
         {
             WidgetLocation.Bundled => "bundled",
             WidgetLocation.Custom => "custom",
-            _ => "auto"
+            _ => "auto",
         };
         headerBuilder.AddLine($"[grey70]Location: {locationText}[/]");
 
@@ -970,7 +1050,7 @@ public static class WidgetConfigDialog
         {
             WidgetLocation.Bundled => "bundled widgets directory",
             WidgetLocation.Custom => "custom widgets directories",
-            _ => "any widget directory"
+            _ => "any widget directory",
         };
         headerBuilder.AddLine($"[red bold]Status: MISSING[/]");
         headerBuilder.AddLine("");
@@ -978,7 +1058,8 @@ public static class WidgetConfigDialog
         _detailPanel.AddControl(missingHeader);
 
         // Show error message
-        var errorBuilder = Controls.Markup()
+        var errorBuilder = Controls
+            .Markup()
             .WithMargin(1, 0, 1, 0)
             .WithBackgroundColor(Color.Maroon);
         errorBuilder.AddLine($"[white bold]⚠ Widget script not found in {locationHint}[/]");
@@ -1002,10 +1083,9 @@ public static class WidgetConfigDialog
         }
 
         _detailPanel.AddControl(errorBuilder.Build());
-        _detailPanel.AddControl(Controls.RuleBuilder()
-            .WithColor(Color.Grey23)
-            .WithMargin(1, 1, 1, 0)
-            .Build());
+        _detailPanel.AddControl(
+            Controls.RuleBuilder().WithColor(Color.Grey23).WithMargin(1, 1, 1, 0).Build()
+        );
 
         // Show settings even for missing widgets (allow changing location)
         ShowWidgetSettingsControls(config);
@@ -1013,7 +1093,8 @@ public static class WidgetConfigDialog
 
     private static void UpdateButtons()
     {
-        if (_selectedEntry == null) return;
+        if (_selectedEntry == null)
+            return;
 
         bool isConfigured = _selectedEntry.Status == WidgetConfigStatus.Configured;
         bool isAvailable = _selectedEntry.Status == WidgetConfigStatus.Available;
@@ -1056,7 +1137,8 @@ public static class WidgetConfigDialog
 
     private static void UpdateTitle()
     {
-        if (_dialogWindow == null) return;
+        if (_dialogWindow == null)
+            return;
 
         string title = _isDirty ? "Configure Widgets [*]" : "Configure Widgets";
         _dialogWindow.Title = title;
@@ -1064,14 +1146,18 @@ public static class WidgetConfigDialog
 
     private static void OnSettingChanged()
     {
-        if (_selectedEntry == null || _workingConfig == null) return;
+        if (_selectedEntry == null || _workingConfig == null)
+            return;
 
         // Apply changes based on current selection
         if (_selectedEntry.IsGlobalSettings)
         {
             ApplyGlobalSettings();
         }
-        else if (_selectedEntry.Status == WidgetConfigStatus.Configured && _selectedEntry.Config != null)
+        else if (
+            _selectedEntry.Status == WidgetConfigStatus.Configured
+            && _selectedEntry.Config != null
+        )
         {
             ApplyWidgetSettings(_selectedEntry.Config);
         }
@@ -1082,9 +1168,13 @@ public static class WidgetConfigDialog
 
     private static void ApplyGlobalSettings()
     {
-        if (_workingConfig == null) return;
+        if (_workingConfig == null)
+            return;
 
-        if (int.TryParse(_defaultRefreshInput?.Input, out int defaultRefresh) && defaultRefresh >= 1)
+        if (
+            int.TryParse(_defaultRefreshInput?.Input, out int defaultRefresh)
+            && defaultRefresh >= 1
+        )
         {
             _workingConfig.DefaultRefresh = defaultRefresh;
         }
@@ -1134,14 +1224,15 @@ public static class WidgetConfigDialog
             {
                 1 => WidgetLocation.Custom,
                 2 => WidgetLocation.Bundled,
-                _ => null  // Auto (omit from YAML)
+                _ => null, // Auto (omit from YAML)
             };
         }
     }
 
     private static int? ParseNullableInt(string? input)
     {
-        if (string.IsNullOrWhiteSpace(input)) return null;
+        if (string.IsNullOrWhiteSpace(input))
+            return null;
         return int.TryParse(input, out int value) ? value : null;
     }
 
@@ -1151,7 +1242,8 @@ public static class WidgetConfigDialog
     /// </summary>
     private static int FindNearestEnabledWidget(List<string> order, int currentIndex, int direction)
     {
-        if (_workingConfig == null) return -1;
+        if (_workingConfig == null)
+            return -1;
 
         int searchIndex = currentIndex + direction;
         while (searchIndex >= 0 && searchIndex < order.Count)
@@ -1169,14 +1261,20 @@ public static class WidgetConfigDialog
 
     private static void MoveWidgetUp()
     {
-        if (_selectedEntry == null || _workingConfig == null || _selectedEntry.Status != WidgetConfigStatus.Configured)
+        if (
+            _selectedEntry == null
+            || _workingConfig == null
+            || _selectedEntry.Status != WidgetConfigStatus.Configured
+        )
             return;
 
         var order = _workingConfig.Layout?.Order;
-        if (order == null) return;
+        if (order == null)
+            return;
 
         int idx = order.IndexOf(_selectedEntry.Id);
-        if (idx <= 0) return;
+        if (idx <= 0)
+            return;
 
         // Find nearest enabled widget above
         int targetIdx = FindNearestEnabledWidget(order, idx, -1);
@@ -1194,14 +1292,20 @@ public static class WidgetConfigDialog
 
     private static void MoveWidgetDown()
     {
-        if (_selectedEntry == null || _workingConfig == null || _selectedEntry.Status != WidgetConfigStatus.Configured)
+        if (
+            _selectedEntry == null
+            || _workingConfig == null
+            || _selectedEntry.Status != WidgetConfigStatus.Configured
+        )
             return;
 
         var order = _workingConfig.Layout?.Order;
-        if (order == null) return;
+        if (order == null)
+            return;
 
         int idx = order.IndexOf(_selectedEntry.Id);
-        if (idx < 0 || idx >= order.Count - 1) return;
+        if (idx < 0 || idx >= order.Count - 1)
+            return;
 
         // Find nearest enabled widget below
         int targetIdx = FindNearestEnabledWidget(order, idx, 1);
@@ -1219,13 +1323,17 @@ public static class WidgetConfigDialog
 
     private static void HandleAddRemove()
     {
-        if (_selectedEntry == null || _workingConfig == null) return;
+        if (_selectedEntry == null || _workingConfig == null)
+            return;
 
         if (_selectedEntry.Status == WidgetConfigStatus.Available)
         {
             AddWidget();
         }
-        else if (_selectedEntry.Status == WidgetConfigStatus.Configured || _selectedEntry.Status == WidgetConfigStatus.Missing)
+        else if (
+            _selectedEntry.Status == WidgetConfigStatus.Configured
+            || _selectedEntry.Status == WidgetConfigStatus.Missing
+        )
         {
             RemoveWidget();
         }
@@ -1233,7 +1341,8 @@ public static class WidgetConfigDialog
 
     private static void AddWidget()
     {
-        if (_selectedEntry == null || _workingConfig == null || _selectedEntry.FullPath == null) return;
+        if (_selectedEntry == null || _workingConfig == null || _selectedEntry.FullPath == null)
+            return;
 
         // Calculate checksum
         var checksum = ScriptValidator.CalculateChecksum(_selectedEntry.FullPath);
@@ -1252,7 +1361,7 @@ public static class WidgetConfigDialog
             Location = _selectedEntry.Config?.Location,
             Sha256 = checksum,
             Refresh = _workingConfig.DefaultRefresh,
-            Pinned = false
+            Pinned = false,
         };
 
         // Add to config
@@ -1273,7 +1382,8 @@ public static class WidgetConfigDialog
 
     private static void RemoveWidget()
     {
-        if (_selectedEntry == null || _workingConfig == null) return;
+        if (_selectedEntry == null || _workingConfig == null)
+            return;
 
         // Remove from widgets
         _workingConfig.Widgets.Remove(_selectedEntry.Id);
@@ -1312,7 +1422,8 @@ public static class WidgetConfigDialog
 
     private static void SaveConfig(Action? onConfigChanged)
     {
-        if (_workingConfig == null || _configPath == null) return;
+        if (_workingConfig == null || _configPath == null)
+            return;
 
         try
         {
@@ -1350,7 +1461,8 @@ public static class WidgetConfigDialog
 
     private static void ShowUnsavedChangesDialog(Action? onConfigChanged)
     {
-        if (_windowSystem == null || _dialogWindow == null) return;
+        if (_windowSystem == null || _dialogWindow == null)
+            return;
 
         var confirmDialog = new WindowBuilder(_windowSystem)
             .WithTitle("Unsaved Changes")
@@ -1362,36 +1474,48 @@ public static class WidgetConfigDialog
             .HideCloseButton()
             .Build();
 
-        confirmDialog.AddControl(Controls.Markup()
-            .AddLine("")
-            .AddLine("  You have unsaved changes.")
-            .AddLine("  Do you want to save before closing?")
-            .AddLine("")
-            .Build());
+        confirmDialog.AddControl(
+            Controls
+                .Markup()
+                .AddLine("")
+                .AddLine("  You have unsaved changes.")
+                .AddLine("  Do you want to save before closing?")
+                .AddLine("")
+                .Build()
+        );
 
-        var saveButton = Controls.Button(" Save & Close ")
-            .OnClick((s, e) =>
-            {
-                _windowSystem.CloseWindow(confirmDialog);
-                SaveConfig(onConfigChanged);
-            })
+        var saveButton = Controls
+            .Button(" Save & Close ")
+            .OnClick(
+                (s, e) =>
+                {
+                    _windowSystem.CloseWindow(confirmDialog);
+                    SaveConfig(onConfigChanged);
+                }
+            )
             .Build();
 
-        var discardButton = Controls.Button(" Discard ")
+        var discardButton = Controls
+            .Button(" Discard ")
             .WithMargin(1, 0, 0, 0)
-            .OnClick((s, e) =>
-            {
-                _windowSystem.CloseWindow(confirmDialog);
-                _dialogWindow?.Close();
-            })
+            .OnClick(
+                (s, e) =>
+                {
+                    _windowSystem.CloseWindow(confirmDialog);
+                    _dialogWindow?.Close();
+                }
+            )
             .Build();
 
-        var cancelButton = Controls.Button(" Cancel ")
+        var cancelButton = Controls
+            .Button(" Cancel ")
             .WithMargin(1, 0, 0, 0)
-            .OnClick((s, e) =>
-            {
-                _windowSystem.CloseWindow(confirmDialog);
-            })
+            .OnClick(
+                (s, e) =>
+                {
+                    _windowSystem.CloseWindow(confirmDialog);
+                }
+            )
             .Build();
 
         var buttonGrid = HorizontalGridControl.ButtonRow(saveButton, discardButton, cancelButton);
@@ -1404,7 +1528,8 @@ public static class WidgetConfigDialog
 
     private static void ShowErrorDialog(string message)
     {
-        if (_windowSystem == null) return;
+        if (_windowSystem == null)
+            return;
 
         var errorDialog = new WindowBuilder(_windowSystem)
             .WithTitle("Error")
@@ -1415,13 +1540,17 @@ public static class WidgetConfigDialog
             .WithColors(Color.Grey15, Color.Grey93)
             .Build();
 
-        errorDialog.AddControl(Controls.Markup()
-            .AddLine("")
-            .AddLine($"  [red]{Markup.Escape(message)}[/]")
-            .AddLine("")
-            .Build());
+        errorDialog.AddControl(
+            Controls
+                .Markup()
+                .AddLine("")
+                .AddLine($"  [red]{Markup.Escape(message)}[/]")
+                .AddLine("")
+                .Build()
+        );
 
-        var okButton = Controls.Button("  OK  ")
+        var okButton = Controls
+            .Button("  OK  ")
             .OnClick((s, e) => _windowSystem.CloseWindow(errorDialog))
             .Build();
 
@@ -1435,7 +1564,8 @@ public static class WidgetConfigDialog
 
     private static void ShowConfigurationErrorDialog(ConfigurationException ex)
     {
-        if (_windowSystem == null) return;
+        if (_windowSystem == null)
+            return;
 
         var errorDialog = new WindowBuilder(_windowSystem)
             .WithTitle("Configuration Error")
@@ -1447,7 +1577,8 @@ public static class WidgetConfigDialog
             .Build();
 
         // Problem
-        var problemPanel = Controls.Markup()
+        var problemPanel = Controls
+            .Markup()
             .AddLine("")
             .AddLine($"[yellow bold]Problem:[/]")
             .AddLine($"  {Markup.Escape(ex.Problem)}")
@@ -1459,8 +1590,7 @@ public static class WidgetConfigDialog
         // Additional info (scrollable if many items)
         if (ex.AdditionalInfo.Count > 0)
         {
-            var infoBuilder = Controls.Markup()
-                .WithMargin(1, 0, 1, 0);
+            var infoBuilder = Controls.Markup().WithMargin(1, 0, 1, 0);
 
             foreach (var info in ex.AdditionalInfo.Take(8))
             {
@@ -1480,7 +1610,8 @@ public static class WidgetConfigDialog
         }
 
         // How to fix
-        var fixPanel = Controls.Markup()
+        var fixPanel = Controls
+            .Markup()
             .AddLine($"[green bold]How to fix:[/]")
             .AddLine($"  {Markup.Escape(ex.HowToFix)}")
             .AddLine("")
@@ -1491,7 +1622,8 @@ public static class WidgetConfigDialog
         // Config path
         if (!string.IsNullOrEmpty(ex.ConfigPath))
         {
-            var pathPanel = Controls.Markup()
+            var pathPanel = Controls
+                .Markup()
                 .AddLine($"[grey70]Config: {Markup.Escape(ex.ConfigPath)}[/]")
                 .WithMargin(1, 0, 1, 0)
                 .Build();
@@ -1499,7 +1631,8 @@ public static class WidgetConfigDialog
         }
 
         // Buttons
-        var okButton = Controls.Button("  OK  ")
+        var okButton = Controls
+            .Button("  OK  ")
             .OnClick((s, e) => _windowSystem.CloseWindow(errorDialog))
             .Build();
 
@@ -1517,17 +1650,18 @@ public static class WidgetConfigDialog
         var discovered = WidgetConfigurationHelper.DiscoverAllWidgets(config);
 
         // Convert to UI-specific WidgetListEntry
-        return discovered.Select(d => new WidgetListEntry
-        {
-            Id = d.DisplayId,
-            Path = d.RelativePath,
-            FullPath = d.FullPath,
-            Status = d.Status,
-            Config = d.Config,
-            IsGlobalSettings = false
-        }).ToList();
+        return discovered
+            .Select(d => new WidgetListEntry
+            {
+                Id = d.DisplayId,
+                Path = d.RelativePath,
+                FullPath = d.FullPath,
+                Status = d.Status,
+                Config = d.Config,
+                IsGlobalSettings = false,
+            })
+            .ToList();
     }
-
 
     /// <summary>
     /// Applies syntax highlighting to file lines with line numbers.
@@ -1535,7 +1669,10 @@ public static class WidgetConfigDialog
     /// <param name="lines">Lines to highlight</param>
     /// <param name="startLineNumber">Starting line number (default: 1)</param>
     /// <returns>List of formatted markup strings</returns>
-    private static List<string> ApplySyntaxHighlighting(IEnumerable<string> lines, int startLineNumber = 1)
+    private static List<string> ApplySyntaxHighlighting(
+        IEnumerable<string> lines,
+        int startLineNumber = 1
+    )
     {
         var result = new List<string>();
         int lineNum = startLineNumber;
@@ -1543,7 +1680,7 @@ public static class WidgetConfigDialog
         foreach (var line in lines)
         {
             var escapedLine = Markup.Escape(line);
-            result.Add($"[grey50]{lineNum,3}[/] {escapedLine}");
+            result.Add($"[grey50]{lineNum, 3}[/] {escapedLine}");
             lineNum++;
         }
 
@@ -1556,7 +1693,8 @@ public static class WidgetConfigDialog
     /// <param name="filePath">Full path to the file to display</param>
     private static void ShowFullFileViewer(string filePath)
     {
-        if (_windowSystem == null || _dialogWindow == null || !File.Exists(filePath)) return;
+        if (_windowSystem == null || _dialogWindow == null || !File.Exists(filePath))
+            return;
 
         var fileName = Path.GetFileName(filePath);
         int modalWidth = Math.Min((int)(Console.WindowWidth * 0.9), 150);
@@ -1571,41 +1709,40 @@ public static class WidgetConfigDialog
             .WithParent(_dialogWindow)
             .WithBorderStyle(BorderStyle.Single)
             .WithBorderColor(Color.Grey35)
-            .Resizable(false)
-            .Movable(false)
+            .Resizable(true)
+            .Movable(true)
             .Minimizable(false)
-            .Maximizable(false)
+            .Maximizable(true)
             .WithColors(Color.Grey15, Color.Grey93)
             .Build();
 
         try
         {
             // Header with file path
-            var header = Controls.Markup()
+            var header = Controls
+                .Markup()
                 .AddLine($"[grey70]Full path: {Markup.Escape(filePath)}[/]")
                 .WithMargin(1, 1, 1, 0)
                 .Build();
             modal.AddControl(header);
 
             // Separator
-            modal.AddControl(Controls.RuleBuilder()
-                .WithColor(Color.Grey23)
-                .Build());
+            modal.AddControl(Controls.RuleBuilder().WithColor(Color.Grey23).Build());
 
             // Read and highlight all lines
             var allLines = File.ReadLines(filePath);
             var highlightedLines = ApplySyntaxHighlighting(allLines);
 
             // Create scrollable content
-            var contentBuilder = Controls.Markup()
-                .WithBackgroundColor(Color.Grey19);
+            var contentBuilder = Controls.Markup().WithBackgroundColor(Color.Grey19);
 
             foreach (var line in highlightedLines)
             {
                 contentBuilder.AddLine(line);
             }
 
-            var scrollPanel = Controls.ScrollablePanel()
+            var scrollPanel = Controls
+                .ScrollablePanel()
                 .WithVerticalScroll(ScrollMode.Scroll)
                 .WithScrollbar(true)
                 .WithScrollbarPosition(ScrollbarPosition.Right)
@@ -1619,17 +1756,17 @@ public static class WidgetConfigDialog
             modal.AddControl(scrollPanel);
 
             // Footer separator
-            modal.AddControl(Controls.RuleBuilder()
-                .WithColor(Color.Grey23)
-                .StickyBottom()
-                .Build());
+            modal.AddControl(Controls.RuleBuilder().WithColor(Color.Grey23).StickyBottom().Build());
 
             // Footer with instructions
-            modal.AddControl(Controls.Markup()
-                .AddLine("[grey70]↑↓: Scroll | Mouse Wheel: Scroll | Esc/Enter: Close[/]")
-                .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Center)
-                .StickyBottom()
-                .Build());
+            modal.AddControl(
+                Controls
+                    .Markup()
+                    .AddLine("[grey70]↑↓: Scroll | Mouse Wheel: Scroll | Esc/Enter: Close[/]")
+                    .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Center)
+                    .StickyBottom()
+                    .Build()
+            );
 
             // Handle keyboard shortcuts
             modal.KeyPressed += (s, e) =>
@@ -1663,7 +1800,8 @@ public static class WidgetConfigDialog
     /// <param name="fileName">Name of the file that failed to load</param>
     private static void ShowFileViewerErrorDialog(string errorMessage, string fileName)
     {
-        if (_windowSystem == null) return;
+        if (_windowSystem == null)
+            return;
 
         var errorDialog = new WindowBuilder(_windowSystem)
             .WithTitle("Error Opening File")
@@ -1675,15 +1813,19 @@ public static class WidgetConfigDialog
             .WithColors(Color.Grey15, Color.Grey93)
             .Build();
 
-        errorDialog.AddControl(Controls.Markup()
-            .AddLine("")
-            .AddLine($"  [red bold]Failed to open file: {Markup.Escape(fileName)}[/]")
-            .AddLine("")
-            .AddLine($"  [grey70]{Markup.Escape(errorMessage)}[/]")
-            .AddLine("")
-            .Build());
+        errorDialog.AddControl(
+            Controls
+                .Markup()
+                .AddLine("")
+                .AddLine($"  [red bold]Failed to open file: {Markup.Escape(fileName)}[/]")
+                .AddLine("")
+                .AddLine($"  [grey70]{Markup.Escape(errorMessage)}[/]")
+                .AddLine("")
+                .Build()
+        );
 
-        var okButton = Controls.Button("  OK  ")
+        var okButton = Controls
+            .Button("  OK  ")
             .OnClick((s, e) => _windowSystem.CloseWindow(errorDialog))
             .Build();
 
@@ -1704,5 +1846,4 @@ public static class WidgetConfigDialog
 
         _windowSystem.AddWindow(errorDialog);
     }
-
 }
