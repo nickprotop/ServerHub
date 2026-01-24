@@ -154,6 +154,16 @@ public static class WidgetPaths
     }
 
     /// <summary>
+    /// Gets the user custom widgets directory (~/.config/serverhub/widgets)
+    /// Alias for GetUserWidgetsDirectory() for semantic clarity in init-config scenarios
+    /// </summary>
+    /// <returns>Path to ~/.config/serverhub/widgets/</returns>
+    public static string GetUserCustomWidgetsDirectory()
+    {
+        return GetUserWidgetsDirectory();
+    }
+
+    /// <summary>
     /// Gets the bundled widgets directory
     /// </summary>
     /// <returns>Path to ~/.local/share/serverhub/widgets/</returns>

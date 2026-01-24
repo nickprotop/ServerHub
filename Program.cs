@@ -11,6 +11,8 @@ using SharpConsoleUI.Builders;
 using SharpConsoleUI.Controls;
 using SharpConsoleUI.Drivers;
 using Spectre.Console;
+using YamlDotNet.Serialization;
+using YamlDotNet.Serialization.NamingConventions;
 
 namespace ServerHub;
 
@@ -82,25 +84,49 @@ class Program
                 return await VerifyChecksumsAsync(options.ConfigPath);
             }
 
+            // Handle --init-config command
+            if (!string.IsNullOrEmpty(options.InitConfig))
+            {
+                return await InitConfigAsync(options.InitConfig, options.WidgetsPath);
+            }
+
             // Ensure directories exist
             WidgetPaths.EnsureDirectoriesExist();
 
             // Load configuration
             var configPath = options.ConfigPath ?? ConfigManager.GetDefaultConfigPath();
-
-            // Store path for later use (widget reordering)
             _configPath = configPath;
-
             var configMgr = new ConfigManager();
+
+            // Auto-create ONLY the default config path for first-time users
+            var isDefaultPath = configPath == ConfigManager.GetDefaultConfigPath();
 
             if (!File.Exists(configPath))
             {
-                Console.WriteLine($"Configuration file not found: {configPath}");
-                Console.WriteLine("Creating default configuration...");
-                configMgr.CreateDefaultConfig(configPath);
-                Console.WriteLine($"Default configuration created at: {configPath}");
-                Console.WriteLine("Starting ServerHub with default configuration...");
-                Console.WriteLine();
+                if (isDefaultPath)
+                {
+                    // First-time user: silent auto-create with production template
+                    // Uses existing CreateDefaultConfig() - just bundled widgets, no custom widget scanning
+                    Console.WriteLine("First-time setup: Creating default configuration...");
+                    configMgr.CreateDefaultConfig(configPath);
+                    Console.WriteLine($"Created: {configPath}");
+                    Console.WriteLine("Starting ServerHub...");
+                    Console.WriteLine();
+                }
+                else
+                {
+                    // Custom path: fail with helpful error
+                    Console.Error.WriteLine($"Configuration file not found: {configPath}");
+                    Console.Error.WriteLine();
+                    Console.Error.WriteLine("To create this configuration file:");
+                    Console.Error.WriteLine($"  serverhub --init-config {Path.GetFileName(configPath)}");
+                    if (!string.IsNullOrEmpty(options.WidgetsPath))
+                        Console.Error.WriteLine($"            --widgets-path {options.WidgetsPath}");
+                    Console.Error.WriteLine();
+                    Console.Error.WriteLine("Or use the default configuration:");
+                    Console.Error.WriteLine("  serverhub");
+                    return 1;
+                }
             }
 
             _config = configMgr.LoadConfig(configPath);
@@ -1075,7 +1101,7 @@ class Program
         try
         {
             // Resolve widget path
-            var scriptPath = WidgetPaths.ResolveWidgetPath(widgetConfig.Path);
+            var scriptPath = WidgetPaths.ResolveWidgetPath(widgetConfig.Path, widgetConfig.Location);
             if (scriptPath == null)
             {
                 _consecutiveErrors.TryGetValue(widgetId, out var errorCount);
@@ -1437,6 +1463,18 @@ class Program
                     options.DevMode = true;
                     break;
 
+                case "--init-config":
+                    if (i + 1 < args.Length)
+                    {
+                        options.InitConfig = args[++i];
+                    }
+                    else
+                    {
+                        Console.Error.WriteLine("Error: --init-config requires a path argument");
+                        return options;
+                    }
+                    break;
+
                 default:
                     if (!args[i].StartsWith("--") && options.ConfigPath == null)
                     {
@@ -1605,6 +1643,155 @@ class Program
         return Task.FromResult(0);
     }
 
+    /// <summary>
+    /// Creates a new configuration file by discovering all available widgets
+    /// Starts with production config (keeps all bundled widgets as-is) and adds custom widgets
+    /// </summary>
+    private static Task<int> InitConfigAsync(string configPath, string? customWidgetsPath)
+    {
+        if (File.Exists(configPath))
+        {
+            Console.Error.WriteLine($"Configuration file already exists: {configPath}");
+            Console.Error.WriteLine("Delete it first or choose a different name.");
+            return Task.FromResult(1);
+        }
+
+        Console.WriteLine("Discovering widgets...\n");
+
+        // Start with production config template (keep it exactly as-is)
+        var configManager = new ConfigManager();
+        ServerHubConfig config;
+        try
+        {
+            var deserializer = new DeserializerBuilder()
+                .WithNamingConvention(UnderscoredNamingConvention.Instance)
+                .WithTypeConverter(new WidgetLocationTypeConverter())
+                .IgnoreUnmatchedProperties()
+                .Build();
+            config = deserializer.Deserialize<ServerHubConfig>(DefaultConfig.YamlContent);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Failed to parse production config template: {ex.Message}");
+            return Task.FromResult(1);
+        }
+
+        int bundledCount = config.Widgets.Count;  // All bundled widgets from template
+        int customCount = 0;
+
+        // Scan for custom widgets to add
+        var userCustomDir = WidgetPaths.GetUserCustomWidgetsDirectory();
+        var customPath = !string.IsNullOrEmpty(customWidgetsPath)
+            ? Path.GetFullPath(customWidgetsPath)
+            : null;
+
+        // Scan user custom directory
+        if (Directory.Exists(userCustomDir))
+        {
+            foreach (var file in Directory.GetFiles(userCustomDir).OrderBy(f => f))
+            {
+                if (IsExecutable(file))
+                {
+                    var filename = Path.GetFileName(file);
+                    var id = GenerateUniqueId(Path.GetFileNameWithoutExtension(filename), config.Widgets);
+                    config.Widgets[id] = new WidgetConfig
+                    {
+                        Path = filename,
+                        Location = WidgetLocation.Custom,
+                        Sha256 = null,  // SECURITY: No checksum - requires --dev-mode or --discover
+                        Refresh = 5
+                    };
+                    config.Layout?.Order?.Add(id);
+                    customCount++;
+                }
+            }
+        }
+
+        // Scan --widgets-path directory
+        if (customPath != null && Directory.Exists(customPath))
+        {
+            foreach (var file in Directory.GetFiles(customPath).OrderBy(f => f))
+            {
+                if (IsExecutable(file))
+                {
+                    var filename = Path.GetFileName(file);
+                    var id = GenerateUniqueId(Path.GetFileNameWithoutExtension(filename), config.Widgets);
+                    config.Widgets[id] = new WidgetConfig
+                    {
+                        Path = filename,
+                        Location = WidgetLocation.Custom,
+                        Sha256 = null,  // SECURITY: No checksum - requires --dev-mode or --discover
+                        Refresh = 5
+                    };
+                    config.Layout?.Order?.Add(id);
+                    customCount++;
+                }
+            }
+        }
+
+        // Create directory if needed
+        var configDir = Path.GetDirectoryName(Path.GetFullPath(configPath));
+        if (!string.IsNullOrEmpty(configDir) && !Directory.Exists(configDir))
+        {
+            Directory.CreateDirectory(configDir);
+        }
+
+        // Save config
+        try
+        {
+            configManager.SaveConfig(config, configPath);
+
+            Console.WriteLine($"✓ Included {bundledCount} bundled widget(s) from template");
+            if (customCount > 0)
+                Console.WriteLine($"✓ Added {customCount} custom widget(s)");
+
+            Console.WriteLine();
+            AnsiConsole.MarkupLine($"[green]Generated {configPath} with {bundledCount + customCount} widgets[/]");
+
+            // Security note for custom widgets
+            if (customCount > 0)
+            {
+                Console.WriteLine();
+                AnsiConsole.MarkupLine("[yellow]Note:[/] Custom widgets have no checksums (security).");
+                Console.WriteLine("To run securely:");
+                Console.WriteLine("  1. Run: serverhub --discover");
+                Console.WriteLine("     (reviews and adds checksums for custom widgets)");
+                Console.WriteLine("  2. Or use: --dev-mode flag to skip checksum validation");
+            }
+
+            // Show command to run
+            Console.WriteLine("\nTo start ServerHub:");
+            var devModeFlag = customCount > 0 ? " --dev-mode" : "";
+            if (!string.IsNullOrEmpty(customWidgetsPath))
+                Console.WriteLine($"  serverhub --widgets-path {customWidgetsPath} {Path.GetFileName(configPath)}{devModeFlag}");
+            else if (configPath != ConfigManager.GetDefaultConfigPath())
+                Console.WriteLine($"  serverhub {Path.GetFileName(configPath)}{devModeFlag}");
+            else
+                Console.WriteLine($"  serverhub{devModeFlag}");
+
+            return Task.FromResult(0);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error saving config: {ex.Message}");
+            return Task.FromResult(1);
+        }
+    }
+
+    /// <summary>
+    /// Generates a unique widget ID by adding suffix if needed
+    /// </summary>
+    private static string GenerateUniqueId(string baseId, Dictionary<string, WidgetConfig> existingWidgets)
+    {
+        var id = baseId;
+        int suffix = 1;
+        while (existingWidgets.ContainsKey(id))
+        {
+            id = $"{baseId}_{suffix++}";
+        }
+        return id;
+    }
+
     private static Task<int> VerifyChecksumsAsync(string? configPath)
     {
         configPath ??= ConfigManager.GetDefaultConfigPath();
@@ -1749,6 +1936,10 @@ class Program
         Console.WriteLine(
             "                                   Searches this path first, before default paths"
         );
+        Console.WriteLine("  --init-config <path>             Initialize a new configuration file by");
+        Console.WriteLine(
+            "                                   discovering available widgets"
+        );
         Console.WriteLine("  --discover                       Find and add new custom widgets to config");
         Console.WriteLine(
             "  --verify-checksums               Verify checksums for all configured widgets"
@@ -1765,6 +1956,15 @@ class Program
             "  serverhub                                    Use default config (~/.config/serverhub/config.yaml)"
         );
         Console.WriteLine("  serverhub myconfig.yaml                      Use custom config file");
+        Console.WriteLine(
+            "  serverhub --init-config config.yaml          Create config.yaml by discovering all available widgets"
+        );
+        Console.WriteLine(
+            "  serverhub --init-config config.dev.yaml --widgets-path ./widgets/"
+        );
+        Console.WriteLine(
+            "                                               Create config with bundled + custom + ./widgets/ directory widgets"
+        );
         Console.WriteLine(
             "  serverhub --widgets-path ./dev-widgets       Load widgets from ./dev-widgets"
         );
@@ -1802,5 +2002,6 @@ class Program
         public bool Discover { get; set; }
         public bool VerifyChecksums { get; set; }
         public bool DevMode { get; set; }
+        public string? InitConfig { get; set; }
     }
 }
