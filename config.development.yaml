@@ -1,0 +1,94 @@
+widgets:
+  alerts:
+    path: alerts.sh
+    location: custom
+    refresh: 30
+    enabled: true
+  cpu:
+    path: cpu.sh
+    location: custom
+    refresh: 2
+    enabled: true
+  memory:
+    path: memory.sh
+    location: custom
+    refresh: 2
+    enabled: true
+  disk:
+    path: disk.sh
+    location: custom
+    refresh: 10
+    enabled: true
+  sysinfo:
+    path: sysinfo.sh
+    location: custom
+    refresh: 30
+    enabled: true
+  network:
+    path: network.sh
+    location: custom
+    refresh: 2
+    enabled: true
+  processes:
+    path: processes.sh
+    location: custom
+    refresh: 3
+    enabled: true
+  services:
+    path: services.sh
+    location: custom
+    refresh: 5
+    enabled: true
+  docker:
+    path: docker.sh
+    refresh: 30
+    column_span: 2
+    enabled: true
+  netstat:
+    path: netstat.sh
+    location: custom
+    refresh: 5
+    enabled: true
+  sensors:
+    path: sensors.sh
+    location: custom
+    refresh: 5
+    enabled: true
+  logs:
+    path: logs.sh
+    location: custom
+    refresh: 10
+    enabled: true
+  ssl-certs:
+    path: ssl-certs.sh
+    location: custom
+    refresh: 3600
+    enabled: true
+  updates:
+    path: updates.sh
+    location: custom
+    refresh: 3600
+    enabled: true
+layout:
+  order:
+  - alerts
+  - cpu
+  - memory
+  - disk
+  - sysinfo
+  - network
+  - processes
+  - services
+  - docker
+  - netstat
+  - sensors
+  - logs
+  - ssl-certs
+  - updates
+default_refresh: 5
+max_lines_per_widget: 20
+show_truncation_indicator: true
+breakpoints:
+  double: 100
+  triple: 160
+  quad: 220

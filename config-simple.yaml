@@ -36,7 +36,7 @@ widgets:
 
   docker:
     path: docker.sh
-    refresh: 5
+    refresh: 30
     column_span: 4  # Docker takes full width (4 columns)
     location: bundled
 

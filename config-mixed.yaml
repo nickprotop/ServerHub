@@ -21,7 +21,7 @@ widgets:
 
   docker:
     path: docker.sh
-    refresh: 5
+    refresh: 30
     column_span: 2  # Spans 2 columns
     location: bundled
 
