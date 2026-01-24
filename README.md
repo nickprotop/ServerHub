@@ -72,13 +72,37 @@ Requires .NET 9.0 SDK for building.
 ## Usage
 
 ```bash
-serverhub                      # Run with default config
-serverhub myconfig.yaml        # Use custom config file
-serverhub --discover           # Find and add custom widgets
-serverhub --verify-checksums   # Verify all widget checksums
-serverhub --dev-mode           # Development mode (see Security section)
-serverhub --help               # Show all options
+serverhub                                    # Run with default config
+serverhub myconfig.yaml                      # Use custom config file
+serverhub --init-config config.yaml          # Create config by discovering widgets
+serverhub --discover                         # Find and add custom widgets
+serverhub --verify-checksums                 # Verify all widget checksums
+serverhub --dev-mode                         # Development mode (see Security section)
+serverhub --help                             # Show all options
 ```
+
+### Creating Configurations
+
+**First-time setup** - The default config (`~/.config/serverhub/config.yaml`) is automatically created on first run with all bundled widgets.
+
+**Custom configurations** - Use `--init-config` to create a new configuration file by discovering available widgets:
+
+```bash
+# Create config with bundled widgets only
+serverhub --init-config config.production.yaml
+
+# Create config with bundled + custom widgets from specific directory
+serverhub --init-config config.dev.yaml --widgets-path ./widgets/
+```
+
+**How it works:**
+1. Starts with all 14 bundled widgets from the production template
+2. Scans `~/.config/serverhub/widgets/` for custom widgets
+3. Scans `--widgets-path` if provided
+4. Generates config with appropriate `location` fields
+5. Custom widgets have no checksums initially (security - requires `--discover` or `--dev-mode`)
+
+**Note:** Custom config paths (non-default) are not auto-created. You must explicitly use `--init-config` to create them. This prevents accidental file creation from typos.
 
 ### Keyboard Shortcuts
 
@@ -93,7 +117,23 @@ serverhub --help               # Show all options
 
 ## Configuration
 
+### Default Configuration
+
 Configuration file location: `~/.config/serverhub/config.yaml`
+
+On first run, ServerHub automatically creates this file with all bundled widgets configured.
+
+For custom configuration paths, use `--init-config`:
+
+```bash
+# Create a new configuration file
+serverhub --init-config myconfig.yaml
+
+# Create config with widgets from a specific directory
+serverhub --init-config myconfig.yaml --widgets-path ./widgets/
+```
+
+### Configuration Format
 
 ```yaml
 default_refresh: 5
@@ -108,10 +148,17 @@ widgets:
     path: memory.sh
     refresh: 2
 
+  my-custom:
+    path: my-custom.sh
+    location: custom
+    sha256: a1b2c3d4...  # Required for custom widgets (use --discover)
+    refresh: 10
+
 layout:
   order:
     - cpu
     - memory
+    - my-custom
 
 breakpoints:
   double: 100    # 2 columns at 100+ chars
@@ -121,13 +168,18 @@ breakpoints:
 
 ### Widget Path Resolution
 
-When a widget with the same filename exists in multiple locations (e.g., `cpu.sh` in both bundled and custom directories), you can use the `location` field to explicitly specify where to search:
+The `location` field controls where ServerHub searches for widget scripts:
 
 - `location: bundled` - Search only in `~/.local/share/serverhub/widgets/`
 - `location: custom` - Search only in `~/.config/serverhub/widgets/` and `--widgets-path`
-- `location: auto` (or omit) - Search all directories in order: custom → user → bundled (default)
+- `location: auto` (or omit) - Search all directories in priority order: `--widgets-path` → `~/.config/serverhub/widgets/` → `~/.local/share/serverhub/widgets/` (default)
 
-This is useful when you want to override a bundled widget with a custom version, or explicitly use the bundled version when both exist.
+**Use cases:**
+- Override a bundled widget with a custom version while keeping both
+- Explicitly use the bundled version when custom exists
+- Have multiple versions of the same widget (e.g., `cpu` bundled, `cpu_1` custom)
+
+When using `--init-config` with `--widgets-path`, widgets found in the custom path are added with `location: custom` and unique IDs if filenames conflict with bundled widgets.
 
 See [config.example.yaml](config.example.yaml) for full configuration options.
 
@@ -276,15 +328,27 @@ Without a checksum, custom widgets will not run. This is intentional.
 
 ### Adding Custom Widgets Safely
 
-**Option 1: Discovery (Recommended)**
+**Option 1: Initialize Config with Discovery (Recommended for new configs)**
+
+```bash
+# Create config with auto-discovered widgets
+serverhub --init-config config.yaml --widgets-path ./widgets/
+
+# Then review and add checksums interactively
+serverhub --discover
+```
+
+This discovers all widgets in bundled and custom locations, generating a config file. Custom widgets are added **without checksums** (security), requiring you to review them via `--discover` or run with `--dev-mode`.
+
+**Option 2: Discovery (Recommended for existing configs)**
 
 ```bash
 serverhub --discover
 ```
 
-This shows you a code preview of each widget before adding it. When you approve, the checksum is captured at that moment—the "trusted moment" when you've actually seen what the code does.
+This shows you a code preview of each unconfigured widget before adding it. When you approve, the checksum is captured at that moment—the "trusted moment" when you've actually seen what the code does.
 
-**Option 2: Manual**
+**Option 3: Manual**
 
 ```bash
 # 1. Read the script yourself
@@ -296,6 +360,23 @@ sha256sum ~/.config/serverhub/widgets/my-widget.sh
 # 3. Add to config with the checksum
 nano ~/.config/serverhub/config.yaml
 ```
+
+### Configuration File Creation
+
+ServerHub's auto-creation behavior is intentionally restrictive to prevent security issues:
+
+**Auto-created:** `~/.config/serverhub/config.yaml` (default path only)
+- Created automatically on first run
+- Contains only bundled widgets with verified checksums
+- Safe for immediate use
+
+**Not auto-created:** Custom config paths (e.g., `config.dev.yaml`, `myconfig.yaml`)
+- Prevents accidental file creation from typos (e.g., `config.developmnet.yaml`)
+- Prevents wrong defaults when using `--widgets-path`
+- Must use `--init-config` explicitly to create
+
+**Why this matters:**
+Running `serverhub config.dev.yaml --widgets-path ./widgets/` should fail if the config doesn't exist, not silently create a config that expects bundled widgets while you're pointing at custom widgets. This mismatch causes path resolution issues and confusing behavior.
 
 ### Why We Don't Auto-Generate Checksums
 
