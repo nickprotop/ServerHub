@@ -6,6 +6,7 @@ using ServerHub.Models;
 using ServerHub.Services;
 using ServerHub.UI;
 using ServerHub.Utils;
+using ServerHub.Exceptions;
 using SharpConsoleUI;
 using SharpConsoleUI.Builders;
 using SharpConsoleUI.Controls;
@@ -189,10 +190,14 @@ class Program
 
             return 0;
         }
+        catch (ConfigurationException configEx)
+        {
+            DisplayConfigurationError(configEx);
+            return 1;
+        }
         catch (Exception ex)
         {
-            Console.Clear();
-            AnsiConsole.WriteException(ex);
+            DisplayGenericError(ex);
             return 1;
         }
     }
@@ -276,6 +281,14 @@ class Program
 
             // Recalculate layout
             var placements = _layoutEngine.CalculateLayout(_config, terminalWidth, terminalHeight);
+
+            // Check if dashboard is empty
+            if (placements.Count == 0)
+            {
+                ShowEmptyDashboardMessage();
+                UpdateStatusBar();
+                return;
+            }
 
             // RE-INITIALIZE FocusManager with new placements
             _focusManager?.Initialize(_mainWindow, placements);
@@ -695,7 +708,7 @@ class Program
         var configuredPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var widget in _config.Widgets.Values)
         {
-            var resolved = WidgetPaths.ResolveWidgetPath(widget.Path);
+            var resolved = WidgetPaths.ResolveWidgetPath(widget.Path, widget.Location);
             if (resolved != null)
                 configuredPaths.Add(Path.GetFullPath(resolved));
         }
@@ -1041,6 +1054,10 @@ class Program
 
         foreach (var (widgetId, widgetConfig) in _config.Widgets)
         {
+            // Skip disabled widgets - no timers, no initial fetch
+            if (!widgetConfig.Enabled)
+                continue;
+
             // Initial fetch
             _ = RefreshWidgetAsync(widgetId, widgetConfig);
 
@@ -1072,6 +1089,10 @@ class Program
 
         foreach (var (widgetId, widgetConfig) in _config.Widgets)
         {
+            // Skip disabled widgets
+            if (!widgetConfig.Enabled)
+                continue;
+
             _ = RefreshWidgetAsync(widgetId, widgetConfig);
         }
     }
@@ -1387,21 +1408,135 @@ class Program
 
     private static void UpdateStatusBar()
     {
-        if (_windowSystem == null)
+        if (_windowSystem == null || _config == null)
             return;
 
-        var totalWidgets = _widgetDataCache.Count;
+        // Count widgets by state
+        var totalConfigured = _config.Widgets.Count;
+        var disabledCount = _config.Widgets.Values.Count(w => !w.Enabled);
+        var enabledCount = totalConfigured - disabledCount;
+
         var errorWidgets = _widgetDataCache.Values.Count(w => w.HasError);
-        var okWidgets = totalWidgets - errorWidgets;
+        var okWidgets = _widgetDataCache.Count - errorWidgets;
 
         var cpuUsage = GetSystemCPU();
         var memUsage = GetSystemMemory();
 
         var status = _isPaused
-            ? $"[yellow]PAUSED[/] | {totalWidgets} widgets | Press Space to resume"
-            : $"ServerHub | {totalWidgets} widgets ({okWidgets} ok, {errorWidgets} error) | CPU {cpuUsage}% MEM {memUsage}% | {DateTime.Now:HH:mm:ss}";
+            ? $"[yellow]PAUSED[/] | {enabledCount} widgets ({disabledCount} disabled) | Press Space to resume"
+            : $"ServerHub | {enabledCount} widgets ({okWidgets} ok, {errorWidgets} error{(disabledCount > 0 ? $", {disabledCount} disabled" : "")}) | CPU {cpuUsage}% MEM {memUsage}% | {DateTime.Now:HH:mm:ss}";
 
         _windowSystem.BottomStatus = status;
+    }
+
+    private static void DisplayConfigurationError(ConfigurationException ex)
+    {
+        Console.Clear();
+
+        // Title bar
+        AnsiConsole.Write(new Rule($"[red]Configuration Error: {ex.GetType().Name.Replace("Exception", "")}[/]").LeftJustified());
+        AnsiConsole.WriteLine();
+
+        // Problem section
+        AnsiConsole.MarkupLine($"[yellow]Problem:[/]");
+        AnsiConsole.MarkupLine($"  {Markup.Escape(ex.Problem)}");
+        AnsiConsole.WriteLine();
+
+        // Additional info (if any)
+        if (ex.AdditionalInfo.Count > 0)
+        {
+            foreach (var info in ex.AdditionalInfo)
+            {
+                if (info.EndsWith(":"))
+                {
+                    AnsiConsole.MarkupLine($"[cyan]{Markup.Escape(info)}[/]");
+                }
+                else
+                {
+                    AnsiConsole.MarkupLine($"[grey]{Markup.Escape(info)}[/]");
+                }
+            }
+            AnsiConsole.WriteLine();
+        }
+
+        // How to fix section
+        AnsiConsole.MarkupLine($"[green]How to fix:[/]");
+        AnsiConsole.MarkupLine($"  {Markup.Escape(ex.HowToFix)}");
+        AnsiConsole.WriteLine();
+
+        // Config file location
+        if (!string.IsNullOrEmpty(ex.ConfigPath))
+        {
+            AnsiConsole.MarkupLine($"[grey]Config file:[/] {Markup.Escape(ex.ConfigPath)}");
+            AnsiConsole.WriteLine();
+        }
+
+        // Footer
+        AnsiConsole.MarkupLine("[grey]Press F2 in ServerHub to edit configuration, or edit the file manually.[/]");
+    }
+
+    private static void DisplayGenericError(Exception ex)
+    {
+        Console.Clear();
+
+        AnsiConsole.Write(new Rule("[red]Error[/]").LeftJustified());
+        AnsiConsole.WriteLine();
+
+        AnsiConsole.MarkupLine($"[yellow]An error occurred:[/]");
+        AnsiConsole.MarkupLine($"  {Markup.Escape(ex.Message)}");
+        AnsiConsole.WriteLine();
+
+        if (ex.InnerException != null)
+        {
+            AnsiConsole.MarkupLine($"[grey]Caused by:[/]");
+            AnsiConsole.MarkupLine($"  {Markup.Escape(ex.InnerException.Message)}");
+            AnsiConsole.WriteLine();
+        }
+
+        // Show full exception in verbose mode or for unexpected errors
+        AnsiConsole.MarkupLine("[grey]For detailed error information, see below:[/]");
+        AnsiConsole.WriteLine();
+        AnsiConsole.WriteException(ex, ExceptionFormats.ShortenEverything);
+    }
+
+    private static void ShowEmptyDashboardMessage()
+    {
+        if (_mainWindow == null || _config == null)
+            return;
+
+        var enabledCount = _config.Widgets.Values.Count(w => w.Enabled);
+        var disabledCount = _config.Widgets.Count - enabledCount;
+
+        string message;
+        if (_config.Widgets.Count == 0)
+        {
+            message = @"[cyan]Welcome to ServerHub![/]
+
+No widgets configured yet.
+
+[yellow]Press F2[/] to open the configuration dialog and add widgets.
+You can discover available widgets and add them to your dashboard.";
+        }
+        else if (enabledCount == 0)
+        {
+            message = $@"[yellow]All {disabledCount} widgets are disabled[/]
+
+[yellow]Press F2[/] to open the configuration dialog.
+Select a disabled widget and check 'Enabled' to show it on the dashboard.";
+        }
+        else
+        {
+            return; // Don't show message if there are enabled widgets
+        }
+
+        var panel = Controls.Markup()
+            .AddLine("")
+            .AddLine(message)
+            .AddLine("")
+            .WithMargin(4, 2, 4, 2)
+            .Build();
+
+        _mainWindow.AddControl(panel);
     }
 
     private static int GetColumnCountFromWidth(int terminalWidth)
@@ -1512,7 +1647,7 @@ class Program
                 config = configManager.LoadConfig(configPath);
                 foreach (var widget in config.Widgets.Values)
                 {
-                    var resolved = WidgetPaths.ResolveWidgetPath(widget.Path);
+                    var resolved = WidgetPaths.ResolveWidgetPath(widget.Path, widget.Location);
                     if (resolved != null)
                     {
                         configuredPaths.Add(Path.GetFullPath(resolved));
@@ -1822,7 +1957,7 @@ class Program
 
         foreach (var (id, widget) in config.Widgets)
         {
-            var resolved = WidgetPaths.ResolveWidgetPath(widget.Path);
+            var resolved = WidgetPaths.ResolveWidgetPath(widget.Path, widget.Location);
 
             if (resolved == null || !File.Exists(resolved))
             {

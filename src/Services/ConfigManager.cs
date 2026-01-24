@@ -6,6 +6,7 @@ using YamlDotNet.Serialization.NamingConventions;
 using ServerHub.Models;
 using ServerHub.Utils;
 using ServerHub.Config;
+using ServerHub.Exceptions;
 
 namespace ServerHub.Services;
 
@@ -16,6 +17,7 @@ public class ConfigManager
 {
     private readonly IDeserializer _deserializer;
     private readonly ISerializer _serializer;
+    private string? _lastLoadedPath;
 
     public ConfigManager()
     {
@@ -28,6 +30,7 @@ public class ConfigManager
         _serializer = new SerializerBuilder()
             .WithNamingConvention(UnderscoredNamingConvention.Instance)
             .WithTypeConverter(new WidgetLocationTypeConverter())
+            .ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitDefaults)
             .Build();
     }
 
@@ -43,6 +46,7 @@ public class ConfigManager
             throw new FileNotFoundException($"Configuration file not found: {configPath}");
         }
 
+        _lastLoadedPath = configPath;
         var yaml = File.ReadAllText(configPath);
         var config = _deserializer.Deserialize<ServerHubConfig>(yaml);
 
@@ -89,32 +93,60 @@ public class ConfigManager
     /// </summary>
     private void ValidateConfig(ServerHubConfig config)
     {
+        // Check 1: At least one widget configured (can be disabled)
         if (config.Widgets.Count == 0)
         {
-            throw new InvalidOperationException("Configuration must contain at least one widget");
+            // Allow empty config - will show empty dashboard
+            // User can press F2 to discover and add widgets
+            return;
         }
 
+        // Check 2: Validate widget configurations
         foreach (var (widgetId, widgetConfig) in config.Widgets)
         {
+            // Path is required
             if (string.IsNullOrWhiteSpace(widgetConfig.Path))
             {
-                throw new InvalidOperationException($"Widget '{widgetId}' has no path specified");
+                throw new MissingWidgetPathException(widgetId)
+                {
+                    ConfigPath = _lastLoadedPath
+                };
             }
 
+            // Refresh must be >= 1
             if (widgetConfig.Refresh < 1)
             {
-                throw new InvalidOperationException($"Widget '{widgetId}' has invalid refresh interval: {widgetConfig.Refresh}");
+                throw new InvalidRefreshIntervalException(widgetId, widgetConfig.Refresh)
+                {
+                    ConfigPath = _lastLoadedPath
+                };
             }
         }
 
-        // Validate layout order references existing widgets
+        // Check 3: Validate layout order references
         if (config.Layout?.Order != null)
         {
+            var availableWidgets = config.Widgets.Keys.ToList();
+            var seenWidgets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
             foreach (var widgetId in config.Layout.Order)
             {
                 if (!config.Widgets.ContainsKey(widgetId))
                 {
-                    throw new InvalidOperationException($"Layout references unknown widget: '{widgetId}'");
+                    throw new InvalidLayoutWidgetException(widgetId, availableWidgets)
+                    {
+                        ConfigPath = _lastLoadedPath
+                    };
+                }
+
+                // Detect duplicates in layout order
+                if (seenWidgets.Contains(widgetId))
+                {
+                    Console.WriteLine($"Warning: Widget '{widgetId}' appears multiple times in layout.order");
+                }
+                else
+                {
+                    seenWidgets.Add(widgetId);
                 }
             }
         }

@@ -135,6 +135,55 @@ public static class WidgetPaths
     }
 
     /// <summary>
+    /// Resolves widget path and returns the actual location where it was found.
+    /// For Auto/null location, determines whether widget was found in custom or bundled directory.
+    /// </summary>
+    /// <param name="relativePath">Relative path to the widget</param>
+    /// <param name="configuredLocation">Location constraint from configuration (null = Auto)</param>
+    /// <returns>Tuple of (resolved path, actual location). Path is null if not found.</returns>
+    public static (string? path, WidgetLocation? actualLocation) ResolveWidgetPathWithLocation(
+        string relativePath,
+        WidgetLocation? configuredLocation)
+    {
+        // If explicit location specified, honor it and return that location
+        if (configuredLocation == WidgetLocation.Bundled)
+        {
+            var path = ResolveWidgetPath(relativePath, WidgetLocation.Bundled);
+            return (path, path != null ? WidgetLocation.Bundled : null);
+        }
+
+        if (configuredLocation == WidgetLocation.Custom)
+        {
+            var path = ResolveWidgetPath(relativePath, WidgetLocation.Custom);
+            return (path, path != null ? WidgetLocation.Custom : null);
+        }
+
+        // Auto location: determine actual location based on where widget is found
+        var bundledPath = GetBundledWidgetsDirectory();
+        var customPaths = GetCustomSearchPaths().ToList();
+
+        // Search custom paths first (higher priority)
+        foreach (var searchPath in customPaths)
+        {
+            var fullPath = Path.Combine(searchPath, relativePath);
+            if (File.Exists(fullPath))
+            {
+                return (fullPath, WidgetLocation.Custom);
+            }
+        }
+
+        // Search bundled path last (lower priority)
+        var bundledFullPath = Path.Combine(bundledPath, relativePath);
+        if (File.Exists(bundledFullPath))
+        {
+            return (bundledFullPath, WidgetLocation.Bundled);
+        }
+
+        // Not found
+        return (null, null);
+    }
+
+    /// <summary>
     /// Gets the user configuration directory
     /// </summary>
     /// <returns>Path to ~/.config/serverhub/</returns>

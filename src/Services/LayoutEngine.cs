@@ -55,9 +55,9 @@ public class LayoutEngine
         var placements = new List<WidgetPlacement>();
         int currentRow = 0;
 
-        // First, place pinned widgets
+        // First, place pinned widgets (only enabled ones)
         var pinnedWidgets = config.Widgets
-            .Where(w => w.Value.Pinned)
+            .Where(w => w.Value.Pinned && w.Value.Enabled)
             .Select(w => w.Key)
             .ToList();
 
@@ -86,6 +86,10 @@ public class LayoutEngine
                 {
                     // Skip pinned widgets (already placed)
                     if (widgetConfig.Pinned)
+                        continue;
+
+                    // Skip disabled widgets
+                    if (!widgetConfig.Enabled)
                         continue;
 
                     // Calculate column span for this widget
@@ -231,16 +235,37 @@ public class LayoutEngine
     /// <summary>
     /// Gets the widget order from configuration
     /// Uses layout.order if available, otherwise returns all widgets
+    /// Filters out disabled widgets and duplicates
     /// </summary>
     private List<string> GetWidgetOrder(ServerHubConfig config)
     {
+        List<string> allWidgets;
+
         if (config.Layout?.Order != null && config.Layout.Order.Count > 0)
         {
-            return config.Layout.Order;
+            allWidgets = config.Layout.Order;
+        }
+        else
+        {
+            allWidgets = config.Widgets.Keys.ToList();
         }
 
-        // Default: return all widgets in configuration order
-        return config.Widgets.Keys.ToList();
+        // Filter out disabled widgets and remove duplicates (preserve first occurrence)
+        var seenWidgets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        return allWidgets
+            .Where(widgetId =>
+            {
+                if (!config.Widgets.TryGetValue(widgetId, out var widgetConfig) || !widgetConfig.Enabled)
+                    return false;
+
+                // Skip if we've already seen this widget (handles duplicates in layout.order)
+                if (seenWidgets.Contains(widgetId))
+                    return false;
+
+                seenWidgets.Add(widgetId);
+                return true;
+            })
+            .ToList();
     }
 
 }

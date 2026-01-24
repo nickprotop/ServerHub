@@ -5,6 +5,7 @@ using ServerHub.Config;
 using ServerHub.Models;
 using ServerHub.Services;
 using ServerHub.Utils;
+using ServerHub.Exceptions;
 using SharpConsoleUI;
 using SharpConsoleUI.Builders;
 using SharpConsoleUI.Controls;
@@ -60,6 +61,7 @@ public static class WidgetConfigDialog
     // Detail panel controls
     private static PromptControl? _refreshInput;
     private static CheckboxControl? _pinnedCheckbox;
+    private static CheckboxControl? _enabledCheckbox;
     private static DropdownControl? _columnSpanDropdown;
     private static PromptControl? _maxLinesInput;
     private static DropdownControl? _locationDropdown;
@@ -292,8 +294,10 @@ public static class WidgetConfigDialog
             }
         }
 
-        // Configured widgets
-        var configured = _allEntries.Where(e => !e.IsGlobalSettings && e.Status == WidgetStatus.Configured).ToList();
+        // Configured widgets (enabled only)
+        var configured = _allEntries.Where(e => !e.IsGlobalSettings
+                                               && e.Status == WidgetStatus.Configured
+                                               && e.Config?.Enabled == true).ToList();
         if (configured.Any())
         {
             _widgetList.AddItem(new ListItem("[green bold]✓ CONFIGURED:[/]") { IsEnabled = false });
@@ -306,6 +310,26 @@ public static class WidgetConfigDialog
                     _ => ""
                 };
                 var item = new ListItem($"[green]✓[/] {entry.Id}{locationHint}") { Tag = entry };
+                _widgetList.AddItem(item);
+            }
+        }
+
+        // Disabled widgets (configured but disabled)
+        var disabled = _allEntries.Where(e => !e.IsGlobalSettings
+                                             && e.Status == WidgetStatus.Configured
+                                             && e.Config?.Enabled == false).ToList();
+        if (disabled.Any())
+        {
+            _widgetList.AddItem(new ListItem("[grey70 bold]○ DISABLED:[/]") { IsEnabled = false });
+            foreach (var entry in disabled)
+            {
+                var locationHint = entry.Config?.Location switch
+                {
+                    WidgetLocation.Bundled => " [grey50](bundled)[/]",
+                    WidgetLocation.Custom => " [grey50](custom)[/]",
+                    _ => ""
+                };
+                var item = new ListItem($"[grey70]○[/] {entry.Id}{locationHint}") { Tag = entry };
                 _widgetList.AddItem(item);
             }
         }
@@ -401,6 +425,9 @@ public static class WidgetConfigDialog
 
         _pinnedCheckbox = new CheckboxControl("Pinned to top", false);
         _pinnedCheckbox.CheckedChanged += (s, isChecked) => OnSettingChanged();
+
+        _enabledCheckbox = new CheckboxControl("Enabled (visible & refreshing)", true);
+        _enabledCheckbox.CheckedChanged += (s, isChecked) => OnSettingChanged();
 
         _columnSpanDropdown = new DropdownControl("Column Span:");
         _columnSpanDropdown.AddItem("1");
@@ -533,22 +560,43 @@ public static class WidgetConfigDialog
         var config = _selectedEntry.Config;
         if (config == null) return;
 
-        // Determine widget type based on location setting (not resolved path)
-        bool isBundled = config.Location == WidgetLocation.Bundled;
+        // Determine actual widget type for checksum validation
+        // For Auto location, resolve to find out if it's actually bundled
+        var (resolvedPath, actualLocation) = WidgetPaths.ResolveWidgetPathWithLocation(
+            config.Path,
+            config.Location);
+
+        // If explicit location, use that; if Auto, use actual resolved location
+        var effectiveLocation = config.Location ?? actualLocation;
+        bool isBundled = effectiveLocation == WidgetLocation.Bundled;
 
         // Build header with status
         var headerBuilder = Controls.Markup()
             .AddLine($"[cyan1 bold]{_selectedEntry.Id}[/]")
             .AddLine($"[grey70]Path: {config.Path}[/]");
 
-        // Show location
-        var locationText = config.Location switch
+        // Show configured location and actual resolved location if different
+        var configuredLocationText = config.Location switch
         {
             WidgetLocation.Bundled => "bundled",
             WidgetLocation.Custom => "custom",
             _ => "auto"
         };
-        headerBuilder.AddLine($"[grey70]Location: {locationText}[/]");
+
+        if (config.Location == null && actualLocation != null)
+        {
+            var actualLocationText = actualLocation switch
+            {
+                WidgetLocation.Bundled => "bundled",
+                WidgetLocation.Custom => "custom",
+                _ => "unknown"
+            };
+            headerBuilder.AddLine($"[grey70]Location: {configuredLocationText} (resolved to {actualLocationText})[/]");
+        }
+        else
+        {
+            headerBuilder.AddLine($"[grey70]Location: {configuredLocationText}[/]");
+        }
 
         // Get checksums
         string? expectedChecksum = null;
@@ -790,6 +838,19 @@ public static class WidgetConfigDialog
             .WithMargin(1, 1, 1, 0)
             .Build();
         _detailPanel!.AddControl(settingsHeader);
+
+        // Enabled checkbox (first setting)
+        _enabledCheckbox!.Checked = config.Enabled;
+        _enabledCheckbox.Margin = new Margin(1, 0, 1, 0);
+        _detailPanel.AddControl(_enabledCheckbox);
+
+        var enabledHint = Controls.Markup()
+            .AddLine(config.Enabled
+                ? "[grey70]Widget is visible and refreshing[/]"
+                : "[yellow]Widget is hidden and paused[/]")
+            .WithMargin(1, 0, 1, 1)
+            .Build();
+        _detailPanel.AddControl(enabledHint);
 
         // Refresh
         _refreshInput!.Input = config.Refresh.ToString();
@@ -1072,6 +1133,9 @@ public static class WidgetConfigDialog
         if (_pinnedCheckbox != null)
             config.Pinned = _pinnedCheckbox.Checked;
 
+        if (_enabledCheckbox != null)
+            config.Enabled = _enabledCheckbox.Checked;
+
         if (_columnSpanDropdown != null)
             config.ColumnSpan = _columnSpanDropdown.SelectedIndex + 1;
 
@@ -1094,6 +1158,28 @@ public static class WidgetConfigDialog
         return int.TryParse(input, out int value) ? value : null;
     }
 
+    /// <summary>
+    /// Finds the nearest enabled widget in the specified direction from a given index.
+    /// Returns -1 if no enabled widget found.
+    /// </summary>
+    private static int FindNearestEnabledWidget(List<string> order, int currentIndex, int direction)
+    {
+        if (_workingConfig == null) return -1;
+
+        int searchIndex = currentIndex + direction;
+        while (searchIndex >= 0 && searchIndex < order.Count)
+        {
+            var widgetId = order[searchIndex];
+            if (_workingConfig.Widgets.TryGetValue(widgetId, out var config) && config.Enabled)
+            {
+                return searchIndex;
+            }
+            searchIndex += direction;
+        }
+
+        return -1;
+    }
+
     private static void MoveWidgetUp()
     {
         if (_selectedEntry == null || _workingConfig == null || _selectedEntry.Status != WidgetStatus.Configured)
@@ -1103,10 +1189,14 @@ public static class WidgetConfigDialog
         if (order == null) return;
 
         int idx = order.IndexOf(_selectedEntry.Id);
-        if (idx > 0)
+        if (idx <= 0) return;
+
+        // Find nearest enabled widget above
+        int targetIdx = FindNearestEnabledWidget(order, idx, -1);
+        if (targetIdx >= 0)
         {
-            // Swap with previous
-            (order[idx], order[idx - 1]) = (order[idx - 1], order[idx]);
+            // Swap with target
+            (order[idx], order[targetIdx]) = (order[targetIdx], order[idx]);
             _isDirty = true;
 
             // Refresh list and reselect
@@ -1124,10 +1214,14 @@ public static class WidgetConfigDialog
         if (order == null) return;
 
         int idx = order.IndexOf(_selectedEntry.Id);
-        if (idx >= 0 && idx < order.Count - 1)
+        if (idx < 0 || idx >= order.Count - 1) return;
+
+        // Find nearest enabled widget below
+        int targetIdx = FindNearestEnabledWidget(order, idx, 1);
+        if (targetIdx >= 0)
         {
-            // Swap with next
-            (order[idx], order[idx + 1]) = (order[idx + 1], order[idx]);
+            // Swap with target
+            (order[idx], order[targetIdx]) = (order[targetIdx], order[idx]);
             _isDirty = true;
 
             // Refresh list and reselect
@@ -1157,28 +1251,36 @@ public static class WidgetConfigDialog
         // Calculate checksum
         var checksum = ScriptValidator.CalculateChecksum(_selectedEntry.FullPath);
 
-        // Create widget config
+        // Strip " (bundled)" or " (custom)" suffix from available widget ID
+        var widgetId = _selectedEntry.Id;
+        if (widgetId.EndsWith(" (bundled)"))
+            widgetId = widgetId.Substring(0, widgetId.Length - " (bundled)".Length);
+        else if (widgetId.EndsWith(" (custom)"))
+            widgetId = widgetId.Substring(0, widgetId.Length - " (custom)".Length);
+
+        // Create widget config (set location based on original entry's config)
         var widgetConfig = new WidgetConfig
         {
             Path = _selectedEntry.Path,
+            Location = _selectedEntry.Config?.Location,
             Sha256 = checksum,
             Refresh = _workingConfig.DefaultRefresh,
             Pinned = false
         };
 
         // Add to config
-        _workingConfig.Widgets[_selectedEntry.Id] = widgetConfig;
+        _workingConfig.Widgets[widgetId] = widgetConfig;
 
         // Add to layout order
         _workingConfig.Layout ??= new LayoutConfig { Order = new List<string>() };
         _workingConfig.Layout.Order ??= new List<string>();
-        if (!_workingConfig.Layout.Order.Contains(_selectedEntry.Id))
+        if (!_workingConfig.Layout.Order.Contains(widgetId))
         {
-            _workingConfig.Layout.Order.Add(_selectedEntry.Id);
+            _workingConfig.Layout.Order.Add(widgetId);
         }
 
         _isDirty = true;
-        RefreshWidgetList(_selectedEntry.Id);
+        RefreshWidgetList(widgetId);
         UpdateTitle();
     }
 
@@ -1236,9 +1338,13 @@ public static class WidgetConfigDialog
 
             _dialogWindow?.Close();
         }
+        catch (ConfigurationException configEx)
+        {
+            ShowConfigurationErrorDialog(configEx);
+        }
         catch (Exception ex)
         {
-            // Show error dialog
+            // Generic errors use simple dialog
             ShowErrorDialog($"Failed to save config: {ex.Message}");
         }
     }
@@ -1340,6 +1446,85 @@ public static class WidgetConfigDialog
         _windowSystem.AddWindow(errorDialog);
     }
 
+    private static void ShowConfigurationErrorDialog(ConfigurationException ex)
+    {
+        if (_windowSystem == null) return;
+
+        var errorDialog = new WindowBuilder(_windowSystem)
+            .WithTitle("Configuration Error")
+            .WithSize(70, 18)
+            .Centered()
+            .AsModal()
+            .WithBorderStyle(BorderStyle.Single)
+            .WithColors(Color.Grey15, Color.Grey93)
+            .Build();
+
+        // Problem
+        var problemPanel = Controls.Markup()
+            .AddLine("")
+            .AddLine($"[yellow bold]Problem:[/]")
+            .AddLine($"  {Markup.Escape(ex.Problem)}")
+            .AddLine("")
+            .WithMargin(1, 0, 1, 0)
+            .Build();
+        errorDialog.AddControl(problemPanel);
+
+        // Additional info (scrollable if many items)
+        if (ex.AdditionalInfo.Count > 0)
+        {
+            var infoBuilder = Controls.Markup()
+                .WithMargin(1, 0, 1, 0);
+
+            foreach (var info in ex.AdditionalInfo.Take(8))
+            {
+                if (info.EndsWith(":"))
+                    infoBuilder.AddLine($"[cyan]{Markup.Escape(info)}[/]");
+                else
+                    infoBuilder.AddLine($"[grey70]{Markup.Escape(info)}[/]");
+            }
+
+            if (ex.AdditionalInfo.Count > 8)
+            {
+                infoBuilder.AddLine($"[grey50]... and {ex.AdditionalInfo.Count - 8} more[/]");
+            }
+
+            infoBuilder.AddLine("");
+            errorDialog.AddControl(infoBuilder.Build());
+        }
+
+        // How to fix
+        var fixPanel = Controls.Markup()
+            .AddLine($"[green bold]How to fix:[/]")
+            .AddLine($"  {Markup.Escape(ex.HowToFix)}")
+            .AddLine("")
+            .WithMargin(1, 0, 1, 0)
+            .Build();
+        errorDialog.AddControl(fixPanel);
+
+        // Config path
+        if (!string.IsNullOrEmpty(ex.ConfigPath))
+        {
+            var pathPanel = Controls.Markup()
+                .AddLine($"[grey70]Config: {Markup.Escape(ex.ConfigPath)}[/]")
+                .WithMargin(1, 0, 1, 0)
+                .Build();
+            errorDialog.AddControl(pathPanel);
+        }
+
+        // Buttons
+        var okButton = Controls.Button("  OK  ")
+            .OnClick((s, e) => _windowSystem.CloseWindow(errorDialog))
+            .Build();
+
+        var buttonGrid = HorizontalGridControl.ButtonRow(okButton);
+        buttonGrid.HorizontalAlignment = SharpConsoleUI.Layout.HorizontalAlignment.Center;
+        buttonGrid.StickyPosition = StickyPosition.Bottom;
+        buttonGrid.Margin = new Margin(0, 0, 0, 1);
+        errorDialog.AddControl(buttonGrid);
+
+        _windowSystem.AddWindow(errorDialog);
+    }
+
     private static List<WidgetListEntry> DiscoverWidgets(ServerHubConfig config)
     {
         var entries = new List<WidgetListEntry>();
@@ -1371,22 +1556,41 @@ public static class WidgetConfigDialog
             if (!config.Widgets.TryGetValue(widgetId, out var widgetConfig))
                 continue;
 
-            var fullPath = WidgetPaths.ResolveWidgetPath(widgetConfig.Path, widgetConfig.Location);
+            // Resolve with actual location detection for Auto widgets
+            var (fullPath, actualLocation) = WidgetPaths.ResolveWidgetPathWithLocation(
+                widgetConfig.Path,
+                widgetConfig.Location);
+
             var status = fullPath != null && File.Exists(fullPath)
                 ? WidgetStatus.Configured
                 : WidgetStatus.Missing;
 
+            // For Auto location, show where it resolved to in the widget list
+            var displayId = widgetId;
+            if (widgetConfig.Location == null && actualLocation != null)
+            {
+                var locationText = actualLocation switch
+                {
+                    WidgetLocation.Bundled => "auto: bundled",
+                    WidgetLocation.Custom => "auto: custom",
+                    _ => "auto"
+                };
+                displayId = $"{widgetId} ({locationText})";
+            }
+
             entries.Add(new WidgetListEntry
             {
-                Id = widgetId,
+                Id = displayId,
                 Path = widgetConfig.Path,
                 FullPath = fullPath,
                 Status = status,
                 Config = widgetConfig
             });
 
-            // Track this path+location as configured (even if missing)
-            configuredPathLocations.Add((widgetConfig.Path, widgetConfig.Location));
+            // Track using ACTUAL location for Auto widgets (prevents duplicates)
+            // If configured location is explicit, use that; otherwise use actual resolved location
+            var trackingLocation = widgetConfig.Location ?? actualLocation;
+            configuredPathLocations.Add((widgetConfig.Path, trackingLocation));
         }
 
         // Discover available widgets from bundled directory
@@ -1401,7 +1605,9 @@ public static class WidgetConfigDialog
                 var fullPath = Path.GetFullPath(file);
 
                 // Skip if this path+bundled combination is already configured
-                if (configuredPathLocations.Contains((fileName, WidgetLocation.Bundled)))
+                // OR if the path is configured with Auto (null) location
+                if (configuredPathLocations.Contains((fileName, WidgetLocation.Bundled)) ||
+                    configuredPathLocations.Contains((fileName, null)))
                     continue;
 
                 var widgetId = Path.GetFileNameWithoutExtension(file);
@@ -1437,7 +1643,9 @@ public static class WidgetConfigDialog
                 var fullPath = Path.GetFullPath(file);
 
                 // Skip if this path+custom combination is already configured
-                if (configuredPathLocations.Contains((fileName, WidgetLocation.Custom)))
+                // OR if the path is configured with Auto (null) location
+                if (configuredPathLocations.Contains((fileName, WidgetLocation.Custom)) ||
+                    configuredPathLocations.Contains((fileName, null)))
                     continue;
 
                 var widgetId = Path.GetFileNameWithoutExtension(file);
