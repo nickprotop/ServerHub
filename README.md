@@ -148,6 +148,12 @@ widgets:
     path: memory.sh
     refresh: 2
 
+  docker:
+    path: docker.sh
+    refresh: 30              # Dashboard refreshes every 30s
+    expanded_refresh: 10     # Expanded dialog refreshes every 10s
+    location: bundled
+
   my-custom:
     path: my-custom.sh
     location: custom
@@ -158,6 +164,7 @@ layout:
   order:
     - cpu
     - memory
+    - docker
     - my-custom
 
 breakpoints:
@@ -165,6 +172,37 @@ breakpoints:
   triple: 160    # 3 columns at 160+ chars
   quad: 220      # 4 columns at 220+ chars
 ```
+
+**Refresh Intervals:**
+
+Each widget can have two refresh intervals:
+
+- `refresh` - Refresh rate for the main dashboard (required)
+- `expanded_refresh` - Refresh rate when viewing the expanded dialog (optional)
+
+If `expanded_refresh` is not set, the widget uses the `refresh` value for both views.
+
+**Common patterns:**
+
+- **Slower expanded refresh** - Reduce resource usage when viewing details:
+  ```yaml
+  alerts:
+    refresh: 30
+    expanded_refresh: 60  # Slower - alerts don't change often
+  ```
+
+- **Faster expanded refresh** - More detail when actively monitoring:
+  ```yaml
+  docker:
+    refresh: 30
+    expanded_refresh: 10  # Faster when viewing container details
+  ```
+
+- **Real-time monitoring** - Keep the same rate for both:
+  ```yaml
+  cpu:
+    refresh: 2  # No expanded_refresh - uses 2s for both views
+  ```
 
 ### Widget Path Resolution
 

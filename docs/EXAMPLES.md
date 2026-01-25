@@ -352,6 +352,7 @@ widgets:
     path: api-health.sh
     sha256: <checksum>
     refresh: 10
+    expanded_refresh: 5  # Faster when viewing detailed status
 ```
 
 ---
@@ -412,7 +413,8 @@ widgets:
   docker-services:
     path: docker-services.sh
     sha256: <checksum>
-    refresh: 5
+    refresh: 30              # Dashboard: slower updates
+    expanded_refresh: 10     # Expanded: faster when monitoring containers
 ```
 
 ---
@@ -480,6 +482,7 @@ widgets:
     path: git-deploy.sh
     sha256: <checksum>
     refresh: 30
+    expanded_refresh: 60  # Slower when viewing - deployment status changes infrequently
 ```
 
 ---
