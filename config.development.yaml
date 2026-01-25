@@ -3,6 +3,7 @@ widgets:
     path: alerts.sh
     location: custom
     refresh: 30
+    expanded_refresh: 60
     enabled: true
   cpu:
     path: cpu.sh
@@ -18,46 +19,55 @@ widgets:
     path: disk.sh
     location: custom
     refresh: 10
+    expanded_refresh: 30
     enabled: true
   sysinfo:
     path: sysinfo.sh
     location: custom
     refresh: 30
+    expanded_refresh: 60
     enabled: true
   network:
     path: network.sh
     location: custom
     refresh: 2
+    expanded_refresh: 1
     enabled: true
   processes:
     path: processes.sh
     location: custom
     refresh: 3
+    expanded_refresh: 2
     enabled: true
   services:
     path: services.sh
     location: custom
     refresh: 5
+    expanded_refresh: 10
     enabled: true
   docker:
     path: docker.sh
     refresh: 30
+    expanded_refresh: 10
     column_span: 2
     enabled: true
   netstat:
     path: netstat.sh
     location: custom
     refresh: 5
+    expanded_refresh: 2
     enabled: true
   sensors:
     path: sensors.sh
     location: custom
     refresh: 5
+    expanded_refresh: 3
     enabled: true
   logs:
     path: logs.sh
     location: custom
     refresh: 10
+    expanded_refresh: 5
     enabled: true
   ssl-certs:
     path: ssl-certs.sh

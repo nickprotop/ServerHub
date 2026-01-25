@@ -7,34 +7,42 @@ default_refresh: 5
 
 # Widget definitions
 widgets:
+  # Example 1: Slower refresh in expanded view (reduce resource usage)
   alerts:
     path: alerts.sh
-    refresh: 30
+    refresh: 30             # Main dashboard: moderate updates
+    expanded_refresh: 60    # Expanded dialog: slower (alerts change infrequently)
     pinned: false
     # Optional: SHA256 checksum for security validation
     # sha256: abc123...
 
+  # Example 2: Real-time monitoring (keep same rate in both views)
   cpu:
     path: cpu.sh
     refresh: 2
+    # No expanded_refresh - keep real-time in both views
     pinned: false
     # Optional: Specify where to search for widget
     # location: bundled  # bundled, custom, or auto (default)
-    # Use this when same widget exists in multiple locations
 
   memory:
     path: memory.sh
     refresh: 2
+    # No expanded_refresh - real-time monitoring
     pinned: false
 
+  # Example 3: Faster refresh in expanded view (detailed monitoring)
   disk:
     path: disk.sh
-    refresh: 10
+    refresh: 10             # Main dashboard: slower updates
+    expanded_refresh: 5     # Expanded dialog: faster when viewing details
     pinned: false
 
+  # Example 4: Very slow refresh (same for both views)
   updates:
     path: updates.sh
     refresh: 3600  # Check every hour
+    # No expanded_refresh - hourly is appropriate for both views
     pinned: false
 
 # Layout configuration

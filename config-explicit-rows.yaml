@@ -17,36 +17,43 @@ widgets:
   disk:
     path: disk.sh
     refresh: 10
+    expanded_refresh: 30
     location: bundled
 
   sysinfo:
     path: sysinfo.sh
     refresh: 30
+    expanded_refresh: 60
     location: bundled
 
   network:
     path: network.sh
     refresh: 2
+    expanded_refresh: 1
     location: bundled
 
   processes:
     path: processes.sh
     refresh: 3
+    expanded_refresh: 2
     location: bundled
 
   docker:
     path: docker.sh
     refresh: 30
+    expanded_refresh: 10
     location: bundled
 
   services:
     path: services.sh
     refresh: 5
+    expanded_refresh: 10
     location: bundled
 
   logs:
     path: logs.sh
     refresh: 10
+    expanded_refresh: 5
     location: bundled
 
 # Explicit row-based layout

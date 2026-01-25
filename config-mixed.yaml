@@ -17,28 +17,33 @@ widgets:
   disk:
     path: disk.sh
     refresh: 10
+    expanded_refresh: 5
     location: bundled
 
   docker:
     path: docker.sh
     refresh: 30
+    expanded_refresh: 10    # Faster when monitoring containers
     column_span: 2  # Spans 2 columns
     location: bundled
 
   processes:
     path: processes.sh
     refresh: 3
+    expanded_refresh: 2     # Faster when monitoring activity
     column_span: 3  # Takes most of the row
     location: bundled
 
   services:
     path: services.sh
     refresh: 5
+    expanded_refresh: 10
     location: bundled
 
   logs:
     path: logs.sh
     refresh: 10
+    expanded_refresh: 5     # Faster when watching logs
     location: bundled
 
 # Explicit rows with column spanning
