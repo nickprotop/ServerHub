@@ -81,6 +81,26 @@ public class WidgetRefreshService
     }
 
     /// <summary>
+    /// Gets the refresh interval for the expanded dialog view of a specific widget.
+    /// Falls back to regular refresh interval if expanded_refresh is not configured.
+    /// </summary>
+    /// <param name="widgetId">The widget ID</param>
+    /// <returns>Refresh interval in seconds for expanded dialog view</returns>
+    public int GetExpandedRefreshInterval(string widgetId)
+    {
+        var widgetConfig = _config.Widgets.GetValueOrDefault(widgetId);
+
+        // Return expanded_refresh if explicitly set
+        if (widgetConfig?.ExpandedRefresh.HasValue == true)
+        {
+            return widgetConfig.ExpandedRefresh.Value;
+        }
+
+        // Fall back to regular refresh interval
+        return GetRefreshInterval(widgetId);
+    }
+
+    /// <summary>
     /// Gets the widget configuration
     /// </summary>
     /// <param name="widgetId">Widget identifier</param>

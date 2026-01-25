@@ -62,7 +62,7 @@ public static class WidgetExpansionDialog
             .Build();
 
         // Get refresh interval from service
-        int refreshInterval = refreshService.GetRefreshInterval(widgetId);
+        int refreshInterval = refreshService.GetExpandedRefreshInterval(widgetId);
 
         // Header section with refresh button (hybrid approach)
         var headerLine2 = $"[grey50]Refresh: {refreshInterval}s  •  Loading extended data...[/]";
