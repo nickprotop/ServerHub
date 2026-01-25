@@ -33,6 +33,7 @@ public class WidgetListEntry
 public static class WidgetConfigDialog
 {
     private static bool _isDirty = false;
+    private static bool _isPopulating = false; // Flag to prevent applying settings during initialization
     private static ServerHubConfig? _workingConfig;
     private static string? _configPath;
     private static List<WidgetListEntry> _allEntries = new();
@@ -47,6 +48,7 @@ public static class WidgetConfigDialog
 
     // Detail panel controls
     private static PromptControl? _refreshInput;
+    private static PromptControl? _expandedRefreshInput;
     private static CheckboxControl? _pinnedCheckbox;
     private static CheckboxControl? _enabledCheckbox;
     private static DropdownControl? _columnSpanDropdown;
@@ -429,6 +431,13 @@ public static class WidgetConfigDialog
         _refreshInput = new PromptControl { Prompt = "Refresh (sec):", InputWidth = 8 };
         _refreshInput.InputChanged += (s, text) => OnSettingChanged();
 
+        _expandedRefreshInput = new PromptControl
+        {
+            Prompt = "Expanded Refresh (sec):",
+            InputWidth = 8
+        };
+        _expandedRefreshInput.InputChanged += (s, text) => OnSettingChanged();
+
         _pinnedCheckbox = new CheckboxControl("Pinned to top", false);
         _pinnedCheckbox.CheckedChanged += (s, isChecked) => OnSettingChanged();
 
@@ -533,6 +542,9 @@ public static class WidgetConfigDialog
         if (_detailPanel == null || _workingConfig == null)
             return;
 
+        // Set flag to prevent InputChanged events from applying settings while we populate
+        _isPopulating = true;
+
         var header = Controls
             .Markup()
             .AddLine("[cyan1 bold]Global Settings[/]")
@@ -578,6 +590,9 @@ public static class WidgetConfigDialog
         _breakpointQuadInput!.Input = breakpoints.Quad.ToString();
         _breakpointQuadInput.Margin = new Margin(1, 0, 1, 0);
         _detailPanel.AddControl(_breakpointQuadInput);
+
+        // Done populating - re-enable change events
+        _isPopulating = false;
     }
 
     private static void ShowConfiguredWidgetSettings()
@@ -885,6 +900,9 @@ public static class WidgetConfigDialog
 
     private static void ShowWidgetSettingsControls(WidgetConfig config)
     {
+        // Set flag to prevent InputChanged events from applying settings while we populate
+        _isPopulating = true;
+
         var settingsHeader = Controls
             .Markup()
             .AddLine("[grey70]Settings:[/]")
@@ -913,6 +931,11 @@ public static class WidgetConfigDialog
         _refreshInput.Margin = new Margin(1, 0, 1, 0);
         _detailPanel.AddControl(_refreshInput);
 
+        // Expanded refresh (optional)
+        _expandedRefreshInput!.Input = config.ExpandedRefresh?.ToString() ?? "";
+        _expandedRefreshInput.Margin = new Margin(1, 0, 1, 0);
+        _detailPanel.AddControl(_expandedRefreshInput);
+
         // Pinned
         _pinnedCheckbox!.Checked = config.Pinned;
         _pinnedCheckbox.Margin = new Margin(1, 1, 1, 0);
@@ -938,6 +961,9 @@ public static class WidgetConfigDialog
         _maxLinesInput!.Input = config.MaxLines?.ToString() ?? "";
         _maxLinesInput.Margin = new Margin(1, 1, 1, 0);
         _detailPanel.AddControl(_maxLinesInput);
+
+        // Done populating - re-enable change events
+        _isPopulating = false;
     }
 
     private static void ShowAvailableWidgetPreview()
@@ -1146,6 +1172,10 @@ public static class WidgetConfigDialog
 
     private static void OnSettingChanged()
     {
+        // Skip if we're currently populating controls
+        if (_isPopulating)
+            return;
+
         if (_selectedEntry == null || _workingConfig == null)
             return;
 
@@ -1205,6 +1235,16 @@ public static class WidgetConfigDialog
         if (int.TryParse(_refreshInput?.Input, out int refresh) && refresh >= 1)
         {
             config.Refresh = refresh;
+        }
+
+        // Apply expanded_refresh (optional)
+        if (string.IsNullOrWhiteSpace(_expandedRefreshInput?.Input))
+        {
+            config.ExpandedRefresh = null;  // Clear if empty
+        }
+        else if (int.TryParse(_expandedRefreshInput?.Input, out int expandedRefresh) && expandedRefresh >= 1)
+        {
+            config.ExpandedRefresh = expandedRefresh;
         }
 
         if (_pinnedCheckbox != null)
@@ -1650,17 +1690,22 @@ public static class WidgetConfigDialog
         var discovered = WidgetConfigurationHelper.DiscoverAllWidgets(config);
 
         // Convert to UI-specific WidgetListEntry
-        return discovered
-            .Select(d => new WidgetListEntry
-            {
-                Id = d.DisplayId,
-                Path = d.RelativePath,
-                FullPath = d.FullPath,
-                Status = d.Status,
-                Config = d.Config,
-                IsGlobalSettings = false,
+        var entries = discovered
+            .Select(d => {
+                var entry = new WidgetListEntry
+                {
+                    Id = d.DisplayId,
+                    Path = d.RelativePath,
+                    FullPath = d.FullPath,
+                    Status = d.Status,
+                    Config = d.Config,
+                    IsGlobalSettings = false,
+                };
+                return entry;
             })
             .ToList();
+
+        return entries;
     }
 
     /// <summary>
