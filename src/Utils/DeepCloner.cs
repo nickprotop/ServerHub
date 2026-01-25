@@ -22,6 +22,7 @@ public static class DeepCloner
         _serializer = new SerializerBuilder()
             .WithNamingConvention(UnderscoredNamingConvention.Instance)
             .WithTypeConverter(new WidgetLocationTypeConverter())
+            .ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitDefaults)
             .Build();
 
         _deserializer = new DeserializerBuilder()
