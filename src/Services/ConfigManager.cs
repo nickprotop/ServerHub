@@ -121,6 +121,18 @@ public class ConfigManager
                     ConfigPath = _lastLoadedPath
                 };
             }
+
+            // Validate expanded_refresh if set
+            if (widgetConfig.ExpandedRefresh.HasValue && widgetConfig.ExpandedRefresh.Value < 1)
+            {
+                throw new InvalidRefreshIntervalException(
+                    widgetId,
+                    widgetConfig.ExpandedRefresh.Value,
+                    "expanded_refresh")
+                {
+                    ConfigPath = _lastLoadedPath
+                };
+            }
         }
 
         // Check 3: Validate layout order references

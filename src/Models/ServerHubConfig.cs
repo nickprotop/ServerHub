@@ -103,6 +103,13 @@ public class WidgetConfig
     public int Refresh { get; set; } = 5;
 
     /// <summary>
+    /// Gets or sets the refresh interval for the expanded dialog view (in seconds).
+    /// If not set, defaults to the Refresh value.
+    /// </summary>
+    [YamlMember(Alias = "expanded_refresh")]
+    public int? ExpandedRefresh { get; set; }
+
+    /// <summary>
     /// Whether this widget should be pinned to the top as a tile
     /// </summary>
     [YamlMember(Alias = "pinned")]

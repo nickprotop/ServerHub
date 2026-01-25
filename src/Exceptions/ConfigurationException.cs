@@ -90,4 +90,16 @@ public class InvalidRefreshIntervalException : ConfigurationException
         AdditionalInfo.Add($"Current value: {interval} seconds");
         AdditionalInfo.Add("Minimum allowed: 1 second");
     }
+
+    public InvalidRefreshIntervalException(string widgetId, int interval, string fieldName)
+        : base(
+            $"Widget '{widgetId}' has invalid {fieldName} interval: {interval}",
+            $"Set {fieldName} to 1 or higher for widget '{widgetId}'")
+    {
+        WidgetId = widgetId;
+        InvalidInterval = interval;
+        AdditionalInfo.Add($"Field: {fieldName}");
+        AdditionalInfo.Add($"Current value: {interval} seconds");
+        AdditionalInfo.Add("Minimum allowed: 1 second");
+    }
 }
