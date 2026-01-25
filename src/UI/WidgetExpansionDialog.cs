@@ -253,6 +253,7 @@ public static class WidgetExpansionDialog
         var cts = new CancellationTokenSource();
         var currentData = widgetData;
         var refreshState = new RefreshState();
+        Timer? autoRefreshTimer = null;
 
         // Create update context to share state with refresh loop
         var updateContext = new ModalUpdateContext
@@ -283,11 +284,20 @@ public static class WidgetExpansionDialog
                 {
                     _ = Task.Run(async () =>
                     {
+                        // Stop timer before manual refresh
+                        autoRefreshTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+
                         refreshState.IsRefreshing = true;
                         var data = await refreshService.RefreshAsync(widgetId, extended: true);
                         currentData = data;
                         UpdateModalContent(updateContext, data);
                         refreshState.IsRefreshing = false;
+
+                        // Restart timer with fresh interval
+                        autoRefreshTimer?.Change(
+                            TimeSpan.FromSeconds(refreshInterval),
+                            TimeSpan.FromSeconds(refreshInterval)
+                        );
                     });
                 }
             };
@@ -304,12 +314,21 @@ public static class WidgetExpansionDialog
                     modal,
                     onRefreshRequested: async () =>
                     {
+                        // Stop timer before action refresh
+                        autoRefreshTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+
                         // Trigger immediate refresh with extended data
                         refreshState.IsRefreshing = true;
                         var data = await refreshService.RefreshAsync(widgetId, extended: true);
                         currentData = data;
                         UpdateModalContent(updateContext, data);
                         refreshState.IsRefreshing = false;
+
+                        // Restart timer with fresh interval
+                        autoRefreshTimer?.Change(
+                            TimeSpan.FromSeconds(refreshInterval),
+                            TimeSpan.FromSeconds(refreshInterval)
+                        );
                     },
                     onMainWidgetRefresh: onMainWidgetRefresh);
             }
@@ -336,11 +355,20 @@ public static class WidgetExpansionDialog
                 {
                     _ = Task.Run(async () =>
                     {
+                        // Stop timer before manual refresh
+                        autoRefreshTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+
                         refreshState.IsRefreshing = true;
                         var data = await refreshService.RefreshAsync(widgetId, extended: true);
                         currentData = data;
                         UpdateModalContent(updateContext, data);
                         refreshState.IsRefreshing = false;
+
+                        // Restart timer with fresh interval
+                        autoRefreshTimer?.Change(
+                            TimeSpan.FromSeconds(refreshInterval),
+                            TimeSpan.FromSeconds(refreshInterval)
+                        );
                     });
                 }
                 e.Handled = true;
@@ -358,11 +386,20 @@ public static class WidgetExpansionDialog
                         modal,
                         onRefreshRequested: async () =>
                         {
+                            // Stop timer before action refresh
+                            autoRefreshTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+
                             refreshState.IsRefreshing = true;
                             var data = await refreshService.RefreshAsync(widgetId, extended: true);
                             currentData = data;
                             UpdateModalContent(updateContext, data);
                             refreshState.IsRefreshing = false;
+
+                            // Restart timer with fresh interval
+                            autoRefreshTimer?.Change(
+                                TimeSpan.FromSeconds(refreshInterval),
+                                TimeSpan.FromSeconds(refreshInterval)
+                            );
                         },
                         onMainWidgetRefresh: onMainWidgetRefresh);
                     e.Handled = true;
@@ -406,7 +443,8 @@ public static class WidgetExpansionDialog
             refreshInterval,
             refreshState,
             (data) => currentData = data,
-            cts.Token);
+            cts.Token,
+            (timer) => autoRefreshTimer = timer);
 
         // Show modal
         windowSystem.AddWindow(modal);
@@ -447,10 +485,12 @@ public static class WidgetExpansionDialog
         int refreshInterval,
         RefreshState refreshState,
         Action<WidgetData> setCurrentData,
-        CancellationToken ct)
+        CancellationToken ct,
+        Action<Timer?> setAutoRefreshTimer)
     {
         int spinnerFrame = 0;
         bool firstLoad = true;
+        Timer? timer = null;
 
         // Start spinner animation task that runs continuously
         var spinnerTask = Task.Run(async () =>
@@ -477,38 +517,85 @@ public static class WidgetExpansionDialog
             }
         }, ct);
 
+        // Define refresh callback for timer
+        void RefreshCallback(object? state)
+        {
+            // Defense check: prevent concurrent execution
+            if (refreshState.IsRefreshing)
+                return;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    // Mark as refreshing
+                    refreshState.IsRefreshing = true;
+
+                    // Fetch extended data (spinner animates concurrently)
+                    var newData = await refreshService.RefreshAsync(widgetId, extended: true);
+                    setCurrentData(newData);
+
+                    // Mark as not refreshing
+                    refreshState.IsRefreshing = false;
+
+                    // Update modal content
+                    UpdateModalContent(context, newData);
+
+                    // On first load, hide loading panel and show content
+                    if (firstLoad && context.LoadingPanel != null && context.MainGrid != null)
+                    {
+                        context.LoadingPanel.Visible = false;
+                        context.MainGrid.Visible = true;
+                        firstLoad = false;
+                    }
+                }
+                catch (Exception)
+                {
+                    // Ensure flag is reset on error
+                    refreshState.IsRefreshing = false;
+                }
+            });
+        }
+
         try
         {
-            while (!ct.IsCancellationRequested)
+            // Immediate initial refresh
+            refreshState.IsRefreshing = true;
+            var initialData = await refreshService.RefreshAsync(widgetId, extended: true);
+            setCurrentData(initialData);
+            refreshState.IsRefreshing = false;
+            UpdateModalContent(context, initialData);
+
+            // On first load, hide loading panel and show content
+            if (context.LoadingPanel != null && context.MainGrid != null)
             {
-                // Mark as refreshing
-                refreshState.IsRefreshing = true;
-
-                // Fetch extended data (spinner animates concurrently)
-                var newData = await refreshService.RefreshAsync(widgetId, extended: true);
-                setCurrentData(newData);
-
-                // Mark as not refreshing
-                refreshState.IsRefreshing = false;
-
-                // Update modal content
-                UpdateModalContent(context, newData);
-
-                // On first load, hide loading panel and show content
-                if (firstLoad && context.LoadingPanel != null && context.MainGrid != null)
-                {
-                    context.LoadingPanel.Visible = false;
-                    context.MainGrid.Visible = true;
-                    firstLoad = false;
-                }
-
-                // Wait for next refresh interval
-                await Task.Delay(refreshInterval * 1000, ct);
+                context.LoadingPanel.Visible = false;
+                context.MainGrid.Visible = true;
+                firstLoad = false;
             }
+
+            // Create timer for automatic refresh
+            timer = new Timer(
+                RefreshCallback,
+                null,
+                TimeSpan.FromSeconds(refreshInterval),
+                TimeSpan.FromSeconds(refreshInterval)
+            );
+
+            // Expose timer to outer scope
+            setAutoRefreshTimer(timer);
+
+            // Wait for cancellation
+            await Task.Delay(Timeout.Infinite, ct);
         }
         catch (OperationCanceledException)
         {
             // Expected when modal closes
+        }
+        finally
+        {
+            // Dispose timer
+            timer?.Dispose();
         }
 
         // Wait for spinner task to complete
