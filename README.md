@@ -69,6 +69,19 @@ cd ServerHub
 
 Requires .NET 9.0 SDK for building.
 
+## Uninstall
+
+To remove ServerHub from your system:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nickprotop/ServerHub/main/uninstall.sh | bash
+```
+
+This removes:
+- The ServerHub binary from `~/.local/bin`
+- Bundled widgets from `~/.local/share/serverhub`
+- Optionally, your configuration from `~/.config/serverhub` (the script will ask)
+
 ## Usage
 
 ```bash
