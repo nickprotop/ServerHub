@@ -133,6 +133,26 @@ public class WidgetConfig
     /// </summary>
     [YamlMember(Alias = "enabled", DefaultValuesHandling = DefaultValuesHandling.OmitDefaults)]
     public bool Enabled { get; set; } = true;
+
+    /// <summary>
+    /// Source of the widget: "marketplace", "bundled", or null for custom/manual
+    /// </summary>
+    [YamlMember(Alias = "source", DefaultValuesHandling = DefaultValuesHandling.OmitNull)]
+    public string? Source { get; set; }
+
+    /// <summary>
+    /// Original widget ID from marketplace registry (for tracking updates)
+    /// The config key can differ from this if user renames the widget
+    /// </summary>
+    [YamlMember(Alias = "marketplace_id", DefaultValuesHandling = DefaultValuesHandling.OmitNull)]
+    public string? MarketplaceId { get; set; }
+
+    /// <summary>
+    /// Installed version from marketplace (for update detection)
+    /// Only set for widgets installed from marketplace
+    /// </summary>
+    [YamlMember(Alias = "marketplace_version", DefaultValuesHandling = DefaultValuesHandling.OmitNull)]
+    public string? MarketplaceVersion { get; set; }
 }
 
 /// <summary>

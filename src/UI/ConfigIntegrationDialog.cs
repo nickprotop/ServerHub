@@ -70,7 +70,7 @@ public static class ConfigIntegrationDialog
         modal.AddControl(detailsBuilder.Build());
 
         // Check if widget already exists
-        bool alreadyExists = ConfigHelper.WidgetExistsInConfig(configPath, result.WidgetId ?? "");
+        bool alreadyExists = ConfigHelper.WidgetExistsInConfig(configPath, result.WidgetId ?? "", manifest.Metadata.Id);
 
         if (alreadyExists)
         {
@@ -163,7 +163,10 @@ public static class ConfigIntegrationDialog
                         widgetFileName,
                         result.Sha256 ?? "",
                         refresh,
-                        expandedRefresh
+                        expandedRefresh,
+                        source: "marketplace",
+                        marketplaceId: manifest.Metadata.Id,
+                        marketplaceVersion: manifest.LatestVersion?.Version
                     );
 
                     modal.Close();

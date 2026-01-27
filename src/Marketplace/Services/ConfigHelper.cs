@@ -13,13 +13,25 @@ public class ConfigHelper
     /// <summary>
     /// Adds a widget to the config file
     /// </summary>
+    /// <param name="configPath">Path to config.yaml</param>
+    /// <param name="widgetId">Widget ID to use as config key</param>
+    /// <param name="widgetPath">Path to widget script</param>
+    /// <param name="sha256">SHA256 checksum</param>
+    /// <param name="refreshInterval">Refresh interval in seconds</param>
+    /// <param name="expandedRefreshInterval">Optional expanded refresh interval</param>
+    /// <param name="source">Source: "marketplace", "bundled", or null</param>
+    /// <param name="marketplaceId">Original marketplace widget ID (for tracking updates)</param>
+    /// <param name="marketplaceVersion">Version from marketplace (for update detection)</param>
     public static bool AddWidgetToConfig(
         string configPath,
         string widgetId,
         string widgetPath,
         string sha256,
         int refreshInterval,
-        int? expandedRefreshInterval = null)
+        int? expandedRefreshInterval = null,
+        string? source = null,
+        string? marketplaceId = null,
+        string? marketplaceVersion = null)
     {
         try
         {
@@ -40,10 +52,22 @@ public class ConfigHelper
                 };
             }
 
-            // Check if widget already exists
+            // Check if widget already exists by config key
             if (config.Widgets.ContainsKey(widgetId))
             {
                 return false; // Already exists
+            }
+
+            // Check if marketplace widget already installed under different config key
+            if (!string.IsNullOrEmpty(marketplaceId))
+            {
+                var existingMarketplaceWidget = config.Widgets
+                    .FirstOrDefault(w => w.Value.MarketplaceId == marketplaceId);
+
+                if (existingMarketplaceWidget.Key != null)
+                {
+                    return false; // Same marketplace widget already installed
+                }
             }
 
             // Add widget configuration
@@ -52,7 +76,10 @@ public class ConfigHelper
                 Path = widgetPath,
                 Refresh = refreshInterval,
                 ExpandedRefresh = expandedRefreshInterval,
-                Sha256 = sha256
+                Sha256 = sha256,
+                Source = source,
+                MarketplaceId = marketplaceId,
+                MarketplaceVersion = marketplaceVersion
             };
 
             // Add to layout order
@@ -73,9 +100,9 @@ public class ConfigHelper
     }
 
     /// <summary>
-    /// Checks if a widget already exists in the config
+    /// Checks if a widget already exists in the config (by config key or marketplace_id)
     /// </summary>
-    public static bool WidgetExistsInConfig(string configPath, string widgetId)
+    public static bool WidgetExistsInConfig(string configPath, string widgetId, string? marketplaceId = null)
     {
         try
         {
@@ -86,7 +113,20 @@ public class ConfigHelper
 
             var configManager = new ConfigManager();
             var config = configManager.LoadConfig(configPath);
-            return config.Widgets.ContainsKey(widgetId);
+
+            // Check by config key
+            if (config.Widgets.ContainsKey(widgetId))
+            {
+                return true;
+            }
+
+            // Check by marketplace_id if provided
+            if (!string.IsNullOrEmpty(marketplaceId))
+            {
+                return config.Widgets.Any(w => w.Value.MarketplaceId == marketplaceId);
+            }
+
+            return false;
         }
         catch
         {

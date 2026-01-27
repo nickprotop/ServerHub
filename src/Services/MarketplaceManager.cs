@@ -9,15 +9,15 @@ using ServerHub.Config;
 namespace ServerHub.Services;
 
 /// <summary>
-/// High-level service for managing marketplace operations
-/// Orchestrates RegistryClient, WidgetInstaller, DependencyChecker, and MarketplaceCache
+/// High-level service for managing marketplace operations.
+/// Orchestrates RegistryClient, WidgetInstaller, and DependencyChecker.
+/// Data is always fetched fresh; in-memory filtering is used for search.
 /// </summary>
 public class MarketplaceManager
 {
     private readonly RegistryClient _registryClient;
     private readonly WidgetInstaller _installer;
     private readonly DependencyChecker _dependencyChecker;
-    private readonly MarketplaceCache _cache;
     private readonly string _configPath;
 
     public MarketplaceManager(string installPath, string configPath)
@@ -25,7 +25,6 @@ public class MarketplaceManager
         _registryClient = new RegistryClient();
         _installer = new WidgetInstaller(_registryClient, installPath);
         _dependencyChecker = new DependencyChecker();
-        _cache = new MarketplaceCache();
         _configPath = configPath;
     }
 
@@ -55,28 +54,11 @@ public class MarketplaceManager
     }
 
     /// <summary>
-    /// Fetches registry index with caching
+    /// Fetches registry index (always fresh)
     /// </summary>
-    public async Task<RegistryIndex?> GetRegistryIndexAsync(bool forceRefresh = false)
+    public async Task<RegistryIndex?> GetRegistryIndexAsync()
     {
-        const string cacheKey = "registry_index";
-
-        if (!forceRefresh)
-        {
-            var cached = _cache.Get<RegistryIndex>(cacheKey);
-            if (cached != null)
-            {
-                return cached;
-            }
-        }
-
-        var index = await _registryClient.FetchRegistryIndexAsync();
-        if (index != null)
-        {
-            _cache.Set(cacheKey, index);
-        }
-
-        return index;
+        return await _registryClient.FetchRegistryIndexAsync();
     }
 
     /// <summary>
@@ -90,9 +72,9 @@ public class MarketplaceManager
     /// <summary>
     /// Gets all marketplace widgets with status information
     /// </summary>
-    public async Task<List<MarketplaceWidgetInfo>> GetAllWidgetsAsync(bool forceRefresh = false)
+    public async Task<List<MarketplaceWidgetInfo>> GetAllWidgetsAsync()
     {
-        var index = await GetRegistryIndexAsync(forceRefresh);
+        var index = await GetRegistryIndexAsync();
         if (index == null)
         {
             return new List<MarketplaceWidgetInfo>();
@@ -115,15 +97,16 @@ public class MarketplaceManager
                 ManifestUrl = registryWidget.ManifestUrl
             };
 
-            // Check if installed
-            if (installedWidgets.TryGetValue(registryWidget.Id, out var installedVersion))
+            // Check if installed (lookup by marketplace ID)
+            if (installedWidgets.TryGetValue(registryWidget.Id, out var installedInfo) &&
+                installedInfo.Source == "marketplace")
             {
-                widgetInfo.InstalledVersion = installedVersion;
+                widgetInfo.InstalledVersion = installedInfo.MarketplaceVersion;
                 widgetInfo.Status = WidgetStatus.Installed;
 
                 // Check if update available
-                if (!string.IsNullOrEmpty(installedVersion) &&
-                    CompareVersions(registryWidget.LatestVersion, installedVersion) > 0)
+                if (!string.IsNullOrEmpty(installedInfo.MarketplaceVersion) &&
+                    CompareVersions(registryWidget.LatestVersion, installedInfo.MarketplaceVersion) > 0)
                 {
                     widgetInfo.HasUpdate = true;
                     widgetInfo.Status = WidgetStatus.UpdateAvailable;
@@ -143,11 +126,9 @@ public class MarketplaceManager
     /// <summary>
     /// Searches widgets by query
     /// </summary>
-    public async Task<List<MarketplaceWidgetInfo>> SearchWidgetsAsync(
-        string query,
-        bool forceRefresh = false)
+    public async Task<List<MarketplaceWidgetInfo>> SearchWidgetsAsync(string query)
     {
-        var allWidgets = await GetAllWidgetsAsync(forceRefresh);
+        var allWidgets = await GetAllWidgetsAsync();
 
         if (string.IsNullOrWhiteSpace(query))
         {
@@ -225,11 +206,22 @@ public class MarketplaceManager
     }
 
     /// <summary>
-    /// Gets installed widgets from config
+    /// Info about an installed widget from config
     /// </summary>
-    private Dictionary<string, string> GetInstalledWidgets()
+    public class InstalledWidgetInfo
     {
-        var installed = new Dictionary<string, string>();
+        public string ConfigKey { get; set; } = string.Empty;
+        public string? MarketplaceId { get; set; }
+        public string? MarketplaceVersion { get; set; }
+        public string? Source { get; set; }
+    }
+
+    /// <summary>
+    /// Gets installed widgets from config, keyed by marketplace_id (if set) or config key
+    /// </summary>
+    private Dictionary<string, InstalledWidgetInfo> GetInstalledWidgets()
+    {
+        var installed = new Dictionary<string, InstalledWidgetInfo>();
 
         try
         {
@@ -241,11 +233,19 @@ public class MarketplaceManager
             var configManager = new ConfigManager();
             var config = configManager.LoadConfig(_configPath);
 
-            foreach (var (widgetId, widgetConfig) in config.Widgets)
+            foreach (var (configKey, widgetConfig) in config.Widgets)
             {
-                // Try to extract version from config or filename
-                // For now, we'll just mark as installed without version info
-                installed[widgetId] = "installed";
+                var info = new InstalledWidgetInfo
+                {
+                    ConfigKey = configKey,
+                    MarketplaceId = widgetConfig.MarketplaceId,
+                    MarketplaceVersion = widgetConfig.MarketplaceVersion,
+                    Source = widgetConfig.Source
+                };
+
+                // Key by marketplace_id if it's a marketplace widget, otherwise by config key
+                var lookupKey = widgetConfig.MarketplaceId ?? configKey;
+                installed[lookupKey] = info;
             }
         }
         catch
@@ -272,11 +272,4 @@ public class MarketplaceManager
         return Version.TryParse(cleanVersion, out var v) ? v : new Version(0, 0, 0);
     }
 
-    /// <summary>
-    /// Clears cache (for F5 refresh)
-    /// </summary>
-    public void ClearCache()
-    {
-        _cache.Clear();
-    }
 }

@@ -429,7 +429,10 @@ public class MarketplaceCommand
                 widgetFileName,
                 result.Sha256 ?? "",
                 refresh,
-                expandedRefresh
+                expandedRefresh,
+                source: "marketplace",
+                marketplaceId: manifest.Metadata.Id,
+                marketplaceVersion: targetVersion.Version
             );
 
             if (added)

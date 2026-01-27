@@ -9,8 +9,6 @@ using SharpConsoleUI.Builders;
 using SharpConsoleUI.Controls;
 using SharpConsoleUI.Core;
 using Spectre.Console;
-using System.Diagnostics;
-
 namespace ServerHub.UI;
 
 /// <summary>
@@ -38,6 +36,9 @@ public static class MarketplaceBrowserDialog
     private static MarkupControl? _detailHeader;
     private static ScrollablePanelControl? _detailPanel;
     private static MarkupControl? _loadingIndicator;
+    private static ColumnContainer? _detailColumn;
+    private static RuleControl? _actionButtonSeparator;
+    private static HorizontalGridControl? _actionButtonGrid;
 
     // Search debounce
     private static System.Timers.Timer? _searchDebounceTimer;
@@ -282,6 +283,9 @@ public static class MarketplaceBrowserDialog
 
     private static void BuildDetailPanel(ColumnContainer container, Action? onWidgetInstalled)
     {
+        // Store reference to container for adding action buttons later
+        _detailColumn = container;
+
         // Detail header
         _detailHeader = Controls
             .Markup()
@@ -320,6 +324,22 @@ public static class MarketplaceBrowserDialog
             .Build();
 
         container.AddContent(_detailPanel);
+
+        // Separator above action buttons (initially hidden)
+        _actionButtonSeparator = Controls.RuleBuilder().WithColor(Color.Grey23).Build();
+        _actionButtonSeparator.Visible = false;
+        container.AddContent(_actionButtonSeparator);
+
+        // Action buttons placeholder (will be populated when widget is selected)
+        // This is placed OUTSIDE the scrollable panel so buttons are always visible
+        _actionButtonGrid = Controls
+            .HorizontalGrid()
+            .WithName("action_buttons")
+            .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Center)
+            .WithMargin(1, 0, 1, 1)
+            .Build();
+        _actionButtonGrid.Visible = false;
+        container.AddContent(_actionButtonGrid);
     }
 
     private static async Task LoadMarketplaceDataAsync()
@@ -564,8 +584,7 @@ public static class MarketplaceBrowserDialog
             _detailPanel.AddControl(versionsBuilder.Build());
         }
 
-        // Action buttons
-        _detailPanel.AddControl(Controls.Markup().AddLine("").Build());
+        // Action buttons (built outside scrollable panel)
         BuildActionButtons(widget, manifest, dependencies);
     }
 
@@ -574,8 +593,14 @@ public static class MarketplaceBrowserDialog
         WidgetManifest manifest,
         List<DependencyChecker.DependencyCheckResult> dependencies)
     {
-        if (_detailPanel == null)
+        if (_actionButtonGrid == null)
             return;
+
+        // Clear existing buttons
+        foreach (var child in _actionButtonGrid.Columns.ToList())
+        {
+            _actionButtonGrid.RemoveColumn(child);
+        }
 
         var buttons = new List<ButtonControl>();
 
@@ -623,16 +648,35 @@ public static class MarketplaceBrowserDialog
 
         // View Source button (always shown)
         var viewSourceButton = Controls
-            .Button(" View Source ")
+            .Button("View Source")
+            .WithWidth(18)
             .WithMargin(1, 0, 0, 0)
-            .OnClick((s, e) => OpenBrowser(manifest.Metadata.Homepage))
+            .OnClick((s, e) =>
+            {
+                var latestVersion = manifest.LatestVersion;
+                if (latestVersion != null && latestVersion.Artifacts.Count > 0)
+                {
+                    var artifact = latestVersion.Artifacts[0];
+                    SourceViewerDialog.ShowFromUrl(_windowSystem!, artifact.Name, artifact.Url, _dialogWindow);
+                }
+            })
             .Build();
         buttons.Add(viewSourceButton);
 
-        // Add button grid
-        var buttonGrid = HorizontalGridControl.ButtonRow(buttons.ToArray());
-        buttonGrid.Margin = new Margin(1, 1, 1, 0);
-        _detailPanel.AddControl(buttonGrid);
+        // Add buttons to the action grid (outside scrollable panel)
+        foreach (var button in buttons)
+        {
+            var column = new ColumnContainer(_actionButtonGrid);
+            column.AddContent(button);
+            _actionButtonGrid.AddColumn(column);
+        }
+
+        // Show the separator and action buttons
+        if (_actionButtonSeparator != null)
+        {
+            _actionButtonSeparator.Visible = true;
+        }
+        _actionButtonGrid.Visible = true;
     }
 
     private static void HandleInstall(
@@ -773,22 +817,6 @@ public static class MarketplaceBrowserDialog
         _windowSystem.AddWindow(errorDialog);
     }
 
-    private static void OpenBrowser(string url)
-    {
-        try
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = url,
-                UseShellExecute = true
-            });
-        }
-        catch
-        {
-            // Ignore errors
-        }
-    }
-
     private static void OnSearchChanged()
     {
         // Debounce search input
@@ -845,7 +873,6 @@ public static class MarketplaceBrowserDialog
 
     private static void RefreshMarketplace()
     {
-        _manager?.ClearCache();
         _ = LoadMarketplaceDataAsync();
     }
 
@@ -857,6 +884,16 @@ public static class MarketplaceBrowserDialog
         foreach (var child in _detailPanel.Children.ToList())
         {
             _detailPanel.RemoveControl(child);
+        }
+
+        // Hide action buttons and separator when clearing
+        if (_actionButtonSeparator != null)
+        {
+            _actionButtonSeparator.Visible = false;
+        }
+        if (_actionButtonGrid != null)
+        {
+            _actionButtonGrid.Visible = false;
         }
     }
 
