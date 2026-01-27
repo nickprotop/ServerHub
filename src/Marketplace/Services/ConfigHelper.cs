@@ -18,7 +18,8 @@ public class ConfigHelper
         string widgetId,
         string widgetPath,
         string sha256,
-        int refreshInterval)
+        int refreshInterval,
+        int? expandedRefreshInterval = null)
     {
         try
         {
@@ -50,6 +51,7 @@ public class ConfigHelper
             {
                 Path = widgetPath,
                 Refresh = refreshInterval,
+                ExpandedRefresh = expandedRefreshInterval,
                 Sha256 = sha256
             };
 

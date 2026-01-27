@@ -396,6 +396,29 @@ public class MarketplaceCommand
                         : Spectre.Console.ValidationResult.Error("[red]Refresh interval must be between 1 and 3600 seconds[/]"))
             );
 
+            // Prompt for expanded refresh interval (optional)
+            int? expandedRefresh = null;
+            if (manifest.Config?.DefaultExpandedRefresh.HasValue == true)
+            {
+                var defaultExpandedRefresh = manifest.Config.DefaultExpandedRefresh.Value;
+                var useExpandedRefresh = AnsiConsole.Confirm(
+                    $"Set expanded view refresh interval? (default: {defaultExpandedRefresh}s)",
+                    defaultValue: true
+                );
+
+                if (useExpandedRefresh)
+                {
+                    expandedRefresh = AnsiConsole.Prompt(
+                        new TextPrompt<int>($"Expanded view refresh interval (seconds)?")
+                            .DefaultValue(defaultExpandedRefresh)
+                            .ValidationErrorMessage("[red]Please enter a valid number[/]")
+                            .Validate(r => r >= 1 && r <= 3600
+                                ? Spectre.Console.ValidationResult.Success()
+                                : Spectre.Console.ValidationResult.Error("[red]Refresh interval must be between 1 and 3600 seconds[/]"))
+                    );
+                }
+            }
+
             // Determine widget filename for config (just the filename, not full path)
             var widgetFileName = Path.GetFileName(result.InstalledPath) ?? "";
 
@@ -405,7 +428,8 @@ public class MarketplaceCommand
                 widgetId,
                 widgetFileName,
                 result.Sha256 ?? "",
-                refresh
+                refresh,
+                expandedRefresh
             );
 
             if (added)

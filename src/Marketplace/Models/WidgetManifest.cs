@@ -129,4 +129,7 @@ public class WidgetConfigInfo
 
     [YamlMember(Alias = "default_refresh")]
     public int DefaultRefresh { get; set; } = 10;
+
+    [YamlMember(Alias = "default_expanded_refresh")]
+    public int? DefaultExpandedRefresh { get; set; }
 }
