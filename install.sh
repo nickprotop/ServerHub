@@ -120,15 +120,16 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 if [ "$PATH_ADDED" = true ]; then
-    echo "To reload your PATH (choose one):"
-    echo "  source $SHELL_RC       - Reload config in current terminal"
-    echo "  exec \$SHELL              - Restart your shell"
-    echo "  Or open a new terminal"
+    echo "Run this command to get started:"
+    echo ""
+    echo "  source $SHELL_RC && serverhub"
+    echo ""
+else
+    echo "Run 'serverhub' to get started!"
     echo ""
 fi
 
-echo "Quick start:"
-echo "  serverhub              - Run with default config"
+echo "Other commands:"
 echo "  serverhub --discover   - Find and add custom widgets"
 echo "  serverhub --help       - Show all options"
 echo ""
