@@ -45,7 +45,6 @@ public class MarketplaceCommand
             "list" => await ListAsync(args.Skip(1).ToArray()),
             "info" => await InfoAsync(args.Skip(1).ToArray()),
             "install" => await InstallAsync(args.Skip(1).ToArray()),
-            "refresh" => await RefreshAsync(),
             "list-installed" => await ListInstalledAsync(),
             "help" or "--help" or "-h" => ShowHelpWithReturn(),
             _ => UnknownCommand(subcommand)
@@ -453,20 +452,6 @@ public class MarketplaceCommand
         AnsiConsole.WriteLine("  • Restart ServerHub or press F5 to load the widget");
     }
 
-    private async Task<int> RefreshAsync()
-    {
-        AnsiConsole.MarkupLine("[cyan]Refreshing marketplace cache...[/]");
-
-        var index = await _registryClient.FetchRegistryIndexAsync(forceRefresh: true);
-        if (index == null)
-        {
-            AnsiConsole.MarkupLine("[red]Error:[/] Failed to refresh marketplace");
-            return 1;
-        }
-
-        AnsiConsole.MarkupLine($"[green]✓[/] Cache refreshed. {index.Widgets.Count} widgets available.");
-        return 0;
-    }
 
     private Task<int> ListInstalledAsync()
     {
@@ -520,7 +505,6 @@ public class MarketplaceCommand
         AnsiConsole.WriteLine("  info <widget-id>      Show detailed widget information");
         AnsiConsole.WriteLine("  install <widget-id>   Install a widget from the marketplace");
         AnsiConsole.WriteLine("  list-installed        Show installed marketplace widgets");
-        AnsiConsole.WriteLine("  refresh               Refresh the local marketplace cache");
         AnsiConsole.WriteLine("  help                  Show this help message\n");
         AnsiConsole.WriteLine("Examples:");
         AnsiConsole.WriteLine("  serverhub marketplace search api");

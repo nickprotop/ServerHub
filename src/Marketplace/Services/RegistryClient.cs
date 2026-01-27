@@ -11,7 +11,6 @@ namespace ServerHub.Marketplace.Services;
 public class RegistryClient
 {
     private readonly HttpClient _httpClient;
-    private readonly MarketplaceCache _cache;
     private readonly IDeserializer _yamlDeserializer;
 
     public RegistryClient()
@@ -22,8 +21,6 @@ public class RegistryClient
         };
         _httpClient.DefaultRequestHeaders.Add("User-Agent", "ServerHub-Marketplace/1.0");
 
-        _cache = new MarketplaceCache();
-
         _yamlDeserializer = new DeserializerBuilder()
             .WithNamingConvention(UnderscoredNamingConvention.Instance)
             .IgnoreUnmatchedProperties()
@@ -31,32 +28,14 @@ public class RegistryClient
     }
 
     /// <summary>
-    /// Fetches the registry index (with caching)
+    /// Fetches the registry index (always fresh)
     /// </summary>
-    public async Task<RegistryIndex?> FetchRegistryIndexAsync(bool forceRefresh = false)
+    public async Task<RegistryIndex?> FetchRegistryIndexAsync()
     {
-        const string cacheKey = "registry_index";
-
-        // Try cache first
-        if (!forceRefresh)
-        {
-            var cached = _cache.Get<RegistryIndex>(cacheKey);
-            if (cached != null)
-            {
-                return cached;
-            }
-        }
-
         try
         {
             var response = await _httpClient.GetStringAsync(MarketplaceConfig.RegistryIndexUrl);
             var index = JsonSerializer.Deserialize(response, MarketplaceJsonContext.Default.RegistryIndex);
-
-            if (index != null)
-            {
-                _cache.Set(cacheKey, index);
-            }
-
             return index;
         }
         catch (HttpRequestException ex)
@@ -72,7 +51,7 @@ public class RegistryClient
     }
 
     /// <summary>
-    /// Fetches a specific widget manifest
+    /// Fetches a specific widget manifest (always fresh)
     /// </summary>
     public async Task<WidgetManifest?> FetchWidgetManifestAsync(string manifestUrl)
     {
@@ -81,25 +60,10 @@ public class RegistryClient
             ? manifestUrl
             : $"{MarketplaceConfig.RegistryBaseUrl}/{manifestUrl}";
 
-        var cacheKey = $"manifest_{manifestUrl.Replace("/", "_")}";
-
-        // Try cache first
-        var cached = _cache.Get<WidgetManifest>(cacheKey);
-        if (cached != null)
-        {
-            return cached;
-        }
-
         try
         {
             var response = await _httpClient.GetStringAsync(fullUrl);
             var manifest = _yamlDeserializer.Deserialize<WidgetManifest>(response);
-
-            if (manifest != null)
-            {
-                _cache.Set(cacheKey, manifest);
-            }
-
             return manifest;
         }
         catch (HttpRequestException ex)
@@ -167,11 +131,4 @@ public class RegistryClient
             .FirstOrDefault(w => w.Id.Equals(widgetId, StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>
-    /// Clears the local cache
-    /// </summary>
-    public void ClearCache()
-    {
-        _cache.Clear();
-    }
 }
