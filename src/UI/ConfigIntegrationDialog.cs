@@ -72,6 +72,10 @@ public static class ConfigIntegrationDialog
         // Check if widget already exists
         bool alreadyExists = ConfigHelper.WidgetExistsInConfig(configPath, result.WidgetId ?? "", manifest.Metadata.Id);
 
+        // Declare controls that need to be accessed later for focus
+        ButtonControl? okButton = null;
+        PromptControl? refreshInput = null;
+
         if (alreadyExists)
         {
             // Widget already in config - just show message
@@ -84,7 +88,7 @@ public static class ConfigIntegrationDialog
                 .AddLine("")
                 .Build());
 
-            var okButton = Controls
+            okButton = Controls
                 .Button("  OK  ")
                 .OnClick((s, e) =>
                 {
@@ -105,7 +109,7 @@ public static class ConfigIntegrationDialog
             var defaultExpandedRefresh = manifest.Config?.DefaultExpandedRefresh;
 
             // Refresh interval input
-            var refreshInput = new PromptControl
+            refreshInput = new PromptControl
             {
                 Prompt = "Refresh interval (seconds):",
                 Input = defaultRefresh.ToString(),
@@ -233,6 +237,18 @@ public static class ConfigIntegrationDialog
 
         windowSystem.AddWindow(modal);
         windowSystem.SetActiveWindow(modal);
+
+        // Explicitly focus first interactive control
+        if (alreadyExists)
+        {
+            // Focus OK button
+            okButton?.SetFocus(true, FocusReason.Programmatic);
+        }
+        else
+        {
+            // Focus refresh interval input
+            refreshInput?.SetFocus(true, FocusReason.Programmatic);
+        }
     }
 
     private static void ShowError(ConsoleWindowSystem windowSystem, string message)

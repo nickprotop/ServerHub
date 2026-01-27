@@ -20,6 +20,7 @@ public static class MarketplaceBrowserDialog
     private static Window? _dialogWindow;
     private static MarketplaceManager? _manager;
     private static string? _configPath;
+    private static Action? _onWidgetInstalled;
 
     // Current state
     private static List<MarketplaceManager.MarketplaceWidgetInfo> _allWidgets = new();
@@ -56,6 +57,7 @@ public static class MarketplaceBrowserDialog
         _windowSystem = windowSystem;
         _configPath = configPath;
         _manager = new MarketplaceManager(installPath, configPath);
+        _onWidgetInstalled = onWidgetInstalled;
 
         // Calculate modal size: 90% of screen
         int screenWidth = Console.WindowWidth;
@@ -724,7 +726,7 @@ public static class MarketplaceBrowserDialog
         var missing = dependencies.Where(d => !d.Found && !d.IsOptional).ToList();
         if (missing.Count > 0)
         {
-            ShowMissingDependenciesDialog(missing);
+            ShowMissingDependenciesDialog(missing, _dialogWindow);
             return;
         }
 
@@ -743,6 +745,9 @@ public static class MarketplaceBrowserDialog
                 {
                     // Refresh marketplace to show installed widget
                     RefreshMarketplace();
+
+                    // Trigger dashboard reload callback
+                    _onWidgetInstalled?.Invoke();
                 }
             }
         );
@@ -763,20 +768,32 @@ public static class MarketplaceBrowserDialog
         }
     }
 
-    private static void ShowMissingDependenciesDialog(List<DependencyChecker.DependencyCheckResult> missing)
+    private static void ShowMissingDependenciesDialog(
+        List<DependencyChecker.DependencyCheckResult> missing,
+        Window? parentWindow = null)
     {
         if (_windowSystem == null)
             return;
 
-        var errorDialog = new WindowBuilder(_windowSystem)
+        var builder = new WindowBuilder(_windowSystem)
             .WithTitle("Missing Dependencies")
             .WithSize(70, 15)
             .Centered()
             .AsModal()
             .WithBorderStyle(BorderStyle.Single)
             .WithBorderColor(Color.Red)
-            .WithColors(Color.Grey15, Color.Grey93)
-            .Build();
+            .Resizable(false)
+            .Movable(false)
+            .Minimizable(false)
+            .Maximizable(false)
+            .WithColors(Color.Grey15, Color.Grey93);
+
+        if (parentWindow != null)
+        {
+            builder = builder.WithParent(parentWindow);
+        }
+
+        var errorDialog = builder.Build();
 
         var messageBuilder = Controls
             .Markup()
