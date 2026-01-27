@@ -2,6 +2,7 @@ using Spectre.Console;
 using ServerHub.Marketplace.Models;
 using ServerHub.Marketplace.Services;
 using ServerHub.Utils;
+using ServerHub.Services;
 
 namespace ServerHub.Commands;
 
@@ -377,24 +378,79 @@ public class MarketplaceCommand
         AnsiConsole.WriteLine($"  Location: {result.InstalledPath}");
         AnsiConsole.WriteLine($"  SHA256: {result.Sha256}");
         AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine("[bold]Next steps:[/]");
-        AnsiConsole.WriteLine("  1. Review the widget code if desired:");
-        AnsiConsole.WriteLine($"     cat {result.InstalledPath}");
-        AnsiConsole.WriteLine($"  2. Add to your config file: {_configPath}");
-        AnsiConsole.WriteLine("  3. Restart ServerHub or press F5 to load the widget");
 
-        if (manifest.Config?.Example != null && !string.IsNullOrWhiteSpace(manifest.Config.Example))
+        // Prompt to add to config
+        if (ConfigHelper.WidgetExistsInConfig(_configPath, widgetId))
         {
-            AnsiConsole.WriteLine();
-            AnsiConsole.MarkupLine("[dim]Example configuration:[/]");
-            var lines = manifest.Config.Example.Trim().Split('\n');
-            foreach (var line in lines)
+            AnsiConsole.MarkupLine($"[yellow]Widget '{widgetId}' already exists in config.[/]");
+        }
+        else if (AnsiConsole.Confirm($"Add '{widgetId}' to config file?", defaultValue: true))
+        {
+            // Prompt for refresh interval
+            var defaultRefresh = manifest.Config?.DefaultRefresh ?? 10;
+            var refresh = AnsiConsole.Prompt(
+                new TextPrompt<int>($"Refresh interval (seconds)?")
+                    .DefaultValue(defaultRefresh)
+                    .ValidationErrorMessage("[red]Please enter a valid number[/]")
+                    .Validate(r => r >= 1 && r <= 3600
+                        ? Spectre.Console.ValidationResult.Success()
+                        : Spectre.Console.ValidationResult.Error("[red]Refresh interval must be between 1 and 3600 seconds[/]"))
+            );
+
+            // Determine widget filename for config (just the filename, not full path)
+            var widgetFileName = Path.GetFileName(result.InstalledPath) ?? "";
+
+            // Add to config
+            var added = ConfigHelper.AddWidgetToConfig(
+                _configPath,
+                widgetId,
+                widgetFileName,
+                result.Sha256 ?? "",
+                refresh
+            );
+
+            if (added)
             {
-                AnsiConsole.WriteLine($"  {line}");
+                AnsiConsole.MarkupLine($"[green]✓ Added '{widgetId}' to {_configPath}[/]");
+                AnsiConsole.WriteLine();
+                AnsiConsole.MarkupLine("[bold]Next steps:[/]");
+                AnsiConsole.WriteLine("  • Restart ServerHub or press F5 to load the widget");
+                AnsiConsole.WriteLine($"  • Press F2 in ServerHub to customize layout/settings");
             }
+            else
+            {
+                AnsiConsole.MarkupLine($"[yellow]Failed to add widget to config[/]");
+                AnsiConsole.WriteLine();
+                AnsiConsole.MarkupLine("[bold]Manual configuration:[/]");
+                AnsiConsole.WriteLine($"Add this to {_configPath}:");
+                AnsiConsole.WriteLine();
+                ShowManualConfig(widgetId, widgetFileName, result.Sha256 ?? "", refresh);
+            }
+        }
+        else
+        {
+            // User declined - show manual instructions
+            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLine("[bold]Manual configuration:[/]");
+            AnsiConsole.WriteLine($"Add this to {_configPath}:");
+            AnsiConsole.WriteLine();
+            var widgetFileName = Path.GetFileName(result.InstalledPath) ?? "";
+            ShowManualConfig(widgetId, widgetFileName, result.Sha256 ?? "", manifest.Config?.DefaultRefresh ?? 10);
         }
 
         return 0;
+    }
+
+    private void ShowManualConfig(string widgetId, string widgetPath, string sha256, int refresh)
+    {
+        AnsiConsole.MarkupLine("[dim]widgets:[/]");
+        AnsiConsole.MarkupLine($"[dim]  {widgetId}:[/]");
+        AnsiConsole.MarkupLine($"[dim]    path: {widgetPath}[/]");
+        AnsiConsole.MarkupLine($"[dim]    refresh: {refresh}[/]");
+        AnsiConsole.MarkupLine($"[dim]    sha256: \"{sha256}\"[/]");
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine("[bold]Then:[/]");
+        AnsiConsole.WriteLine("  • Restart ServerHub or press F5 to load the widget");
     }
 
     private async Task<int> RefreshAsync()
