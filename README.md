@@ -294,9 +294,9 @@ Want to share your widget with the community?
 
 1. Create a GitHub repository with your widget
 2. Create a GitHub release with the widget script
-3. Submit a manifest to [serverhub-registry](https://github.com/serverhub/serverhub-registry)
+3. Submit a manifest to [serverhub-registry](https://github.com/nickprotop/serverhub-registry)
 
-See the [Contributing Guide](https://github.com/serverhub/serverhub-registry/blob/main/docs/CONTRIBUTING.md) for details.
+See the [Contributing Guide](https://github.com/nickprotop/serverhub-registry/blob/main/docs/CONTRIBUTING.md) for details.
 
 ## Custom Widgets
 
