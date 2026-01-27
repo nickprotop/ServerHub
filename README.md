@@ -257,6 +257,8 @@ See [config.example.yaml](config.example.yaml) for full configuration options.
 
 Discover and install community-contributed widgets from the ServerHub marketplace.
 
+**[📚 Full Marketplace Documentation →](docs/MARKETPLACE.md)**
+
 ### Browse and Search
 
 ```bash
