@@ -56,8 +56,8 @@ public class MarketplaceCache
                 return JsonSerializer.Deserialize(json, MarketplaceJsonContext.Default.WidgetManifest) as T;
             }
 
-            // Fallback for other types (shouldn't happen)
-            return JsonSerializer.Deserialize<T>(json);
+            // Unknown type - this shouldn't happen
+            throw new InvalidOperationException($"Unsupported cache type: {typeof(T).Name}");
         }
         catch
         {
@@ -86,11 +86,8 @@ public class MarketplaceCache
         }
         else
         {
-            // Fallback for other types (shouldn't happen)
-            json = JsonSerializer.Serialize(value, new JsonSerializerOptions
-            {
-                WriteIndented = true
-            });
+            // Unknown type - this shouldn't happen
+            throw new InvalidOperationException($"Unsupported cache type: {typeof(T).Name}");
         }
 
         File.WriteAllText(cachePath, json);
