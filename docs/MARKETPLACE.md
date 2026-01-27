@@ -115,12 +115,39 @@ The marketplace uses a security-first approach:
 
 ## Contributing Widgets
 
-Want to share your widget with the community? See the [Contributing Guide](https://github.com/nickprotop/serverhub-registry/blob/main/docs/CONTRIBUTING.md) in the serverhub-registry repository for detailed instructions on:
+Want to share your widget with the community?
 
-- Creating and testing your widget
-- Hosting on GitHub releases
-- Submitting to the marketplace registry
-- Review and verification process
+### Submission Process
+
+1. **Create and test your widget** - Follow the [Widget Protocol](WIDGET_PROTOCOL.md) and test thoroughly
+2. **Host on GitHub** - Create a repository and GitHub release with your widget script
+3. **Fork [serverhub-registry](https://github.com/nickprotop/serverhub-registry)** - Create a feature branch
+4. **Add widget files** to `widgets/<category>/<username-widget-name>/`:
+   ```
+   widgets/monitoring/johndoe-api-monitor/
+   ├── manifest.yaml          # Widget metadata, URLs, checksums
+   ├── README.md              # User-facing documentation
+   └── v1.0.0/
+       └── api-monitor.sh     # Your widget script
+   ```
+5. **Submit a pull request** - Maintainers will review and assign verification status
+
+### What Gets Reviewed
+
+- **Security** - Code review for potential security issues
+- **Quality** - Does it follow the widget protocol correctly?
+- **Documentation** - Clear README with installation and usage instructions
+- **Dependencies** - All required commands documented in manifest
+- **Testing** - Widget must work as described
+
+### Verification Levels
+
+After review, your widget receives a status:
+- ✓ **Verified** - Code reviewed and approved by maintainers
+- ⚡ **Community** - Multiple installs, good community feedback
+- ⚠ **Unverified** - New submission, awaiting review/installs
+
+See the [Contributing Guide](https://github.com/nickprotop/serverhub-registry/blob/main/docs/CONTRIBUTING.md) for complete details on manifest format, directory structure, and review criteria.
 
 ## More Information
 

@@ -134,17 +134,7 @@ The marketplace uses a security-first approach:
 
 **You are responsible for reviewing code before installing unverified widgets.**
 
-### Contributing Widgets
-
-Want to share your widget with the community?
-
-1. Create a GitHub repository with your widget
-2. Create a GitHub release with the widget script
-3. Fork [serverhub-registry](https://github.com/nickprotop/serverhub-registry)
-4. Add your widget manifest to `docs/registry.json`
-5. Submit a pull request
-
-See the [Contributing Guide](https://github.com/nickprotop/serverhub-registry/blob/main/docs/CONTRIBUTING.md) for detailed instructions on manifest format and submission process.
+**Want to contribute your own widget?** See [MARKETPLACE.md](docs/MARKETPLACE.md#contributing-widgets) for the submission process.
 
 ## Requirements
 
