@@ -19,13 +19,47 @@ All marketplace widgets are hosted on GitHub and verified with SHA256 checksums.
 
 ## Using the Marketplace
 
-### Browse Widgets
+### Interactive Browser (TUI)
 
-Visit the [Marketplace Browser](https://nickprotop.github.io/serverhub-registry/) to explore widgets visually with filtering, categories, and verification badges.
+**Quick Start:** Press `F3` in the ServerHub dashboard to open the marketplace browser.
 
-### Search and List
+![Marketplace Browser](../.github/marketplace-browser.png)
 
-Find widgets from the command line:
+The TUI marketplace browser provides an interactive way to discover and install widgets directly from your terminal:
+
+**Features:**
+- Visual widget cards with descriptions and metadata
+- Filter by category (monitoring, infrastructure, development, databases, networking, security, cloud, utilities)
+- Filter by verification status (✓ Verified, ⚡ Community, ⚠ Unverified)
+- View dependencies and system requirements before installation
+- Direct links to source code repositories
+- One-click installation with automatic checksum verification
+- Real-time install progress and feedback
+- Automatic dashboard reload after installation
+
+**Installation Path:**
+- Widgets install to `~/.config/serverhub/widgets/` by default
+- If you started ServerHub with `--widgets-path /custom/path`, widgets install to that location
+- Both CLI and TUI respect your startup `--widgets-path` configuration
+- The install path is determined when ServerHub starts and applies to all marketplace operations
+
+**Example Workflow:**
+1. Start ServerHub: `serverhub` (or `serverhub --widgets-path /my/widgets`)
+2. Press `F3` to open marketplace browser
+3. Browse or filter widgets by category/status
+4. Select a widget to view details
+5. Click "Install" button
+6. Review dependencies and confirm
+7. Widget is downloaded, verified with SHA256, and added to your config
+8. Dashboard automatically reloads with the new widget
+
+### Web Browser
+
+Visit the [Marketplace Browser](https://nickprotop.github.io/serverhub-registry/) to explore widgets visually in your web browser with filtering, categories, and verification badges.
+
+### Command Line (CLI)
+
+For scripting or automation, use the CLI commands:
 
 ```bash
 # Search by keyword
@@ -61,8 +95,9 @@ The installer automatically:
 - Downloads from GitHub releases
 - Verifies SHA256 checksums
 - Checks for required dependencies
-- Installs to `~/.config/serverhub/widgets/` (or `--widgets-path` if specified)
+- Installs to `~/.config/serverhub/widgets/` by default, or to `--widgets-path` if you started ServerHub with that option
 - Adds the widget to your config with checksum
+- Both CLI and TUI respect your startup configuration
 
 ## Security & Verification
 

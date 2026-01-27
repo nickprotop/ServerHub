@@ -123,6 +123,8 @@ serverhub --init-config config.dev.yaml --widgets-path ./widgets/
 |-----|--------|
 | `Tab` / `Shift+Tab` | Navigate between widgets |
 | `Arrow keys` | Scroll within focused widget |
+| `F2` | Configure widgets (add, edit, reorder) |
+| `F3` | Browse marketplace widgets |
 | `F5` | Refresh all widgets |
 | `Space` | Pause/resume refresh |
 | `?` or `F1` | Show help |
@@ -259,7 +261,24 @@ Discover and install community-contributed widgets from the ServerHub marketplac
 
 **[📚 Full Marketplace Documentation →](docs/MARKETPLACE.md)**
 
-### Browse and Search
+### Interactive Browser (TUI)
+
+Press `F3` in the dashboard to open the interactive marketplace browser:
+
+![Marketplace Browser](.github/marketplace-browser.png)
+
+- Browse widgets with visual cards and detailed information
+- Filter by category (monitoring, infrastructure, development, databases, etc.)
+- Filter by verification status (✓ Verified, ⚡ Community, ⚠ Unverified)
+- View dependencies and system requirements
+- One-click installation with automatic config integration
+- Respects `--widgets-path` if you started ServerHub with a custom widgets directory
+
+**[View all screenshots →](docs/SCREENSHOTS.md)**
+
+### Command Line (CLI)
+
+Search and install from the terminal:
 
 ```bash
 # Search for widgets

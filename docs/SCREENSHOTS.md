@@ -92,6 +92,31 @@ This screenshot shows a successful package upgrade completion with full apt outp
 
 ---
 
+## Marketplace Browser
+
+![Marketplace Browser](../.github/marketplace-browser.png)
+
+Press `F3` to open the interactive marketplace browser for discovering and installing community widgets:
+
+**Browser features:**
+- Visual widget cards with descriptions and metadata
+- Category filtering (monitoring, infrastructure, development, databases, etc.)
+- Verification status badges (✓ Verified, ⚡ Community, ⚠ Unverified)
+- Dependency information and system requirements
+- Direct source code links to GitHub repositories
+- One-click installation with automatic checksum verification
+- Real-time install progress and feedback
+
+**Installation:**
+- Widgets install to `~/.config/serverhub/widgets/` by default
+- Respects `--widgets-path` if you started ServerHub with a custom path
+- Automatically adds widget to config with checksum
+- Dashboard reloads automatically after installation
+
+The marketplace provides both TUI (F3) and CLI (`serverhub marketplace`) interfaces for maximum flexibility.
+
+---
+
 ## Key Interface Features
 
 ### Context-Aware Actions
@@ -111,6 +136,8 @@ Actions adapt based on widget state:
 - `Enter` - Open expanded view or execute action
 - `Esc` - Close dialogs
 - `Arrow keys` - Scroll within widgets
+- `F2` - Configure widgets (add, edit, reorder)
+- `F3` - Browse marketplace widgets
 - `F5` - Refresh all widgets
 - `Space` - Pause/resume auto-refresh
 
