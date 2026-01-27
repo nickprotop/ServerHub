@@ -611,6 +611,7 @@ class Program
   [bold cyan1]Actions[/]
   [grey]─────────────────────────────────────────────────────────────────────[/]
     [cyan1]F2[/]                   [white]Configure widgets (add/remove/edit)[/]
+    [cyan1]F3[/]                   [white]Browse marketplace (install widgets)[/]
     [cyan1]F5[/]                   [white]Refresh all widgets[/]
     [cyan1]Space[/]                [white]Pause / resume widget refresh[/]
     [cyan1]? or F1[/]              [white]Show this help dialog[/]
@@ -883,6 +884,12 @@ class Program
             ShowConfigDialog();
             e.Handled = true;
         }
+        else if (e.KeyInfo.Key == ConsoleKey.F3)
+        {
+            // Show marketplace browser
+            ShowMarketplaceBrowser();
+            e.Handled = true;
+        }
     }
 
     /// <summary>
@@ -915,6 +922,47 @@ class Program
                 {
                     _windowSystem.BottomStatus = "Configuration saved and reloaded";
                     Task.Delay(3000).ContinueWith(_ => UpdateStatusBar());
+                }
+            }
+        );
+    }
+
+    /// <summary>
+    /// Shows the marketplace browser dialog for browsing and installing marketplace widgets.
+    /// </summary>
+    private static void ShowMarketplaceBrowser()
+    {
+        if (_windowSystem == null || _configPath == null)
+            return;
+
+        // Determine marketplace install path (same logic as CLI)
+        var installPath = WidgetPaths.GetUserWidgetsDirectory();
+
+        MarketplaceBrowserDialog.Show(
+            _windowSystem,
+            installPath,
+            _configPath,
+            onWidgetInstalled: () =>
+            {
+                // Reload configuration after widget installation
+                if (_config != null && _configPath != null)
+                {
+                    var configMgr = new ConfigManager();
+                    _config = configMgr.LoadConfig(_configPath);
+
+                    // Restart widget timers with new configuration
+                    StopWidgetRefreshTimers();
+                    StartWidgetRefreshTimers();
+
+                    // Rebuild the layout
+                    RebuildLayout();
+
+                    // Update status
+                    if (_windowSystem != null)
+                    {
+                        _windowSystem.BottomStatus = "Widget installed and configuration reloaded";
+                        Task.Delay(3000).ContinueWith(_ => UpdateStatusBar());
+                    }
                 }
             }
         );
