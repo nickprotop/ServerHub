@@ -7,6 +7,7 @@ using ServerHub.Services;
 using ServerHub.UI;
 using ServerHub.Utils;
 using ServerHub.Exceptions;
+using ServerHub.Commands;
 using SharpConsoleUI;
 using SharpConsoleUI.Builders;
 using SharpConsoleUI.Controls;
@@ -59,6 +60,21 @@ class Program
             {
                 Console.WriteLine("ServerHub v0.1.0");
                 return 0;
+            }
+
+            // Handle marketplace commands
+            if (options.MarketplaceArgs != null && options.MarketplaceArgs.Length > 0)
+            {
+                // Determine installation path: custom widgets path or default user widgets directory
+                var marketplaceInstallPath = !string.IsNullOrEmpty(options.WidgetsPath)
+                    ? options.WidgetsPath
+                    : WidgetPaths.GetUserWidgetsDirectory();
+
+                // Determine config path: custom config or default
+                var marketplaceConfigPath = options.ConfigPath ?? ConfigManager.GetDefaultConfigPath();
+
+                var marketplaceCmd = new MarketplaceCommand(marketplaceInstallPath, marketplaceConfigPath);
+                return await marketplaceCmd.ExecuteAsync(options.MarketplaceArgs);
             }
 
             // Set custom widgets path if provided (before other operations)
@@ -1423,8 +1439,8 @@ class Program
         var memUsage = GetSystemMemory();
 
         var status = _isPaused
-            ? $"[yellow]PAUSED[/] | {enabledCount} widgets ({disabledCount} disabled) | Press Space to resume"
-            : $"ServerHub | {enabledCount} widgets ({okWidgets} ok, {errorWidgets} error{(disabledCount > 0 ? $", {disabledCount} disabled" : "")}) | CPU {cpuUsage}% MEM {memUsage}% | {DateTime.Now:HH:mm:ss}";
+            ? $"[yellow]PAUSED[/] | {enabledCount} widgets ({disabledCount} disabled) | Press Space to resume | [dim]F2: Config  F1: Help[/]"
+            : $"ServerHub | {enabledCount} widgets ({okWidgets} ok, {errorWidgets} error{(disabledCount > 0 ? $", {disabledCount} disabled" : "")}) | CPU {cpuUsage}% MEM {memUsage}% | {DateTime.Now:HH:mm:ss} | [dim]F2: Config  F1: Help[/]";
 
         _windowSystem.BottomStatus = status;
     }
@@ -1569,6 +1585,11 @@ Select a disabled widget and check 'Enabled' to show it on the dashboard.";
         {
             switch (args[i])
             {
+                case "marketplace":
+                    // Capture all remaining args for marketplace command
+                    options.MarketplaceArgs = args.Skip(i + 1).ToArray();
+                    return options;
+
                 case "--help":
                 case "-h":
                     options.ShowHelp = true;
@@ -2058,6 +2079,20 @@ Select a disabled widget and check 'Enabled' to show it on the dashboard.";
             "  serverhub --verify-checksums                 Verify all widget checksums"
         );
         Console.WriteLine();
+        Console.WriteLine("Marketplace:");
+        Console.WriteLine(
+            "  serverhub marketplace search <query>         Search for community widgets"
+        );
+        Console.WriteLine(
+            "  serverhub marketplace list                   List all available widgets"
+        );
+        Console.WriteLine(
+            "  serverhub marketplace info <widget-id>       Show widget details"
+        );
+        Console.WriteLine(
+            "  serverhub marketplace install <widget-id>    Install widget from marketplace"
+        );
+        Console.WriteLine();
         Console.WriteLine("Widget Search Paths (in priority order):");
         Console.WriteLine("  1. Custom path (if --widgets-path specified)");
         Console.WriteLine("  2. ~/.config/serverhub/widgets/              User custom widgets");
@@ -2083,5 +2118,6 @@ Select a disabled widget and check 'Enabled' to show it on the dashboard.";
         public bool VerifyChecksums { get; set; }
         public bool DevMode { get; set; }
         public string? InitConfig { get; set; }
+        public string[]? MarketplaceArgs { get; set; }
     }
 }

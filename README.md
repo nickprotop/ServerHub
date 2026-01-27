@@ -240,6 +240,64 @@ See [config.example.yaml](config.example.yaml) for full configuration options.
 | `logs` | Recent system log entries |
 | `ssl-certs` | SSL certificate expiry status |
 
+## Marketplace
+
+Discover and install community-contributed widgets from the ServerHub marketplace.
+
+### Browse and Search
+
+```bash
+# Search for widgets
+serverhub marketplace search monitoring
+
+# List all widgets
+serverhub marketplace list
+
+# List by category
+serverhub marketplace list --category monitoring
+
+# Get detailed information
+serverhub marketplace info username/widget-name
+```
+
+### Install Widgets
+
+```bash
+# Install latest version
+serverhub marketplace install username/widget-name
+
+# Install specific version
+serverhub marketplace install username/widget-name@1.0.0
+
+# View installed marketplace widgets
+serverhub marketplace list-installed
+```
+
+### Security & Verification
+
+The marketplace uses a security-first approach:
+
+- **SHA256 checksums** - All widgets have mandatory checksums verified during installation
+- **Verification tiers** - Clear badges indicate review status:
+  - ✓ **Verified** (green) - Code reviewed by ServerHub maintainers
+  - ⚡ **Community** (yellow) - Multiple installs, no reported issues
+  - ⚠ **Unverified** (red) - New or untested, requires explicit confirmation
+- **GitHub-only hosting** - Widgets must be hosted on GitHub releases
+- **Dependency checking** - Required system commands verified before installation
+- **Code transparency** - All widget code is publicly reviewable
+
+**You are responsible for reviewing code before installing unverified widgets.**
+
+### Contributing Widgets
+
+Want to share your widget with the community?
+
+1. Create a GitHub repository with your widget
+2. Create a GitHub release with the widget script
+3. Submit a manifest to [serverhub-registry](https://github.com/serverhub/serverhub-registry)
+
+See the [Contributing Guide](https://github.com/serverhub/serverhub-registry/blob/main/docs/CONTRIBUTING.md) for details.
+
 ## Custom Widgets
 
 Write widgets in any language - C# scripts, bash, Python, Node.js, Go, Rust, or compiled binaries. As long as it outputs to stdout following our protocol, it works.
