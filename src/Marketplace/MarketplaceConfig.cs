@@ -14,7 +14,7 @@ public class MarketplaceConfig
     /// <summary>
     /// URL to the registry index file
     /// </summary>
-    public static string RegistryIndexUrl => $"{RegistryBaseUrl}/registry.json";
+    public static string RegistryIndexUrl => $"{RegistryBaseUrl}/docs/registry.json";
 
     /// <summary>
     /// Cache directory for marketplace data
