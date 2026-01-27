@@ -14,6 +14,38 @@ ServerHub is a terminal control panel for servers and homelabs. Monitor your sys
 
 **[View more screenshots →](docs/SCREENSHOTS.md)**
 
+## Quick Start
+
+Get ServerHub running in 3 steps:
+
+```bash
+# 1. Install ServerHub
+curl -fsSL https://raw.githubusercontent.com/nickprotop/ServerHub/main/install.sh | bash
+
+# 2. Run it (creates default config automatically)
+serverhub
+
+# 3. Press F3 to browse and install community widgets
+```
+
+That's it! You now have a working dashboard with 14 bundled widgets. Press `F3` to explore the marketplace, `F2` to configure widgets, or `?` for help.
+
+## Table of Contents
+
+- [What Makes ServerHub Different](#what-makes-serverhub-different)
+- [Core Features](#core-features)
+- [Marketplace](#marketplace) - Browse and install community widgets
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Configuration](#configuration)
+- [Bundled Widgets](#bundled-widgets)
+- [Custom Widgets](#custom-widgets)
+- [Security](#security)
+- [Screenshots](docs/SCREENSHOTS.md)
+- [Examples](docs/EXAMPLES.md)
+- [Widget Protocol](docs/WIDGET_PROTOCOL.md)
+
 ## What Makes ServerHub Different
 
 **Extensible by design** - Write a script in any language (C#, Python, bash, Node.js, Go, Rust, or compiled binaries). If it outputs to stdout, it's a widget. Monitor anything: custom services, APIs, hardware you built yourself, scripts you already have. Widgets support expanded views - press Enter for full details beyond the dashboard summary.
@@ -33,6 +65,86 @@ ServerHub is a terminal control panel for servers and homelabs. Monitor your sys
 - **SHA256 validation** - All custom widgets require checksum validation (development mode available)
 - **YAML configuration** - Simple, version-controllable config files
 - **Keyboard navigation** - Tab/Shift+Tab between widgets, arrow keys to scroll
+- **Marketplace** - Browse and install community widgets with F3
+
+## Marketplace
+
+Discover and install community-contributed widgets from the ServerHub marketplace.
+
+**[📚 Full Marketplace Documentation →](docs/MARKETPLACE.md)**
+
+### Interactive Browser (TUI)
+
+Press `F3` in the dashboard to open the interactive marketplace browser:
+
+![Marketplace Browser](.github/marketplace-browser.png)
+
+- Browse widgets with visual cards and detailed information
+- Filter by category (monitoring, infrastructure, development, databases, etc.)
+- Filter by verification status (✓ Verified, ⚡ Community, ⚠ Unverified)
+- View dependencies and system requirements
+- One-click installation with automatic config integration
+- Respects `--widgets-path` if you started ServerHub with a custom widgets directory
+
+**[View all screenshots →](docs/SCREENSHOTS.md)**
+
+### Command Line (CLI)
+
+Search and install from the terminal:
+
+```bash
+# Search for widgets
+serverhub marketplace search monitoring
+
+# List all widgets
+serverhub marketplace list
+
+# List by category
+serverhub marketplace list --category monitoring
+
+# Get detailed information
+serverhub marketplace info username/widget-name
+```
+
+### Install Widgets
+
+```bash
+# Install latest version
+serverhub marketplace install username/widget-name
+
+# Install specific version
+serverhub marketplace install username/widget-name@1.0.0
+
+# View installed marketplace widgets
+serverhub marketplace list-installed
+```
+
+### Security & Verification
+
+The marketplace uses a security-first approach:
+
+- **SHA256 checksums** - All widgets have mandatory checksums verified during installation
+- **Verification tiers** - Clear badges indicate review status:
+  - ✓ **Verified** (green) - Code reviewed by ServerHub maintainers
+  - ⚡ **Community** (yellow) - Multiple installs, no reported issues
+  - ⚠ **Unverified** (red) - New or untested, requires explicit confirmation
+- **GitHub-only hosting** - Widgets must be hosted on GitHub releases
+- **Dependency checking** - Required system commands verified before installation
+- **Code transparency** - All widget code is publicly reviewable
+
+**You are responsible for reviewing code before installing unverified widgets.**
+
+### Contributing Widgets
+
+Want to share your widget with the community?
+
+1. Create a GitHub repository with your widget
+2. Create a GitHub release with the widget script
+3. Fork [serverhub-registry](https://github.com/nickprotop/serverhub-registry)
+4. Add your widget manifest to `docs/registry.json`
+5. Submit a pull request
+
+See the [Contributing Guide](https://github.com/nickprotop/serverhub-registry/blob/main/docs/CONTRIBUTING.md) for detailed instructions on manifest format and submission process.
 
 ## Requirements
 
@@ -254,83 +366,6 @@ See [config.example.yaml](config.example.yaml) for full configuration options.
 | `netstat` | Network connections |
 | `logs` | Recent system log entries |
 | `ssl-certs` | SSL certificate expiry status |
-
-## Marketplace
-
-Discover and install community-contributed widgets from the ServerHub marketplace.
-
-**[📚 Full Marketplace Documentation →](docs/MARKETPLACE.md)**
-
-### Interactive Browser (TUI)
-
-Press `F3` in the dashboard to open the interactive marketplace browser:
-
-![Marketplace Browser](.github/marketplace-browser.png)
-
-- Browse widgets with visual cards and detailed information
-- Filter by category (monitoring, infrastructure, development, databases, etc.)
-- Filter by verification status (✓ Verified, ⚡ Community, ⚠ Unverified)
-- View dependencies and system requirements
-- One-click installation with automatic config integration
-- Respects `--widgets-path` if you started ServerHub with a custom widgets directory
-
-**[View all screenshots →](docs/SCREENSHOTS.md)**
-
-### Command Line (CLI)
-
-Search and install from the terminal:
-
-```bash
-# Search for widgets
-serverhub marketplace search monitoring
-
-# List all widgets
-serverhub marketplace list
-
-# List by category
-serverhub marketplace list --category monitoring
-
-# Get detailed information
-serverhub marketplace info username/widget-name
-```
-
-### Install Widgets
-
-```bash
-# Install latest version
-serverhub marketplace install username/widget-name
-
-# Install specific version
-serverhub marketplace install username/widget-name@1.0.0
-
-# View installed marketplace widgets
-serverhub marketplace list-installed
-```
-
-### Security & Verification
-
-The marketplace uses a security-first approach:
-
-- **SHA256 checksums** - All widgets have mandatory checksums verified during installation
-- **Verification tiers** - Clear badges indicate review status:
-  - ✓ **Verified** (green) - Code reviewed by ServerHub maintainers
-  - ⚡ **Community** (yellow) - Multiple installs, no reported issues
-  - ⚠ **Unverified** (red) - New or untested, requires explicit confirmation
-- **GitHub-only hosting** - Widgets must be hosted on GitHub releases
-- **Dependency checking** - Required system commands verified before installation
-- **Code transparency** - All widget code is publicly reviewable
-
-**You are responsible for reviewing code before installing unverified widgets.**
-
-### Contributing Widgets
-
-Want to share your widget with the community?
-
-1. Create a GitHub repository with your widget
-2. Create a GitHub release with the widget script
-3. Submit a manifest to [serverhub-registry](https://github.com/nickprotop/serverhub-registry)
-
-See the [Contributing Guide](https://github.com/nickprotop/serverhub-registry/blob/main/docs/CONTRIBUTING.md) for details.
 
 ## Custom Widgets
 
