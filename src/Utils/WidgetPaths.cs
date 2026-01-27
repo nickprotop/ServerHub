@@ -203,6 +203,23 @@ public static class WidgetPaths
     }
 
     /// <summary>
+    /// Gets the directory where marketplace widgets should be installed.
+    /// Respects the custom widgets path set via --widgets-path if provided.
+    /// </summary>
+    /// <returns>Path where marketplace widgets should be installed</returns>
+    public static string GetMarketplaceInstallPath()
+    {
+        // If a custom widgets path was set via --widgets-path, use it for installations
+        if (!string.IsNullOrEmpty(_customWidgetsPath))
+        {
+            return _customWidgetsPath;
+        }
+
+        // Otherwise use the default user widgets directory
+        return GetUserWidgetsDirectory();
+    }
+
+    /// <summary>
     /// Gets the user custom widgets directory (~/.config/serverhub/widgets)
     /// Alias for GetUserWidgetsDirectory() for semantic clarity in init-config scenarios
     /// </summary>

@@ -11,6 +11,7 @@ using ServerHub.Commands;
 using SharpConsoleUI;
 using SharpConsoleUI.Builders;
 using SharpConsoleUI.Controls;
+using SharpConsoleUI.Core;
 using SharpConsoleUI.Drivers;
 using Spectre.Console;
 using YamlDotNet.Serialization;
@@ -42,6 +43,7 @@ class Program
     private static WidgetRefreshService? _refreshService;
     private static bool _devMode = false;
     private static string? _configPath;
+    private static DateTime _lastConfigLoadTime = DateTime.MinValue;
 
     static async Task<int> Main(string[] args)
     {
@@ -65,10 +67,8 @@ class Program
             // Handle marketplace commands
             if (options.MarketplaceArgs != null && options.MarketplaceArgs.Length > 0)
             {
-                // Determine installation path: custom widgets path or default user widgets directory
-                var marketplaceInstallPath = !string.IsNullOrEmpty(options.WidgetsPath)
-                    ? options.WidgetsPath
-                    : WidgetPaths.GetUserWidgetsDirectory();
+                // Determine installation path using centralized logic
+                var marketplaceInstallPath = WidgetPaths.GetMarketplaceInstallPath();
 
                 // Determine config path: custom config or default
                 var marketplaceConfigPath = options.ConfigPath ?? ConfigManager.GetDefaultConfigPath();
@@ -147,6 +147,7 @@ class Program
             }
 
             _config = configMgr.LoadConfig(configPath);
+            _lastConfigLoadTime = File.GetLastWriteTime(configPath);
 
             // Store dev mode state for use throughout the application
             _devMode = options.DevMode;
@@ -862,8 +863,26 @@ class Program
         }
         else if (e.KeyInfo.Key == ConsoleKey.F5)
         {
-            // Refresh all widgets
-            RefreshAllWidgets();
+            // Check if config file changed on disk
+            if (_configPath != null && File.Exists(_configPath))
+            {
+                var currentModTime = File.GetLastWriteTime(_configPath);
+                if (currentModTime > _lastConfigLoadTime)
+                {
+                    // Config changed - full reload
+                    ReloadConfigAndRebuildDashboard();
+                }
+                else
+                {
+                    // Config unchanged - just refresh widget data
+                    RefreshAllWidgets();
+                }
+            }
+            else
+            {
+                // No config path - just refresh
+                RefreshAllWidgets();
+            }
             e.Handled = true;
         }
         else if (e.KeyInfo.Key == ConsoleKey.Spacebar)
@@ -906,23 +925,7 @@ class Program
             _config,
             onConfigChanged: () =>
             {
-                // Reload configuration after changes
-                var configMgr = new ConfigManager();
-                _config = configMgr.LoadConfig(_configPath);
-
-                // Restart widget timers with new configuration
-                StopWidgetRefreshTimers();
-                StartWidgetRefreshTimers();
-
-                // Rebuild the layout
-                RebuildLayout();
-
-                // Update status
-                if (_windowSystem != null)
-                {
-                    _windowSystem.BottomStatus = "Configuration saved and reloaded";
-                    Task.Delay(3000).ContinueWith(_ => UpdateStatusBar());
-                }
+                ReloadConfigAndRebuildDashboard();
             }
         );
     }
@@ -935,8 +938,8 @@ class Program
         if (_windowSystem == null || _configPath == null)
             return;
 
-        // Determine marketplace install path (same logic as CLI)
-        var installPath = WidgetPaths.GetUserWidgetsDirectory();
+        // Determine marketplace install path (respects --widgets-path)
+        var installPath = WidgetPaths.GetMarketplaceInstallPath();
 
         MarketplaceBrowserDialog.Show(
             _windowSystem,
@@ -949,6 +952,13 @@ class Program
                 {
                     var configMgr = new ConfigManager();
                     _config = configMgr.LoadConfig(_configPath);
+                    _lastConfigLoadTime = File.GetLastWriteTime(_configPath);
+
+                    // Reinitialize refresh service with new config
+                    if (_executor != null && _parser != null)
+                    {
+                        _refreshService = new WidgetRefreshService(_executor, _parser, _config);
+                    }
 
                     // Restart widget timers with new configuration
                     StopWidgetRefreshTimers();
@@ -966,6 +976,55 @@ class Program
                 }
             }
         );
+    }
+
+    /// <summary>
+    /// Reloads configuration from disk and rebuilds dashboard
+    /// </summary>
+    private static void ReloadConfigAndRebuildDashboard()
+    {
+        if (_config == null || _configPath == null)
+            return;
+
+        try
+        {
+            // Reload configuration from disk
+            var configMgr = new ConfigManager();
+            _config = configMgr.LoadConfig(_configPath);
+            _lastConfigLoadTime = File.GetLastWriteTime(_configPath);
+
+            // Reinitialize refresh service with new config
+            if (_executor != null && _parser != null)
+            {
+                _refreshService = new WidgetRefreshService(_executor, _parser, _config);
+            }
+
+            // Restart widget timers with new configuration
+            StopWidgetRefreshTimers();
+            StartWidgetRefreshTimers();
+
+            // Rebuild the layout
+            RebuildLayout();
+
+            // Update status
+            if (_windowSystem != null)
+            {
+                _windowSystem.BottomStatus = "Configuration reloaded from disk";
+                Task.Delay(3000).ContinueWith(_ => UpdateStatusBar());
+            }
+        }
+        catch (Exception ex)
+        {
+            if (_windowSystem != null)
+            {
+                _windowSystem.NotificationStateService.ShowNotification(
+                    "Config Reload Failed",
+                    ex.Message,
+                    NotificationSeverity.Danger,
+                    timeout: 5000
+                );
+            }
+        }
     }
 
     /// <summary>
