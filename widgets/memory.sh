@@ -11,9 +11,56 @@ fi
 echo "title: Memory Usage"
 echo "refresh: 2"
 
+# Setup cache directory for historical data
+CACHE_DIR="$HOME/.cache/serverhub"
+mkdir -p "$CACHE_DIR"
+
 # Get memory usage
 mem_info=$(free -m | awk 'NR==2{printf "%.0f %.0f %.0f", $3,$2,$3*100/$2}')
 read -r used total percent <<< "$mem_info"
+
+# Get swap info
+swap_info=$(free -m | awk 'NR==3{if($2>0) printf "%.0f %.0f %.0f", $3,$2,$3*100/$2; else print "0 0 0"}')
+read -r swap_used swap_total swap_percent <<< "$swap_info"
+
+# Get available memory and cache
+available=$(free -m | awk 'NR==2{print $7}')
+buffers=$(free -m | awk 'NR==2{print $6}')
+cached=$(grep "^Cached:" /proc/meminfo | awk '{print int($2/1024)}')
+
+# Determine sample count based on mode
+if [ "$EXTENDED" = true ]; then
+    MAX_SAMPLES=30
+else
+    MAX_SAMPLES=10
+fi
+
+# Store memory history
+mem_history_file="$CACHE_DIR/memory-usage.txt"
+echo "$percent" >> "$mem_history_file"
+tail -n "$MAX_SAMPLES" "$mem_history_file" > "${mem_history_file}.tmp" 2>/dev/null
+mv "${mem_history_file}.tmp" "$mem_history_file" 2>/dev/null
+
+# Read history for sparkline
+if [ -f "$mem_history_file" ] && [ -s "$mem_history_file" ]; then
+    mem_history=$(paste -sd',' "$mem_history_file")
+else
+    mem_history="$percent"
+fi
+
+# Store swap history if swap exists
+if [ "$swap_total" -gt 0 ]; then
+    swap_history_file="$CACHE_DIR/swap-usage.txt"
+    echo "$swap_percent" >> "$swap_history_file"
+    tail -n "$MAX_SAMPLES" "$swap_history_file" > "${swap_history_file}.tmp" 2>/dev/null
+    mv "${swap_history_file}.tmp" "$swap_history_file" 2>/dev/null
+
+    if [ -f "$swap_history_file" ] && [ -s "$swap_history_file" ]; then
+        swap_history=$(paste -sd',' "$swap_history_file")
+    else
+        swap_history="$swap_percent"
+    fi
+fi
 
 # Determine status
 if [ "$percent" -lt 70 ]; then
@@ -24,106 +71,180 @@ else
     status="error"
 fi
 
-echo "row: [status:$status] Memory: ${used}MB / ${total}MB (${percent}%)"
-echo "row: [progress:${percent}:inline]"
+# Dashboard mode: Compact overview with sparklines
+if [ "$EXTENDED" = false ]; then
+    echo "row: [status:$status] Memory: ${used}MB / ${total}MB [sparkline:${mem_history}:yellow]"
+    echo "row: [progress:${percent}]"
+    echo "row: "
 
-# Get swap info
-swap_info=$(free -m | awk 'NR==3{if($2>0) printf "%.0f %.0f %.0f", $3,$2,$3*100/$2; else print "0 0 0"}')
-read -r swap_used swap_total swap_percent <<< "$swap_info"
+    # Memory breakdown table
+    echo "row: [bold]Memory Breakdown:[/]"
+    echo "[table:Type|Usage]"
+    echo "[tablerow:RAM Used|[miniprogress:${percent}:12]]"
 
-if [ "$swap_total" -gt 0 ]; then
-    if [ "$swap_percent" -gt 50 ]; then
-        echo "row: [status:warn] Swap: ${swap_used}MB / ${swap_total}MB (${swap_percent}%)"
+    if [ "$swap_total" -gt 0 ]; then
+        echo "[tablerow:Swap Used|[miniprogress:${swap_percent}:12]]"
     else
-        echo "row: Swap: ${swap_used}MB / ${swap_total}MB (${swap_percent}%)"
+        echo "[tablerow:Swap|[grey70]Not configured[/]]"
     fi
+
+    # Calculate cache percentage
+    cache_mb=$((buffers + cached))
+    cache_percent=$((cache_mb * 100 / total))
+    avail_percent=$((available * 100 / total))
+
+    echo "[tablerow:Cache|${cache_mb}MB]"
+    echo "[tablerow:Available|${available}MB]"
+
+    # Quick memory info
+    echo "row: "
+    echo "row: [grey70]Available: ${available}MB (${avail_percent}%)[/]"
 else
-    echo "row: Swap: [grey70]Not configured[/]"
-fi
-
-# Get available memory
-available=$(free -m | awk 'NR==2{print $7}')
-echo "row: Available: ${available}MB"
-
-# Extended mode: detailed memory information
-if [ "$EXTENDED" = true ]; then
+    # Extended mode: Detailed view with graphs and tables
+    echo "row: [status:$status] Memory: ${used}MB / ${total}MB (${percent}%)"
+    echo "row: [progress:${percent}]"
     echo "row: "
-    echo "row: [bold]Memory Details:[/]"
+    echo "row: Available: ${available}MB"
 
-    # Buffer/cache breakdown
-    buffers=$(free -m | awk 'NR==2{print $6}')
-    cached=$(grep "^Cached:" /proc/meminfo | awk '{print int($2/1024)}')
-    echo "row: [grey70]Buffers: ${buffers}MB | Cached: ${cached}MB[/]"
-
-    # Shared memory
-    shared=$(free -m | awk 'NR==2{print $5}')
-    echo "row: [grey70]Shared: ${shared}MB[/]"
-
-    # Detailed from /proc/meminfo
+    # Memory history graph
     echo "row: "
-    echo "row: [bold]Detailed Breakdown:[/]"
+    echo "row: [divider]"
+    echo "row: "
+    echo "row: [bold]Memory Usage History (last 60s):[/]"
+    echo "row: [graph:${mem_history}:yellow:Memory %]"
+
+    # Swap graph if configured
+    if [ "$swap_total" -gt 0 ]; then
+        echo "row: "
+        echo "row: [bold]Swap Usage History:[/]"
+        echo "row: [graph:${swap_history}:red:Swap %]"
+    fi
+
+    # Detailed breakdown table
+    echo "row: "
+    echo "row: [divider]"
+    echo "row: "
+    echo "row: [bold]Memory Breakdown:[/]"
+    echo "[table:Type|Size|Percentage]"
+
+    # RAM breakdown
+    echo "[tablerow:Total RAM|${total}MB|100%]"
+    echo "[tablerow:Used|${used}MB|[miniprogress:${percent}:10]]"
+    echo "[tablerow:Available|${available}MB|$((available * 100 / total))%]"
+    echo "[tablerow:Buffers|${buffers}MB|$((buffers * 100 / total))%]"
+    echo "[tablerow:Cache|${cached}MB|$((cached * 100 / total))%]"
+
+    # Swap breakdown
+    if [ "$swap_total" -gt 0 ]; then
+        swap_avail=$((swap_total - swap_used))
+        echo "[tablerow:Swap Total|${swap_total}MB|100%]"
+        echo "[tablerow:Swap Used|${swap_used}MB|[miniprogress:${swap_percent}:10]]"
+        echo "[tablerow:Swap Free|${swap_avail}MB|$((swap_avail * 100 / swap_total))%]"
+    fi
+
+    # Advanced memory details
+    echo "row: "
+    echo "row: [divider]"
+    echo "row: "
+    echo "row: [bold]Advanced Details:[/]"
+    echo "[table:Metric|Value]"
+
     active=$(grep "^Active:" /proc/meminfo | awk '{print int($2/1024)}')
     inactive=$(grep "^Inactive:" /proc/meminfo | awk '{print int($2/1024)}')
     dirty=$(grep "^Dirty:" /proc/meminfo | awk '{print int($2/1024)}')
     slab=$(grep "^Slab:" /proc/meminfo | awk '{print int($2/1024)}')
-    echo "row: [grey70]Active: ${active}MB | Inactive: ${inactive}MB[/]"
-    echo "row: [grey70]Dirty: ${dirty}MB | Slab: ${slab}MB[/]"
+    shared=$(free -m | awk 'NR==2{print $5}')
+
+    echo "[tablerow:Active|${active}MB]"
+    echo "[tablerow:Inactive|${inactive}MB]"
+    echo "[tablerow:Shared|${shared}MB]"
+    echo "[tablerow:Dirty|${dirty}MB]"
+    echo "[tablerow:Slab (kernel)|${slab}MB]"
 
     # Swap partitions
     if [ "$swap_total" -gt 0 ]; then
         echo "row: "
+        echo "row: [divider]"
+        echo "row: "
         echo "row: [bold]Swap Partitions:[/]"
+        echo "[table:Device|Type|Size|Used|Priority]"
+
         cat /proc/swaps 2>/dev/null | tail -n +2 | while read -r filename type size used priority; do
             size_mb=$((size / 1024))
             used_mb=$((used / 1024))
-            echo "row: [grey70]$filename: ${used_mb}MB / ${size_mb}MB (priority: $priority)[/]"
+            used_pct=$((used * 100 / size))
+            dev_name=$(basename "$filename")
+            echo "[tablerow:${dev_name}|${type}|${size_mb}MB|${used_mb}MB|${priority}]"
         done
     fi
 
     # Top memory processes
     echo "row: "
-    echo "row: [bold]Top 10 Memory Processes:[/]"
+    echo "row: [divider]"
+    echo "row: "
+    echo "row: [bold]Top Memory Processes:[/]"
+    echo "[table:Process|Memory|Percent|PID]"
+
     ps aux --sort=-%mem 2>/dev/null | awk 'NR>1 && NR<=11 {
         cmd = $11
         gsub(/.*\//, "", cmd)
-        if (length(cmd) > 25) cmd = substr(cmd, 1, 25)
+        if (length(cmd) > 20) cmd = substr(cmd, 1, 20)
         mem_mb = $6 / 1024
-        printf "row: [grey70]%s: %.1fMB (%.1f%%)[/]\n", cmd, mem_mb, $4
+        printf "[tablerow:%s|%.0fMB|%.1f%%|%s]\n", cmd, mem_mb, $4, $2
     }'
 
     # Memory pressure (if available)
     if [ -f /proc/pressure/memory ]; then
         echo "row: "
+        echo "row: [divider]"
+        echo "row: "
         echo "row: [bold]Memory Pressure:[/]"
-        pressure=$(cat /proc/pressure/memory | head -n1)
-        echo "row: [grey70]$pressure[/]"
+
+        # Parse pressure data
+        some_avg10=$(grep "^some" /proc/pressure/memory | awk -F'avg10=' '{print $2}' | awk '{printf "%.2f", $1}')
+        some_avg60=$(grep "^some" /proc/pressure/memory | awk -F'avg60=' '{print $2}' | awk '{printf "%.2f", $1}')
+        full_avg10=$(grep "^full" /proc/pressure/memory | awk -F'avg10=' '{print $2}' | awk '{printf "%.2f", $1}')
+        full_avg60=$(grep "^full" /proc/pressure/memory | awk -F'avg60=' '{print $2}' | awk '{printf "%.2f", $1}')
+
+        echo "[table:Type|10s avg|60s avg]"
+        echo "[tablerow:Some stall|${some_avg10}%|${some_avg60}%]"
+        echo "[tablerow:Full stall|${full_avg10}%|${full_avg60}%]"
     fi
 
     # Huge pages (if configured)
     huge_total=$(grep "^HugePages_Total:" /proc/meminfo | awk '{print $2}')
     if [ "$huge_total" -gt 0 ]; then
         huge_free=$(grep "^HugePages_Free:" /proc/meminfo | awk '{print $2}')
+        huge_rsvd=$(grep "^HugePages_Rsvd:" /proc/meminfo | awk '{print $2}')
         huge_size=$(grep "^Hugepagesize:" /proc/meminfo | awk '{print $2}')
+
+        echo "row: "
+        echo "row: [divider:─:cyan1]"
         echo "row: "
         echo "row: [bold]Huge Pages:[/]"
-        echo "row: [grey70]Total: $huge_total | Free: $huge_free | Size: ${huge_size}KB[/]"
+        echo "[table:Metric|Value]"
+        echo "[tablerow:Total|$huge_total]"
+        echo "[tablerow:Free|$huge_free]"
+        echo "[tablerow:Reserved|$huge_rsvd]"
+        echo "[tablerow:Page Size|${huge_size}KB]"
     fi
 fi
 
 # Actions (context-based)
-echo "action: [sudo,refresh] Drop caches:sh -c 'sync && echo 3 > /proc/sys/vm/drop_caches' && echo 'Caches dropped'"
-
 if [ "$percent" -gt 90 ]; then
     # Get top memory process for kill action
     top_pid=$(ps aux --sort=-%mem 2>/dev/null | awk 'NR==2 {print $2}')
     top_cmd=$(ps aux --sort=-%mem 2>/dev/null | awk 'NR==2 {cmd=$11; gsub(/.*\//, "", cmd); print cmd}')
     if [ -n "$top_pid" ]; then
-        echo "action: [sudo,danger,refresh] Kill ${top_cmd}:kill -9 ${top_pid}"
+        echo "action: [sudo,danger,refresh] Kill ${top_cmd} (${top_pid}):kill -9 ${top_pid}"
     fi
 fi
 
-if [ "$swap_percent" -gt 50 ]; then
+if [ "$swap_total" -gt 0 ] && [ "$swap_percent" -gt 50 ]; then
     echo "action: [sudo,danger,refresh] Clear swap:swapoff -a && swapon -a"
 fi
 
+echo "action: [sudo,refresh] Drop caches:sh -c 'sync && echo 3 > /proc/sys/vm/drop_caches' && echo 'Caches dropped'"
 echo "action: View memory map:cat /proc/meminfo"
+echo "action: Show OOM killer history:dmesg | grep -i 'killed process' | tail -10"
+echo "action: Clear memory history:rm -f $CACHE_DIR/memory-usage.txt $CACHE_DIR/swap-usage.txt"
