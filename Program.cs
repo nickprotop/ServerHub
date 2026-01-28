@@ -10,6 +10,7 @@ using ServerHub.Exceptions;
 using ServerHub.Commands;
 using SharpConsoleUI;
 using SharpConsoleUI.Builders;
+using SharpConsoleUI.Configuration;
 using SharpConsoleUI.Controls;
 using SharpConsoleUI.Core;
 using SharpConsoleUI.Drivers;
@@ -161,14 +162,19 @@ class Program
             _refreshService = new WidgetRefreshService(_executor, _parser, _config);
 
             // Initialize ConsoleEx window system
-            _windowSystem = new ConsoleWindowSystem(new NetConsoleDriver(RenderMode.Buffer))
+            _windowSystem = new ConsoleWindowSystem(
+                new NetConsoleDriver(RenderMode.Buffer),
+                options: new ConsoleWindowSystemOptions(
+                    StatusBarOptions: new StatusBarOptions(
+                        ShowTaskBar: false,
+                        ShowBottomStatus: true
+                    )
+                ))
             {
                 // Layer 1: Top status bar warning in dev mode
                 TopStatus = _devMode
                     ? "DEV MODE - Custom widget checksums DISABLED"
                     : "ServerHub - Server Monitoring Dashboard",
-                ShowTaskBar = false,
-                ShowBottomStatus = true,
                 BottomStatus = "Press Ctrl+Q to quit | F5 to refresh | ? for help",
             };
 
