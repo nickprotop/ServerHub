@@ -25,6 +25,36 @@ public class WidgetRow
     /// Format: [progress:NN] or [progress:NN:style]
     /// </summary>
     public WidgetProgress? Progress { get; set; }
+
+    /// <summary>
+    /// Parsed sparkline (if present)
+    /// Format: [sparkline:VALUES] or [sparkline:VALUES:COLOR]
+    /// </summary>
+    public WidgetSparkline? Sparkline { get; set; }
+
+    /// <summary>
+    /// Parsed mini progress bar (if present)
+    /// Format: [miniprogress:VALUE] or [miniprogress:VALUE:WIDTH]
+    /// </summary>
+    public WidgetMiniProgress? MiniProgress { get; set; }
+
+    /// <summary>
+    /// Parsed table (if present)
+    /// Format: [table:HEADERS] followed by [tablerow:VALUES]
+    /// </summary>
+    public WidgetTable? Table { get; set; }
+
+    /// <summary>
+    /// Parsed divider (if present)
+    /// Format: [divider] or [divider:CHAR] or [divider:CHAR:COLOR]
+    /// </summary>
+    public WidgetDivider? Divider { get; set; }
+
+    /// <summary>
+    /// Parsed multi-line graph (if present)
+    /// Format: [graph:VALUES] or [graph:VALUES:COLOR] or [graph:VALUES:COLOR:LABEL]
+    /// </summary>
+    public WidgetGraph? Graph { get; set; }
 }
 
 /// <summary>
@@ -63,4 +93,50 @@ public enum ProgressStyle
 {
     Inline,  // Unicode blocks (default)
     Chart,   // Spectre BarChart
+}
+
+/// <summary>
+/// Braille sparkline for inline trend visualization
+/// </summary>
+public class WidgetSparkline
+{
+    public List<double> Values { get; set; } = new();
+    public string? Color { get; set; }
+}
+
+/// <summary>
+/// Compact inline progress bar
+/// </summary>
+public class WidgetMiniProgress
+{
+    public int Value { get; set; }  // 0-100
+    public int Width { get; set; } = 10;
+}
+
+/// <summary>
+/// Multi-column table layout
+/// </summary>
+public class WidgetTable
+{
+    public List<string> Headers { get; set; } = new();
+    public List<List<string>> Rows { get; set; } = new();
+}
+
+/// <summary>
+/// Horizontal divider line
+/// </summary>
+public class WidgetDivider
+{
+    public string Character { get; set; } = "─";
+    public string? Color { get; set; }
+}
+
+/// <summary>
+/// Multi-line braille chart
+/// </summary>
+public class WidgetGraph
+{
+    public List<double> Values { get; set; } = new();
+    public string? Color { get; set; }
+    public string? Label { get; set; }
 }

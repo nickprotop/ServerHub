@@ -121,6 +121,106 @@ row: [progress:45:inline]
 row: [progress:90:chart]
 ```
 
+### Braille Sparkline
+
+Displays an inline mini-graph using braille characters for compact trend visualization.
+
+```
+[sparkline:VALUES]
+[sparkline:VALUES:COLOR]
+```
+
+- **VALUES**: Comma-separated numbers (e.g., `10,20,15,25,30`)
+- **COLOR**: Optional Spectre.Console color (default: `grey70`)
+
+Example:
+```
+row: Load trend: [sparkline:45,48,52,55,50,53:green]
+row: Memory: [sparkline:60,62,65,70,68,72,75:yellow] 75%
+```
+
+### Mini Progress Bar
+
+Displays a compact inline progress indicator (smaller than the standard progress bar).
+
+```
+[miniprogress:VALUE]
+[miniprogress:VALUE:WIDTH]
+```
+
+- **VALUE**: Integer 0-100
+- **WIDTH**: Character width 3-20 (default: 10)
+
+Example:
+```
+row: CPU: [miniprogress:75] 75%
+row: RAM: [miniprogress:85:15] 85%
+```
+
+### Multi-Column Table
+
+Displays structured data in aligned columns. Table directives are used without the `row:` prefix.
+
+```
+[table:HEADER1|HEADER2|HEADER3]
+[tablerow:VALUE1|VALUE2|VALUE3]
+[tablerow:VALUE1|VALUE2|VALUE3]
+```
+
+- **Headers**: Pipe-separated column names
+- **Rows**: Pipe-separated values (supports Spectre.Console markup)
+
+Example:
+```
+[table:Service|Status|Memory]
+[tablerow:nginx|[green]running[/]|45MB]
+[tablerow:mysql|[green]running[/]|320MB]
+[tablerow:redis|[yellow]warning[/]|89MB]
+```
+
+### Horizontal Divider
+
+Displays a full-width horizontal line to separate sections.
+
+```
+[divider]
+[divider:CHARACTER]
+[divider:CHARACTER:COLOR]
+```
+
+- **CHARACTER**: Single character (default: `─`)
+- **COLOR**: Optional Spectre.Console color (default: `grey70`)
+
+Example:
+```
+row: [bold]Section 1[/]
+row: Content here...
+row: [divider]
+row: [bold]Section 2[/]
+row: More content...
+row: [divider:═:cyan1]
+```
+
+### Multi-Line Graph
+
+Displays a braille chart for data visualization (4 lines tall).
+
+```
+[graph:VALUES]
+[graph:VALUES:COLOR]
+[graph:VALUES:COLOR:LABEL]
+```
+
+- **VALUES**: Comma-separated numbers
+- **COLOR**: Optional Spectre.Console color (default: `cyan1`)
+- **LABEL**: Optional label text
+
+Example:
+```
+row: [graph:10,20,15,25,30,28,35,40:green:CPU Load]
+row: [graph:60,62,65,70,68,72,75,78:yellow]
+```
+
 ## Spectre.Console Markup
 
 Row content supports [Spectre.Console markup](https://spectreconsole.net/markup) for styling:
@@ -153,25 +253,33 @@ Row content supports [Spectre.Console markup](https://spectreconsole.net/markup)
 
 ```bash
 #!/bin/bash
-# my-widget.sh - Example custom widget
+# my-widget.sh - Example custom widget with rich elements
 
-echo "title: My Custom Widget"
-echo "refresh: 10"
+echo "title: System Monitor"
+echo "refresh: 5"
 
-# Status row with indicator
-if systemctl is-active --quiet nginx; then
-    echo "row: [status:ok] Nginx is running"
-else
-    echo "row: [status:error] Nginx is stopped"
+# Status with sparkline trend
+cpu_history="45,48,52,55,50,53,58,60,57,62"
+echo "row: CPU: 62% [sparkline:${cpu_history}:green]"
+echo "row: [miniprogress:62:15] Current load"
+
+# Divider
+echo "row: [divider]"
+
+# Table for services
+echo "row: [bold]Services[/]"
+echo "[table:Name|Status|Memory]"
+echo "[tablerow:nginx|[green]running[/]|45MB]"
+echo "[tablerow:mysql|[green]running[/]|320MB]"
+
+# Divider
+echo "row: [divider:─:cyan1]"
+
+# Graph for extended mode
+if [[ "$1" == "--extended" ]]; then
+    memory_history="60,62,65,70,68,72,75,78,80,85"
+    echo "row: [graph:${memory_history}:yellow:Memory usage (10 samples)]"
 fi
-
-# Progress bar
-cpu_usage=$(top -bn1 | grep "Cpu(s)" | awk '{print int($2)}')
-echo "row: CPU: ${cpu_usage}%"
-echo "row: [progress:${cpu_usage}:inline]"
-
-# Styled text
-echo "row: [grey70]Last checked: $(date '+%H:%M:%S')[/]"
 ```
 
 ## Security

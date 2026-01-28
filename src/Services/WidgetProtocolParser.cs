@@ -24,6 +24,30 @@ public class WidgetProtocolParser
     private static readonly Regex StatusRegex = new(@"\[status:(ok|info|warn|error)\]", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex ProgressRegex = new(@"\[progress:(\d+)(?::(inline|chart))?\]", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+    private static readonly Regex SparklineRegex = new(
+        @"\[sparkline:([\d\.,\s]+)(?::(\w+))?\]",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex MiniProgressRegex = new(
+        @"\[miniprogress:(\d+)(?::(\d+))?\]",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex TableHeaderRegex = new(
+        @"\[table:(.+)\]$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex TableRowRegex = new(
+        @"\[tablerow:(.+)\]$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex DividerRegex = new(
+        @"\[divider(?::([^:]+))?(?::(\w+))?\]",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex GraphRegex = new(
+        @"\[graph:([\d\.,\s]+)(?::(\w+))?(?::([^\]]+))?\]",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     /// <summary>
     /// Parses widget script output into structured WidgetData
     /// </summary>
@@ -33,6 +57,9 @@ public class WidgetProtocolParser
     {
         var data = new WidgetData();
         var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+        WidgetTable? currentTable = null;
+        var tableStartIndex = -1;
 
         foreach (var line in lines)
         {
@@ -56,12 +83,28 @@ public class WidgetProtocolParser
             }
             else if (trimmedLine.StartsWith("row:", StringComparison.OrdinalIgnoreCase))
             {
+                // Finalize table if we hit a row directive
+                if (currentTable != null)
+                {
+                    data.Rows.Insert(tableStartIndex, new WidgetRow { Table = currentTable });
+                    currentTable = null;
+                    tableStartIndex = -1;
+                }
+
                 var rowContent = trimmedLine.Substring(4).Trim();
                 var row = ParseRow(rowContent);
                 data.Rows.Add(row);
             }
             else if (trimmedLine.StartsWith("action:", StringComparison.OrdinalIgnoreCase))
             {
+                // Finalize table if we hit an action directive
+                if (currentTable != null)
+                {
+                    data.Rows.Insert(tableStartIndex, new WidgetRow { Table = currentTable });
+                    currentTable = null;
+                    tableStartIndex = -1;
+                }
+
                 var actionContent = trimmedLine.Substring(7).Trim();
                 var action = ParseAction(actionContent);
                 if (action != null)
@@ -69,9 +112,140 @@ public class WidgetProtocolParser
                     data.Actions.Add(action);
                 }
             }
+            else
+            {
+                // Check for table header
+                var tableHeaderMatch = TableHeaderRegex.Match(trimmedLine);
+                if (tableHeaderMatch.Success)
+                {
+                    // Finalize any existing table first
+                    if (currentTable != null)
+                    {
+                        data.Rows.Insert(tableStartIndex, new WidgetRow { Table = currentTable });
+                    }
+
+                    currentTable = new WidgetTable
+                    {
+                        Headers = tableHeaderMatch.Groups[1].Value.Split('|').Select(h => h.Trim()).ToList()
+                    };
+                    tableStartIndex = data.Rows.Count;
+                    continue;
+                }
+
+                // Check for table row
+                var tableRowMatch = TableRowRegex.Match(trimmedLine);
+                if (tableRowMatch.Success && currentTable != null)
+                {
+                    var rowValues = tableRowMatch.Groups[1].Value.Split('|')
+                        .Select(v => ProcessCellContent(v.Trim()))
+                        .ToList();
+                    currentTable.Rows.Add(rowValues);
+                    continue;
+                }
+
+                // Finalize table if we hit a non-table line
+                if (currentTable != null)
+                {
+                    data.Rows.Insert(tableStartIndex, new WidgetRow { Table = currentTable });
+                    currentTable = null;
+                    tableStartIndex = -1;
+                }
+            }
+        }
+
+        // Finalize any remaining table
+        if (currentTable != null && tableStartIndex >= 0)
+        {
+            data.Rows.Insert(tableStartIndex, new WidgetRow { Table = currentTable });
         }
 
         return data;
+    }
+
+    /// <summary>
+    /// Parses comma-separated data points into a list of doubles
+    /// </summary>
+    private static List<double> ParseDataPoints(string values)
+    {
+        return values.Split(',')
+            .Select(v => v.Trim())
+            .Where(v => !string.IsNullOrEmpty(v))
+            .Select(v => double.TryParse(v, out var val) ? val : 0.0)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Processes inline directives in table cell content and replaces them with rendered markup
+    /// </summary>
+    private static string ProcessCellContent(string cellContent)
+    {
+        var content = cellContent;
+
+        // Process sparkline directives
+        content = SparklineRegex.Replace(content, match =>
+        {
+            var values = ParseDataPoints(match.Groups[1].Value);
+            var color = match.Groups[2].Success ? match.Groups[2].Value : "grey70";
+            return RenderSparkline(values, color);
+        });
+
+        // Process mini progress directives
+        content = MiniProgressRegex.Replace(content, match =>
+        {
+            var value = int.Parse(match.Groups[1].Value);
+            var width = match.Groups[2].Success ? int.Parse(match.Groups[2].Value) : 10;
+            return RenderMiniProgress(Math.Clamp(value, 0, 100), Math.Clamp(width, 3, 20));
+        });
+
+        return content;
+    }
+
+    /// <summary>
+    /// Renders a sparkline as markup text
+    /// </summary>
+    private static string RenderSparkline(List<double> values, string color)
+    {
+        if (values.Count == 0) return "";
+
+        var min = values.Min();
+        var max = values.Max();
+        var range = max - min;
+
+        if (range == 0)
+            return $"[{color}]{new string('⠤', values.Count)}[/]";
+
+        var brailleChars = new[] { '⠀', '⠁', '⠃', '⠇', '⡇', '⡗', '⡷', '⡿' };
+        var result = new System.Text.StringBuilder();
+
+        foreach (var value in values)
+        {
+            var normalized = (value - min) / range;
+            var level = (int)(normalized * (brailleChars.Length - 1));
+            result.Append(brailleChars[Math.Clamp(level, 0, brailleChars.Length - 1)]);
+        }
+
+        return $"[{color}]{result}[/]";
+    }
+
+    /// <summary>
+    /// Renders a mini progress bar as markup text
+    /// </summary>
+    private static string RenderMiniProgress(int percentage, int width)
+    {
+        var filledWidth = (int)(width * percentage / 100.0);
+        var emptyWidth = width - filledWidth;
+
+        var filled = new string('█', filledWidth);
+        var empty = new string('░', emptyWidth);
+
+        var color = percentage switch
+        {
+            >= 90 => "red",
+            >= 70 => "yellow",
+            _ => "green"
+        };
+
+        return $"[{color}]{filled}[/][grey35]{empty}[/] {percentage}%";
     }
 
     /// <summary>
@@ -122,6 +296,57 @@ public class WidgetProtocolParser
 
             // Remove the progress tag from display content
             row.Content = ProgressRegex.Replace(row.Content, "").Trim();
+        }
+
+        // Parse sparkline
+        var sparklineMatch = SparklineRegex.Match(row.Content);
+        if (sparklineMatch.Success)
+        {
+            row.Sparkline = new WidgetSparkline
+            {
+                Values = ParseDataPoints(sparklineMatch.Groups[1].Value),
+                Color = sparklineMatch.Groups[2].Success ? sparklineMatch.Groups[2].Value : null
+            };
+            row.Content = SparklineRegex.Replace(row.Content, "");
+        }
+
+        // Parse mini progress
+        var miniProgressMatch = MiniProgressRegex.Match(row.Content);
+        if (miniProgressMatch.Success)
+        {
+            var value = int.Parse(miniProgressMatch.Groups[1].Value);
+            var width = miniProgressMatch.Groups[2].Success ? int.Parse(miniProgressMatch.Groups[2].Value) : 10;
+            row.MiniProgress = new WidgetMiniProgress
+            {
+                Value = Math.Clamp(value, 0, 100),
+                Width = Math.Clamp(width, 3, 20)
+            };
+            row.Content = MiniProgressRegex.Replace(row.Content, "");
+        }
+
+        // Parse divider
+        var dividerMatch = DividerRegex.Match(row.Content);
+        if (dividerMatch.Success)
+        {
+            row.Divider = new WidgetDivider
+            {
+                Character = dividerMatch.Groups[1].Success ? dividerMatch.Groups[1].Value : "─",
+                Color = dividerMatch.Groups[2].Success ? dividerMatch.Groups[2].Value : null
+            };
+            row.Content = DividerRegex.Replace(row.Content, "");
+        }
+
+        // Parse graph
+        var graphMatch = GraphRegex.Match(row.Content);
+        if (graphMatch.Success)
+        {
+            row.Graph = new WidgetGraph
+            {
+                Values = ParseDataPoints(graphMatch.Groups[1].Value),
+                Color = graphMatch.Groups[2].Success ? graphMatch.Groups[2].Value : null,
+                Label = graphMatch.Groups[3].Success ? graphMatch.Groups[3].Value : null
+            };
+            row.Content = GraphRegex.Replace(row.Content, "");
         }
 
         return row;
