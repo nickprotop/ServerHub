@@ -1231,6 +1231,10 @@ class Program
         if (_executor == null || _parser == null || _mainWindow == null)
             return;
 
+        // Skip if widget no longer exists in current configuration (race condition during reload)
+        if (_config?.Widgets.ContainsKey(widgetId) == false)
+            return;
+
         // Skip refresh when paused (unless forced)
         if (!force && _isPaused)
             return;
@@ -1245,7 +1249,9 @@ class Program
         if (!force && _openModalWidgetId == widgetId)
             return;
 
-        // Mark as refreshing
+        // Mark as refreshing (check again before accessing dictionary)
+        if (_config?.Widgets.ContainsKey(widgetId) == false)
+            return;
         _isRefreshing[widgetId] = true;
 
         try
@@ -1346,6 +1352,15 @@ class Program
         }
         catch (Exception ex)
         {
+            // Skip error handling if widget no longer exists (race condition during reload)
+            if (_config?.Widgets.ContainsKey(widgetId) == false)
+            {
+                // Clear refreshing state if it exists and exit silently
+                if (_isRefreshing.ContainsKey(widgetId))
+                    _isRefreshing[widgetId] = false;
+                return;
+            }
+
             // Track exception error
             _consecutiveErrors.TryGetValue(widgetId, out var errorCount);
             _consecutiveErrors[widgetId] = errorCount + 1;
@@ -1387,6 +1402,10 @@ class Program
     private static void UpdateWidgetUI(string widgetId, WidgetData widgetData)
     {
         if (_mainWindow == null || _renderer == null)
+            return;
+
+        // Skip if widget no longer exists (race condition during reload)
+        if (_config?.Widgets.ContainsKey(widgetId) == false)
             return;
 
         // Create a display copy with spinner if currently refreshing
