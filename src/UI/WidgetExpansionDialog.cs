@@ -90,12 +90,15 @@ public static class WidgetExpansionDialog
         headerTextColumn.AddContent(headerControl);
         headerGrid.AddColumn(headerTextColumn);
 
-        // RIGHT COLUMN - Refresh button (fixed width, hidden on narrow terminals)
+        // RIGHT COLUMN - Refresh button (fixed width, hidden on narrow terminals or fast auto-refresh)
+        // Hide refresh button for widgets with refresh < 15s (manual refresh is pointless)
+        bool showRefreshButton = modalWidth >= 60 && refreshInterval >= 15;
+
         var headerButtonColumn = new ColumnContainer(headerGrid)
         {
             Width = 18,  // Fixed width to accommodate focus indicators: "> ↻  Refresh <"
             VerticalAlignment = SharpConsoleUI.Layout.VerticalAlignment.Top,
-            Visible = modalWidth >= 60  // Hide on narrow terminals
+            Visible = showRefreshButton
         };
 
         ButtonControl? refreshButton = null;
@@ -237,10 +240,14 @@ public static class WidgetExpansionDialog
             .StickyBottom()
             .Build());
 
-        // Footer with instructions (AgentStudio pattern) - include F5 refresh hint
+        // Footer with instructions (AgentStudio pattern) - hide F5 refresh hint for fast auto-refresh
         var footerInstructions = widgetData.HasActions
-            ? "[grey70]↑↓/Click: Select  •  Enter/Dbl-click: Execute  •  F5/↻: Refresh  •  Esc: Close[/]"
-            : "[grey70]↑↓/Mouse Wheel: Scroll  •  F5/↻: Refresh  •  Esc/Enter: Close[/]";
+            ? (showRefreshButton
+                ? "[grey70]↑↓/Click: Select  •  Enter/Dbl-click: Execute  •  F5/↻: Refresh  •  Esc: Close[/]"
+                : "[grey70]↑↓/Click: Select  •  Enter/Dbl-click: Execute  •  Esc: Close[/]")
+            : (showRefreshButton
+                ? "[grey70]↑↓/Mouse Wheel: Scroll  •  F5/↻: Refresh  •  Esc/Enter: Close[/]"
+                : "[grey70]↑↓/Mouse Wheel: Scroll  •  Esc/Enter: Close[/]");
 
         modal.AddControl(Controls.Markup()
             .AddLine(footerInstructions)
@@ -348,8 +355,8 @@ public static class WidgetExpansionDialog
                 modal.Close();
                 e.Handled = true;
             }
-            // F5: Force refresh (hybrid approach - works with button)
-            else if (e.KeyInfo.Key == ConsoleKey.F5)
+            // F5: Force refresh (only if manual refresh is enabled)
+            else if (e.KeyInfo.Key == ConsoleKey.F5 && showRefreshButton)
             {
                 if (!refreshState.IsRefreshing)
                 {

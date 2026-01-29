@@ -128,10 +128,10 @@ public static class MarketplaceBrowserDialog
             .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Stretch)
             .Build();
 
-        // LEFT COLUMN - Widget List (40% width)
+        // LEFT COLUMN - Widget List (30% width)
         var listColumn = new ColumnContainer(mainGrid)
         {
-            Width = (int)(width * 0.40),
+            Width = (int)(width * 0.30),
             VerticalAlignment = SharpConsoleUI.Layout.VerticalAlignment.Fill,
         };
 

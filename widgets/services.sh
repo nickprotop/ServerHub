@@ -17,121 +17,199 @@ if ! command -v systemctl &> /dev/null; then
     exit 0
 fi
 
-# Key services to monitor in standard mode (reduced list)
-KEY_SERVICES="sshd docker nginx apache2 postgresql mysql cron"
+# Key services to monitor in standard mode
+KEY_SERVICES="sshd docker nginx apache2 postgresql mysql redis-server cron"
 
 # Get all service states in one call
 all_services=$(systemctl list-units --type=service --all --no-pager --no-legend 2>/dev/null)
 
-# Track counts and found services
-active_count=0
-failed_count=0
-inactive_count=0
+# Count all services
+total_active=$(echo "$all_services" | grep -c "running\|exited")
+total_failed=$(echo "$all_services" | grep -c "failed")
+total_inactive=$(echo "$all_services" | grep -c "inactive")
 
-echo "row: [bold]Key Services:[/]"
-echo "row: "
-
-# Check key services
-for service in $KEY_SERVICES; do
-    service_full="${service}.service"
-    service_info=$(echo "$all_services" | grep -E "^\s*${service_full}\s+" | head -n1)
-
-    if [ -n "$service_info" ]; then
-        # Parse state from the line
-        state=$(echo "$service_info" | awk '{print $3}')  # active/inactive
-        sub_state=$(echo "$service_info" | awk '{print $4}')  # running/dead/failed
-
-        case "$sub_state" in
-            running)
-                status_indicator="ok"
-                status_text="[green]running[/]"
-                ((active_count++))
-                ;;
-            exited)
-                status_indicator="ok"
-                status_text="[grey70]exited[/]"
-                ((active_count++))
-                ;;
-            failed)
-                status_indicator="error"
-                status_text="[red]failed[/]"
-                ((failed_count++))
-                ;;
-            dead)
-                status_indicator="warn"
-                status_text="[grey70]stopped[/]"
-                ((inactive_count++))
-                ;;
-            *)
-                status_indicator="warn"
-                status_text="[grey70]$sub_state[/]"
-                ((inactive_count++))
-                ;;
-        esac
-
-        echo "row: [status:$status_indicator] [cyan1]${service}[/]: $status_text"
-    fi
-done
-
-echo "row: "
-
-# Failed services (from any service, not just key services)
-all_failed=$(echo "$all_services" | grep -c "failed" || echo 0)
-if [ "$all_failed" -gt 0 ]; then
-    echo "row: [status:error] Failed services: [red]$all_failed[/]"
-
-    # Show failed service names
-    echo "$all_services" | grep "failed" | head -n 5 | while read -r line; do
-        service_name=$(echo "$line" | awk '{print $2}' | sed 's/.service//')
-        echo "row: [grey70]  → $service_name[/]"
-    done
-    echo "row: "
+# Status indicator
+status="ok"
+if [ "$total_failed" -gt 0 ]; then
+    status="error"
 fi
 
-# Summary
-echo "row: [grey70]Active: $active_count | Stopped: $inactive_count | Failed: $failed_count[/]"
-
-# Extended mode: show all active services
-if [ "$EXTENDED" = true ]; then
+# Dashboard mode: Compact tables
+if [ "$EXTENDED" = false ]; then
+    echo "row: [status:$status] Active: [green]$total_active[/] | Failed: [red]$total_failed[/]"
     echo "row: "
-    echo "row: [bold]All Active Services:[/]"
 
-    echo "$all_services" | grep "running\|exited" | head -n 30 | while read -r line; do
-        service_name=$(echo "$line" | awk '{print $1}' | sed 's/.service//')
-        sub_state=$(echo "$line" | awk '{print $4}')
+    # Key services table
+    echo "row: [bold]Key Services:[/]"
+    echo "[table:Service|Status]"
 
-        if [ "$sub_state" = "running" ]; then
-            echo "row: [status:ok] [grey70]$service_name[/]"
-        else
-            echo "row: [grey70]$service_name ($sub_state)[/]"
+    for service in $KEY_SERVICES; do
+        service_full="${service}.service"
+        service_info=$(echo "$all_services" | grep -E "^\s*${service_full}\s+" | head -n1)
+
+        if [ -n "$service_info" ]; then
+            sub_state=$(echo "$service_info" | awk '{print $4}')
+
+            case "$sub_state" in
+                running)
+                    echo "[tablerow:$service|[green]running[/]]"
+                    ;;
+                exited)
+                    echo "[tablerow:$service|[cyan1]exited[/]]"
+                    ;;
+                failed)
+                    echo "[tablerow:$service|[red]failed[/]]"
+                    ;;
+                dead)
+                    echo "[tablerow:$service|[grey70]stopped[/]]"
+                    ;;
+                *)
+                    echo "[tablerow:$service|[grey70]$sub_state[/]]"
+                    ;;
+            esac
         fi
     done
 
-    # Service resource usage (if available)
+    # Failed services
+    if [ "$total_failed" -gt 0 ]; then
+        echo "row: "
+        echo "row: [bold]Failed Services:[/]"
+        echo "[table:Service|State]"
+        echo "$all_services" | grep "failed" | head -n 8 | while read -r line; do
+            # Handle both formats: with/without ● prefix
+            service_name=$(echo "$line" | awk '{if ($1 == "●") print $2; else print $1}' | sed 's/.service//' | cut -c1-25)
+            echo "[tablerow:$service_name|[red]failed[/]]"
+        done
+    fi
+else
+    # Extended mode: Detailed view with comprehensive tables
+    echo "row: [status:$status] Total Services - Active: [green]$total_active[/] | Failed: [red]$total_failed[/] | Inactive: [grey70]$total_inactive[/]"
+    echo "row: "
+
+    # Key services table with descriptions
+    echo "row: [bold]Key Services:[/]"
+    echo "[table:Service|Status|State]"
+
+    for service in $KEY_SERVICES; do
+        service_full="${service}.service"
+        service_info=$(echo "$all_services" | grep -E "^\s*${service_full}\s+" | head -n1)
+
+        if [ -n "$service_info" ]; then
+            state=$(echo "$service_info" | awk '{print $3}')
+            sub_state=$(echo "$service_info" | awk '{print $4}')
+
+            case "$sub_state" in
+                running)
+                    echo "[tablerow:$service|[green]running[/]|$state]"
+                    ;;
+                exited)
+                    echo "[tablerow:$service|[cyan1]exited[/]|$state]"
+                    ;;
+                failed)
+                    echo "[tablerow:$service|[red]failed[/]|$state]"
+                    ;;
+                dead)
+                    echo "[tablerow:$service|[grey70]stopped[/]|$state]"
+                    ;;
+                *)
+                    echo "[tablerow:$service|[grey70]$sub_state[/]|$state]"
+                    ;;
+            esac
+        fi
+    done
+
+    # Failed services
+    if [ "$total_failed" -gt 0 ]; then
+        echo "row: "
+        echo "row: [divider]"
+        echo "row: "
+        echo "row: [bold]Failed Services:[/]"
+        echo "[table:Service|Status|Unit File]"
+        echo "$all_services" | grep "failed" | head -n 15 | while read -r line; do
+            # Handle both formats: with/without ● prefix
+            if echo "$line" | grep -q "^●"; then
+                service_name=$(echo "$line" | awk '{print $2}' | sed 's/.service//' | cut -c1-30)
+                unit_state=$(echo "$line" | awk '{print $4}')
+            else
+                service_name=$(echo "$line" | awk '{print $1}' | sed 's/.service//' | cut -c1-30)
+                unit_state=$(echo "$line" | awk '{print $3}')
+            fi
+            echo "[tablerow:$service_name|[red]failed[/]|$unit_state]"
+        done
+    fi
+
+    # All active services
+    echo "row: "
+    echo "row: [divider]"
+    echo "row: "
+    echo "row: [bold]Active Services (Top 30):[/]"
+    echo "[table:Service|Status|Load State]"
+    echo "$all_services" | grep "running\|exited" | head -n 30 | while read -r line; do
+        service_name=$(echo "$line" | awk '{print $1}' | sed 's/.service//' | cut -c1-30)
+        sub_state=$(echo "$line" | awk '{print $4}')
+        load_state=$(echo "$line" | awk '{print $2}')
+
+        if [ "$sub_state" = "running" ]; then
+            echo "[tablerow:$service_name|[green]running[/]|$load_state]"
+        else
+            echo "[tablerow:$service_name|[cyan1]$sub_state[/]|$load_state]"
+        fi
+    done
+
+    # Service memory usage
+    echo "row: "
+    echo "row: [divider]"
     echo "row: "
     echo "row: [bold]Top Services by Memory:[/]"
-    systemctl list-units --type=service --state=running --no-pager --no-legend 2>/dev/null | awk '{print $1}' | head -n 10 | while read -r svc; do
+    echo "[table:Service|Memory|Status]"
+
+    # Get running services with memory info
+    systemctl list-units --type=service --state=running --no-pager --no-legend 2>/dev/null | awk '{print $1}' | while read -r svc; do
         mem=$(systemctl show "$svc" --property=MemoryCurrent 2>/dev/null | cut -d= -f2)
         if [ -n "$mem" ] && [ "$mem" != "[not set]" ] && [ "$mem" -gt 0 ] 2>/dev/null; then
             mem_mb=$((mem / 1048576))
-            svc_short=$(echo "$svc" | sed 's/.service//')
-            echo "row: [grey70]$svc_short: ${mem_mb}MB[/]"
+            svc_short=$(echo "$svc" | sed 's/.service//' | cut -c1-25)
+            echo "$mem_mb|$svc_short"
+        fi
+    done | sort -rn -t'|' -k1 | head -n 15 | while IFS='|' read -r mem_mb svc_short; do
+        # Calculate percentage for mini progress (assume max 500MB for scale)
+        max_mem=500
+        if [ "$mem_mb" -gt "$max_mem" ]; then
+            pct=100
+        else
+            pct=$((mem_mb * 100 / max_mem))
+        fi
+        echo "[tablerow:$svc_short|${mem_mb}MB|[miniprogress:$pct:10]]"
+    done
+
+    # Service ports
+    echo "row: "
+    echo "row: [divider]"
+    echo "row: "
+    echo "row: [bold]Service Listening Ports:[/]"
+    echo "[table:Service|Port|Protocol]"
+    ss -tlnp 2>/dev/null | grep -v "State" | head -n 20 | while read -r state recv send local peer process; do
+        port=$(echo "$local" | awk -F':' '{print $NF}')
+        proc_name=$(echo "$process" | grep -oP 'users:\(\("\K[^"]+' | head -n1)
+        if [ -n "$proc_name" ]; then
+            proc_short=$(echo "$proc_name" | cut -c1-25)
+            echo "[tablerow:$proc_short|$port|TCP]"
         fi
     done
 
-    # Listening ports per service
+    # Service statistics
     echo "row: "
-    echo "row: [bold]Service Ports:[/]"
-    ss -tlnp 2>/dev/null | grep -v "State" | head -n 10 | while read -r state recv send local peer process; do
-        port=$(echo "$local" | awk -F':' '{print $NF}')
-        proc_name=$(echo "$process" | grep -oP 'users:\(\("\K[^"]+' | head -n1)
-        [ -n "$proc_name" ] && echo "row: [grey70]Port $port: $proc_name[/]"
-    done
+    echo "row: [divider:─:cyan1]"
+    echo "row: "
+    echo "row: [bold]Statistics:[/]"
+    enabled_count=$(systemctl list-unit-files --type=service --state=enabled 2>/dev/null | grep -c "enabled")
+    disabled_count=$(systemctl list-unit-files --type=service --state=disabled 2>/dev/null | grep -c "disabled")
+    echo "row: [grey70]Enabled services: $enabled_count[/]"
+    echo "row: [grey70]Disabled services: $disabled_count[/]"
+    echo "row: [grey70]Total running: $(echo "$all_services" | grep -c "running")[/]"
 fi
 
 # Dynamic actions based on installed/running services
-# Check which services exist and their state
-
 # Nginx actions
 if echo "$all_services" | grep -q "nginx.service"; then
     nginx_state=$(echo "$all_services" | grep "nginx.service" | awk '{print $4}')
@@ -175,13 +253,13 @@ if echo "$all_services" | grep -q "mysql.service"; then
 fi
 
 # Failed service restart actions
-if [ "$all_failed" -gt 0 ]; then
-    # Get first failed service for quick restart action (use $2 because $1 is the bullet ●)
-    first_failed=$(echo "$all_services" | grep "failed" | head -n1 | awk '{print $2}')
+if [ "$total_failed" -gt 0 ]; then
+    first_failed=$(echo "$all_services" | grep "failed" | head -n1 | awk '{print $1}')
     first_failed_short=$(echo "$first_failed" | sed 's/.service//')
-    echo "action: [sudo,refresh] Restart ${first_failed_short}:systemctl restart ${first_failed}"
+    echo "action: [sudo,refresh] Restart $first_failed_short:systemctl restart $first_failed"
 fi
 
 # General actions
 echo "action: List all services:systemctl list-units --type=service --all"
 echo "action: [sudo,refresh] Reload systemd:systemctl daemon-reload"
+echo "action: View failed:systemctl list-units --type=service --state=failed"

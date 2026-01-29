@@ -63,23 +63,6 @@ if [ "$EXTENDED" = false ]; then
     echo "row: "
     echo "row: Load Average: ${load1}, ${load5}, ${load15}"
 
-    # Top cores table (show up to 8 cores)
-    echo "row: "
-    echo "row: [bold]Core Usage:[/]"
-    echo "[table:Core|Usage]"
-
-    core_num=0
-    grep "^cpu[0-9]" /proc/stat | head -n 8 | while read -r line; do
-        read -r _ user nice system idle iowait _ <<< "$line"
-        total=$((user + nice + system + idle + iowait))
-        if [ "$total" -gt 0 ]; then
-            busy=$((user + nice + system))
-            usage=$((busy * 100 / total))
-            echo "[tablerow:Core $core_num|[miniprogress:${usage}:10]]"
-        fi
-        ((core_num++))
-    done
-
     # Quick CPU info
     if [ -f /proc/cpuinfo ]; then
         cpu_model=$(grep -m1 "model name" /proc/cpuinfo | cut -d':' -f2 | xargs | cut -c1-50)
