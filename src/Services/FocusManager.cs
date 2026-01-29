@@ -50,12 +50,12 @@ public class FocusManager
 
     // Store original colors before applying focus (for restoration)
     private Dictionary<string, Color> _originalBackgroundColors = new();
+    private Dictionary<string, Color> _originalBorderColors = new();
 
     // Focus color configuration
-    private readonly Color _focusedBackgroundColor = Color.Grey30;
-    private readonly Color[] _unfocusedColors = {
-        Color.Grey15, Color.Grey19, Color.Grey23
-    };
+    private readonly Color _focusedBackgroundColor = new Color(43, 43, 43);  // Grey17 equivalent - very subtle focus color
+    private readonly Color _focusedBorderColor = Color.Cyan1;
+    private readonly Color _unfocusedBackgroundColor = Color.Grey11;
 
     /// <summary>
     /// Initialize or re-initialize focus manager with new layout placements.
@@ -163,6 +163,18 @@ public class FocusManager
         _focusedIndex = index;
         ApplyFocusVisual(widgetId);
         return true;
+    }
+
+    /// <summary>
+    /// Clear focus from all widgets.
+    /// </summary>
+    public void ClearFocus()
+    {
+        if (_focusedIndex >= 0 && _focusedIndex < _widgetPlacements.Count)
+        {
+            RemoveFocusVisual(_widgetPlacements[_focusedIndex].WidgetId);
+        }
+        _focusedIndex = -1;
     }
 
     /// <summary>
@@ -486,7 +498,7 @@ public class FocusManager
     }
 
     /// <summary>
-    /// Apply focus visual (background color) to a widget.
+    /// Apply focus visual (background and border color) to a widget.
     /// </summary>
     private void ApplyFocusVisual(string widgetId)
     {
@@ -496,21 +508,32 @@ public class FocusManager
         // Save original colors on first focus
         if (!_originalBackgroundColors.ContainsKey(widgetId))
         {
-            // Save the MarkupControl's background color
-            if (control is MarkupControl markup)
+            if (control is PanelControl panel)
             {
-                _originalBackgroundColors[widgetId] = markup.BackgroundColor ?? Color.Grey15;
+                _originalBackgroundColors[widgetId] = panel.BackgroundColor ?? _unfocusedBackgroundColor;
+                _originalBorderColors[widgetId] = panel.BorderColor ?? Color.Grey35;
+            }
+            else if (control is MarkupControl markup)
+            {
+                _originalBackgroundColors[widgetId] = markup.BackgroundColor ?? _unfocusedBackgroundColor;
             }
             else
             {
-                _originalBackgroundColors[widgetId] = Color.Grey15;
+                _originalBackgroundColors[widgetId] = _unfocusedBackgroundColor;
             }
         }
 
         // Apply focus color to BOTH the control AND its container for consistent coloring
 
-        // 1. Set on the MarkupControl itself (for the markup content area)
-        if (control is MarkupControl markupControl)
+        // 1. Set on the PanelControl (with enhanced border highlighting)
+        if (control is PanelControl panelControl)
+        {
+            panelControl.BackgroundColor = _focusedBackgroundColor;
+            panelControl.BorderColor = _focusedBorderColor;
+            panelControl.Invalidate();
+        }
+        // Fallback: Set on the MarkupControl (for legacy support)
+        else if (control is MarkupControl markupControl)
         {
             markupControl.BackgroundColor = _focusedBackgroundColor;
             markupControl.Invalidate();
@@ -529,20 +552,33 @@ public class FocusManager
     }
 
     /// <summary>
-    /// Remove focus visual from a widget, restoring original background color.
+    /// Remove focus visual from a widget, restoring original background and border colors.
     /// </summary>
     private void RemoveFocusVisual(string widgetId)
     {
         var control = _mainWindow?.FindControl<IWindowControl>($"widget_{widgetId}");
         if (control == null) return;
 
-        // Restore original color to BOTH control and container
-        if (_originalBackgroundColors.TryGetValue(widgetId, out var originalColor))
+        // Restore original colors to BOTH control and container
+        if (_originalBackgroundColors.TryGetValue(widgetId, out var originalBgColor))
         {
-            // 1. Restore on the MarkupControl itself
-            if (control is MarkupControl markupControl)
+            // 1. Restore on the PanelControl (including border color)
+            if (control is PanelControl panelControl)
             {
-                markupControl.BackgroundColor = originalColor;
+                panelControl.BackgroundColor = originalBgColor;
+
+                // Restore original border color if we saved it
+                if (_originalBorderColors.TryGetValue(widgetId, out var originalBorderColor))
+                {
+                    panelControl.BorderColor = originalBorderColor;
+                }
+
+                panelControl.Invalidate();
+            }
+            // Fallback: Restore on the MarkupControl (for legacy support)
+            else if (control is MarkupControl markupControl)
+            {
+                markupControl.BackgroundColor = originalBgColor;
                 markupControl.Invalidate();
             }
 
@@ -550,7 +586,7 @@ public class FocusManager
             var container = control.Container;
             if (container != null)
             {
-                container.BackgroundColor = originalColor;
+                container.BackgroundColor = originalBgColor;
                 container.Invalidate(true);
             }
         }

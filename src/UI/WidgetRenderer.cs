@@ -17,37 +17,43 @@ namespace ServerHub.UI;
 public class WidgetRenderer
 {
     /// <summary>
-    /// Creates a markup control for a widget
+    /// Creates a panel control for a widget with rounded borders
     /// </summary>
     /// <param name="widgetId">Widget identifier</param>
     /// <param name="widgetData">Widget data to render</param>
     /// <param name="isPinned">Whether this is a pinned widget (compact tile)</param>
     /// <param name="backgroundColor">Background color for the widget</param>
+    /// <param name="borderColor">Border color for the widget panel</param>
     /// <param name="onClickCallback">Optional callback when widget is clicked</param>
     /// <param name="onDoubleClickCallback">Optional callback when widget is double-clicked</param>
     /// <param name="maxLines">Maximum lines to display (null = no limit)</param>
     /// <param name="showTruncationIndicator">Whether to show indicator when truncated</param>
     /// <returns>Control to display the widget</returns>
-    public IWindowControl CreateWidgetPanel(string widgetId, WidgetData widgetData, bool isPinned, Color? backgroundColor = null, Action<string>? onClickCallback = null, Action<string>? onDoubleClickCallback = null, int? maxLines = null, bool showTruncationIndicator = true)
+    public IWindowControl CreateWidgetPanel(string widgetId, WidgetData widgetData, bool isPinned, Color? backgroundColor = null, Color? borderColor = null, Action<string>? onClickCallback = null, Action<string>? onDoubleClickCallback = null, int? maxLines = null, bool showTruncationIndicator = true)
     {
         var lines = BuildWidgetContent(widgetData, isPinned, maxLines, showTruncationIndicator);
+        var content = string.Join("\n", lines);
 
-        var bgColor = backgroundColor ?? Color.Grey15;
+        var bgColor = backgroundColor ?? Color.Grey11;
+        var borderCol = borderColor ?? Color.Grey35;
 
-        var builder = Controls.Markup()
-            .WithName($"widget_{widgetId}")
+        // Use PanelControl with rounded borders for btop-style aesthetic
+        var panelControl = PanelControl.Create()
+            .WithContent(content)
+            .Rounded()
+            .WithBorderColor(borderCol)
+            .WithHeader(widgetData.Title)
+            .HeaderLeft()  // Left-aligned title
+            .WithPadding(1, 0, 1, 0)
             .WithBackgroundColor(bgColor)
-            .WithMargin(1, 0, 1, 0);
-
-        foreach (var line in lines)
-        {
-            builder.AddLine(line);
-        }
-
-        var markupControl = builder.Build();
+            .WithName($"widget_{widgetId}")
+            .StretchHorizontal()
+            .FillVertical()
+            .WithMargin(0, 0, 0, 0)  // No margins - panels touch each other
+            .Build();
 
         // Wire up click and double-click callbacks if provided
-        if (markupControl is SharpConsoleUI.Controls.IMouseAwareControl mouseAware)
+        if (panelControl is SharpConsoleUI.Controls.IMouseAwareControl mouseAware)
         {
             if (onClickCallback != null)
             {
@@ -60,7 +66,7 @@ public class WidgetRenderer
             }
         }
 
-        return markupControl;
+        return panelControl;
     }
 
     /// <summary>
@@ -72,18 +78,15 @@ public class WidgetRenderer
 
         if (isPinned)
         {
-            // Pinned widget: single line with title and first row (no truncation)
-            var content = widgetData.Rows.Count > 0
-                ? $"[bold cyan1]{widgetData.Title}[/] {FormatRow(widgetData.Rows[0])}"
-                : $"[bold cyan1]{widgetData.Title}[/]";
-            lines.Add(content);
+            // Pinned widget: just show first row (title is in panel header now)
+            if (widgetData.Rows.Count > 0)
+            {
+                lines.Add(FormatRow(widgetData.Rows[0]));
+            }
         }
         else
         {
-            // Regular widget: title header + all rows
-            lines.Add($"[bold cyan1]{widgetData.Title}[/]");
-            lines.Add(""); // Empty line for spacing
-
+            // Regular widget: all rows (title is in panel header now)
             if (widgetData.HasError)
             {
                 lines.Add($"[red]Error:[/] {widgetData.Error}");
@@ -339,13 +342,15 @@ public class WidgetRenderer
     /// </summary>
     public void UpdateWidgetPanel(IWindowControl control, WidgetData widgetData, int? maxLines = null, bool showTruncationIndicator = true)
     {
-        if (control is MarkupControl markup)
+        if (control is PanelControl panel)
         {
             // Determine if pinned based on control name
             var isPinned = control.Name?.Contains("_pinned") ?? false;
             var lines = BuildWidgetContent(widgetData, isPinned, maxLines, showTruncationIndicator);
+            var content = string.Join("\n", lines);
 
-            markup.SetContent(lines);
+            panel.SetContent(content);
+            panel.Header = widgetData.Title;
         }
     }
 }

@@ -355,8 +355,8 @@ class Program
         // Determine column count for this terminal width
         var columnCount = GetColumnCountFromWidth(terminalWidth);
 
-        // Calculate base column width
-        const int spacingBetweenWidgets = 1;
+        // Calculate base column width (no spacing between widgets)
+        const int spacingBetweenWidgets = 0;
         int totalSpacing = Math.Max(0, (columnCount - 1) * spacingBetweenWidgets);
         int availableWidth = terminalWidth - totalSpacing;
         int baseColumnWidth = availableWidth / columnCount;
@@ -364,30 +364,12 @@ class Program
         // Group placements by row
         var rowGroups = placements.GroupBy(p => p.Row).OrderBy(g => g.Key);
 
-        // Alternating background colors for widgets
-        var widgetColors = new[]
-        {
-            Spectre.Console.Color.Grey15,
-            Spectre.Console.Color.Grey19,
-            Spectre.Console.Color.Grey23,
-        };
-        int widgetColorIndex = 0;
+        // Consistent styling for all widgets (btop-style with rounded borders)
+        var widgetBackgroundColor = Spectre.Console.Color.Grey11;  // Minimal background, same as window
 
-        // Build rows
-        bool firstRow = true;
+        // Build rows (no vertical spacing between rows)
         foreach (var rowGroup in rowGroups)
         {
-            // Add vertical spacing between rows (not before first row)
-            if (!firstRow)
-            {
-                var spacer = Controls
-                    .Markup("")
-                    .WithBackgroundColor(Spectre.Console.Color.Grey11)
-                    .WithMargin(0, 0, 0, 0)
-                    .Build();
-                _mainWindow.AddControl(spacer);
-            }
-            firstRow = false;
 
             var rowPlacements = rowGroup.OrderBy(p => p.Column).ToList();
 
@@ -425,10 +407,12 @@ class Program
                         ? cachedData
                         : CreateLoadingWidget(placement.WidgetId);
 
-                // Get alternating background color
-                var bgColor = widgetColors[widgetColorIndex % widgetColors.Length];
-                widgetColorIndex++;
-                widgetBgColors.Add(bgColor);
+                // Determine border color: highlight pinned widgets with cyan border
+                var borderColor = placement.IsPinned
+                    ? Spectre.Console.Color.Cyan1
+                    : Spectre.Console.Color.Grey35;
+
+                widgetBgColors.Add(widgetBackgroundColor);
                 widgetIdByColumnIndex.Add(placement.WidgetId); // Track widget for this column
 
                 // Get max lines: widget-specific > global > default 20
@@ -440,8 +424,20 @@ class Program
                     placement.WidgetId,
                     widgetData,
                     placement.IsPinned,
-                    bgColor,
-                    widgetId => _focusManager?.FocusWidget(widgetId),
+                    widgetBackgroundColor,
+                    borderColor,
+                    widgetId =>
+                    {
+                        // Toggle focus: click again to deselect
+                        if (_focusManager?.GetFocusedWidgetId() == widgetId)
+                        {
+                            _focusManager?.ClearFocus();
+                        }
+                        else
+                        {
+                            _focusManager?.FocusWidget(widgetId);
+                        }
+                    },
                     widgetId => ShowWidgetDialog(widgetId),  // Double-click opens dialog
                     maxLines,
                     showIndicator
@@ -471,10 +467,17 @@ class Program
                 {
                     var widgetId = widgetIdByColumnIndex[i]!;
 
-                    // Single click: focus widget
+                    // Single click: toggle focus (click again to deselect)
                     builtRowGrid.Columns[i].MouseClick += (sender, e) =>
                     {
-                        _focusManager?.FocusWidget(widgetId);
+                        if (_focusManager?.GetFocusedWidgetId() == widgetId)
+                        {
+                            _focusManager?.ClearFocus();
+                        }
+                        else
+                        {
+                            _focusManager?.FocusWidget(widgetId);
+                        }
                     };
 
                     // Double-click: open expansion dialog
@@ -764,7 +767,7 @@ class Program
 
     private static void HandleKeyPress(object? sender, KeyPressedEventArgs e)
     {
-        // ===== PRIORITY 0: Widget Expansion =====
+        // ===== PRIORITY 0: Widget Expansion & Focus Clearing =====
         // Handle Enter key on focused widget to show expansion dialog
         if (e.KeyInfo.Key == ConsoleKey.Enter)
         {
@@ -772,6 +775,17 @@ class Program
             if (focusedWidgetId != null)
             {
                 ShowWidgetDialog(focusedWidgetId);
+                e.Handled = true;
+                return;
+            }
+        }
+
+        // Handle Esc key to clear widget focus
+        if (e.KeyInfo.Key == ConsoleKey.Escape)
+        {
+            if (_focusManager?.GetFocusedWidgetId() != null)
+            {
+                _focusManager?.ClearFocus();
                 e.Handled = true;
                 return;
             }
