@@ -6,6 +6,7 @@ using SharpConsoleUI.Builders;
 using SharpConsoleUI.Controls;
 using Spectre.Console;
 using ServerHub.Models;
+using ServerHub.Utils;
 
 namespace ServerHub.UI;
 
@@ -247,27 +248,7 @@ public class WidgetRenderer
     /// </summary>
     private string CreateSparkline(WidgetSparkline sparkline)
     {
-        if (sparkline.Values.Count == 0)
-            return "";
-
-        var min = sparkline.Values.Min();
-        var max = sparkline.Values.Max();
-        var range = max - min;
-
-        if (range == 0)
-            return new string('⠤', sparkline.Values.Count);
-
-        var brailleChars = new[] { '⠀', '⠁', '⠃', '⠇', '⡇', '⡗', '⡷', '⡿' };
-        var result = new StringBuilder();
-        foreach (var value in sparkline.Values)
-        {
-            var normalized = (value - min) / range;
-            var level = (int)(normalized * (brailleChars.Length - 1));
-            result.Append(brailleChars[Math.Clamp(level, 0, brailleChars.Length - 1)]);
-        }
-
-        var color = sparkline.Color ?? "grey70";
-        return $"[{color}]{result}[/]";
+        return InlineElementRenderer.RenderSparkline(sparkline.Values, sparkline.Color);
     }
 
     /// <summary>
@@ -275,22 +256,7 @@ public class WidgetRenderer
     /// </summary>
     private string CreateMiniProgressBar(WidgetMiniProgress miniProgress)
     {
-        var width = miniProgress.Width;
-        var percentage = miniProgress.Value;
-        var filledWidth = (int)(width * percentage / 100.0);
-        var emptyWidth = width - filledWidth;
-
-        var filled = new string('█', filledWidth);
-        var empty = new string('░', emptyWidth);
-
-        var color = percentage switch
-        {
-            >= 90 => "red",
-            >= 70 => "yellow",
-            _ => "green"
-        };
-
-        return $"[{color}]{filled}[/][grey35]{empty}[/] {percentage}%";
+        return InlineElementRenderer.RenderMiniProgress(miniProgress.Value, miniProgress.Width);
     }
 
     /// <summary>
@@ -361,95 +327,11 @@ public class WidgetRenderer
     }
 
     /// <summary>
-    /// Creates a multi-line braille chart
+    /// Creates a multi-line braille chart (vertical bar chart)
     /// </summary>
     private string CreateGraph(WidgetGraph graph)
     {
-        if (graph.Values.Count == 0)
-            return "";
-
-        const int height = 4;
-        var min = graph.Values.Min();
-        var max = graph.Values.Max();
-        var range = max - min;
-
-        var lines = new List<string>();
-        if (!string.IsNullOrEmpty(graph.Label))
-        {
-            lines.Add($"[grey70]{graph.Label}[/]");
-        }
-
-        // Handle flat data (all values the same)
-        if (range == 0)
-        {
-            var color = graph.Color ?? "cyan1";
-            var value = graph.Values[0]; // All values are the same
-
-            // For zero values, render all empty rows
-            if (value == 0)
-            {
-                for (int row = 0; row < height; row++)
-                {
-                    var emptyLine = new string('⠀', graph.Values.Count);
-                    lines.Add($"[{color}]{emptyLine}[/]");
-                }
-            }
-            else
-            {
-                // For non-zero values, calculate height (ensure at least 1 row for visibility)
-                var valueLevel = Math.Max(1, (int)Math.Ceiling(value * height / 100.0));
-                valueLevel = Math.Clamp(valueLevel, 1, height);
-
-                // Render rows: empty above the value, filled at/below
-                for (int row = height - 1; row >= 0; row--)
-                {
-                    if (row < valueLevel)
-                    {
-                        // Show filled line at this level
-                        var filledLine = new string('⡇', graph.Values.Count);
-                        lines.Add($"[{color}]{filledLine}[/]");
-                    }
-                    else
-                    {
-                        // Empty row above the value
-                        var emptyLine = new string('⠀', graph.Values.Count);
-                        lines.Add($"[{color}]{emptyLine}[/]");
-                    }
-                }
-            }
-        }
-        else
-        {
-            // Normal graph rendering with variation
-            var brailleLevels = new[] { '⠀', '⠁', '⠃', '⠇', '⡇', '⡗', '⡷', '⡿' };
-            for (int row = height - 1; row >= 0; row--)
-            {
-                var threshold = min + (range * row / height);
-                var line = new StringBuilder();
-
-                foreach (var value in graph.Values)
-                {
-                    if (value >= threshold)
-                    {
-                        var level = (int)((value - min) / range * (brailleLevels.Length - 1));
-                        line.Append(brailleLevels[Math.Clamp(level, 0, brailleLevels.Length - 1)]);
-                    }
-                    else
-                    {
-                        line.Append('⠀');
-                    }
-                }
-
-                var color = graph.Color ?? "cyan1";
-                lines.Add($"[{color}]{line}[/]");
-            }
-        }
-
-        // Add baseline (x-axis) using dimmed dotted line
-        var baseline = new string('┈', graph.Values.Count);
-        lines.Add($"[grey50]{baseline}[/]");
-
-        return string.Join("\n", lines);
+        return InlineElementRenderer.RenderGraph(graph.Values, 4, graph.Color, graph.Label);
     }
 
     /// <summary>

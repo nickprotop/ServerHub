@@ -3,6 +3,7 @@
 
 using System.Text.RegularExpressions;
 using ServerHub.Models;
+using ServerHub.Utils;
 
 namespace ServerHub.Services;
 
@@ -186,7 +187,7 @@ public class WidgetProtocolParser
         {
             var values = ParseDataPoints(match.Groups[1].Value);
             var color = match.Groups[2].Success ? match.Groups[2].Value : "grey70";
-            return RenderSparkline(values, color);
+            return InlineElementRenderer.RenderSparkline(values, color);
         });
 
         // Process mini progress directives
@@ -194,58 +195,10 @@ public class WidgetProtocolParser
         {
             var value = int.Parse(match.Groups[1].Value);
             var width = match.Groups[2].Success ? int.Parse(match.Groups[2].Value) : 10;
-            return RenderMiniProgress(Math.Clamp(value, 0, 100), Math.Clamp(width, 3, 20));
+            return InlineElementRenderer.RenderMiniProgress(value, width);
         });
 
         return content;
-    }
-
-    /// <summary>
-    /// Renders a sparkline as markup text
-    /// </summary>
-    private static string RenderSparkline(List<double> values, string color)
-    {
-        if (values.Count == 0) return "";
-
-        var min = values.Min();
-        var max = values.Max();
-        var range = max - min;
-
-        if (range == 0)
-            return $"[{color}]{new string('⠤', values.Count)}[/]";
-
-        var brailleChars = new[] { '⠀', '⠁', '⠃', '⠇', '⡇', '⡗', '⡷', '⡿' };
-        var result = new System.Text.StringBuilder();
-
-        foreach (var value in values)
-        {
-            var normalized = (value - min) / range;
-            var level = (int)(normalized * (brailleChars.Length - 1));
-            result.Append(brailleChars[Math.Clamp(level, 0, brailleChars.Length - 1)]);
-        }
-
-        return $"[{color}]{result}[/]";
-    }
-
-    /// <summary>
-    /// Renders a mini progress bar as markup text
-    /// </summary>
-    private static string RenderMiniProgress(int percentage, int width)
-    {
-        var filledWidth = (int)(width * percentage / 100.0);
-        var emptyWidth = width - filledWidth;
-
-        var filled = new string('█', filledWidth);
-        var empty = new string('░', emptyWidth);
-
-        var color = percentage switch
-        {
-            >= 90 => "red",
-            >= 70 => "yellow",
-            _ => "green"
-        };
-
-        return $"[{color}]{filled}[/][grey35]{empty}[/] {percentage}%";
     }
 
     /// <summary>
