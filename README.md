@@ -10,9 +10,9 @@ ServerHub is a terminal control panel for servers and homelabs. Monitor your sys
 
 **Monitor. Act. Extend.**
 
-![ServerHub Screenshot](.github/Screenshot.png)
+![ServerHub Screenshot](.github/dashboard-overview.png)
 
-**[View more screenshots →](docs/SCREENSHOTS.md)**
+**[View more screenshots](docs/SCREENSHOTS.md)**
 
 ## Quick Start
 
@@ -71,7 +71,9 @@ That's it! You now have a working dashboard with 14 bundled widgets. Press `F3` 
 
 Discover and install community-contributed widgets from the ServerHub marketplace.
 
-**[📚 Full Marketplace Documentation →](docs/MARKETPLACE.md)**
+**[Full Marketplace Documentation](docs/MARKETPLACE.md)**
+
+**[Browse the Marketplace](https://nickprotop.github.io/serverhub-registry/)**
 
 ### Interactive Browser (TUI)
 
@@ -81,12 +83,12 @@ Press `F3` in the dashboard to open the interactive marketplace browser:
 
 - Browse widgets with visual cards and detailed information
 - Filter by category (monitoring, infrastructure, development, databases, etc.)
-- Filter by verification status (✓ Verified, ⚡ Community, ⚠ Unverified)
+- Filter by verification status (Verified, Community, Unverified)
 - View dependencies and system requirements
 - One-click installation with automatic config integration
 - Respects `--widgets-path` if you started ServerHub with a custom widgets directory
 
-**[View all screenshots →](docs/SCREENSHOTS.md)**
+**[View all screenshots](docs/SCREENSHOTS.md)**
 
 ### Command Line (CLI)
 
@@ -125,9 +127,9 @@ The marketplace uses a security-first approach:
 
 - **SHA256 checksums** - All widgets have mandatory checksums verified during installation
 - **Verification tiers** - Clear badges indicate review status:
-  - ✓ **Verified** (green) - Code reviewed by ServerHub maintainers
-  - ⚡ **Community** (yellow) - Multiple installs, no reported issues
-  - ⚠ **Unverified** (red) - New or untested, requires explicit confirmation
+  - **Verified** (green) - Code reviewed by ServerHub maintainers
+  - **Community** (yellow) - Multiple installs, no reported issues
+  - **Unverified** (red) - New or untested, requires explicit confirmation
 - **GitHub-only hosting** - Widgets must be hosted on GitHub releases
 - **Dependency checking** - Required system commands verified before installation
 - **Code transparency** - All widget code is publicly reviewable
