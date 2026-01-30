@@ -208,7 +208,7 @@ public class WidgetRenderer
         // Add progress bar on new line (existing)
         if (row.Progress != null)
         {
-            var progressBar = CreateInlineProgressBar(row.Progress.Value);
+            var progressBar = CreateInlineProgressBar(row.Progress.Value, row.Progress.Gradient);
             content = $"{content}\n{progressBar}";
         }
 
@@ -224,26 +224,13 @@ public class WidgetRenderer
 
     /// <summary>
     /// Creates an inline progress bar using Unicode blocks
-    /// Color changes based on threshold: green (<70%), yellow (70-89%), red (>=90%)
+    /// This is just RenderMiniProgress with width=30 and prepended newline
     /// </summary>
-    private string CreateInlineProgressBar(int percentage)
+    private string CreateInlineProgressBar(int percentage, string? gradient = null)
     {
-        const int barWidth = 30;
-        var filledWidth = (int)(barWidth * percentage / 100.0);
-        var emptyWidth = barWidth - filledWidth;
-
-        var filled = new string('█', filledWidth);
-        var empty = new string('░', emptyWidth);
-
-        // Dynamic color based on threshold
-        var color = percentage switch
-        {
-            >= 90 => "red",
-            >= 70 => "yellow",
-            _ => "green"
-        };
-
-        return $"  [{color}]{filled}[/][grey35]{empty}[/] [grey70]{percentage}%[/]";
+        // Progress is just miniprogress with width=30 and leading spacing
+        var bar = InlineElementRenderer.RenderMiniProgress(percentage, 30, gradient);
+        return $"  {bar}";
     }
 
     /// <summary>
@@ -251,7 +238,7 @@ public class WidgetRenderer
     /// </summary>
     private string CreateSparkline(WidgetSparkline sparkline)
     {
-        return InlineElementRenderer.RenderSparkline(sparkline.Values, sparkline.Color);
+        return InlineElementRenderer.RenderSparkline(sparkline.Values, sparkline.Color, sparkline.Width);
     }
 
     /// <summary>
@@ -259,7 +246,7 @@ public class WidgetRenderer
     /// </summary>
     private string CreateMiniProgressBar(WidgetMiniProgress miniProgress)
     {
-        return InlineElementRenderer.RenderMiniProgress(miniProgress.Value, miniProgress.Width);
+        return InlineElementRenderer.RenderMiniProgress(miniProgress.Value, miniProgress.Width, miniProgress.Gradient);
     }
 
     /// <summary>
@@ -394,7 +381,7 @@ public class WidgetRenderer
     /// </summary>
     private string CreateGraph(WidgetGraph graph)
     {
-        return InlineElementRenderer.RenderGraph(graph.Values, 4, graph.Color, graph.Label);
+        return InlineElementRenderer.RenderGraph(graph.Values, 4, graph.Color, graph.Label, true, graph.MinValue, graph.MaxValue, graph.Width);
     }
 
     /// <summary>

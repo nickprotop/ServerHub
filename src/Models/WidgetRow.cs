@@ -87,6 +87,11 @@ public class WidgetProgress
     /// Display style (inline blocks, chart, etc.)
     /// </summary>
     public ProgressStyle Style { get; set; } = ProgressStyle.Inline;
+
+    /// <summary>
+    /// Optional gradient name or custom gradient (e.g., "cool", "warm", "blue→red")
+    /// </summary>
+    public string? Gradient { get; set; }
 }
 
 public enum ProgressStyle
@@ -102,6 +107,7 @@ public class WidgetSparkline
 {
     public List<double> Values { get; set; } = new();
     public string? Color { get; set; }
+    public int Width { get; set; } = 30;
 }
 
 /// <summary>
@@ -111,6 +117,11 @@ public class WidgetMiniProgress
 {
     public int Value { get; set; }  // 0-100
     public int Width { get; set; } = 10;
+
+    /// <summary>
+    /// Optional gradient name or custom gradient (e.g., "cool", "warm", "blue→red")
+    /// </summary>
+    public string? Gradient { get; set; }
 }
 
 /// <summary>
@@ -139,4 +150,7 @@ public class WidgetGraph
     public List<double> Values { get; set; } = new();
     public string? Color { get; set; }
     public string? Label { get; set; }
+    public double? MinValue { get; set; }
+    public double? MaxValue { get; set; }
+    public int Width { get; set; } = 30;
 }

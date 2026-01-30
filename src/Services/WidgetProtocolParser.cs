@@ -23,14 +23,18 @@ namespace ServerHub.Services;
 public class WidgetProtocolParser
 {
     private static readonly Regex StatusRegex = new(@"\[status:(ok|info|warn|error)\]", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly Regex ProgressRegex = new(@"\[progress:(\d+)(?::(inline|chart))?\]", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+    // Updated to support gradient parameter: [progress:VALUE:GRADIENT:STYLE] or [progress:VALUE:GRADIENT] or [progress:VALUE:STYLE]
+    private static readonly Regex ProgressRegex = new(@"\[progress:(\d+)(?::([^:\]]+))?(?::(inline|chart))?\]", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    // Updated to support gradient and width: [sparkline:VALUES:COLOR/GRADIENT:WIDTH]
     private static readonly Regex SparklineRegex = new(
-        @"\[sparkline:([\d\.,\s]+)(?::(\w+))?\]",
+        @"\[sparkline:([\d\.,\s]+)(?::([^\]:]+))?(?::(\d+))?\]",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+    // Updated to support gradient parameter: [miniprogress:VALUE:WIDTH:GRADIENT]
     private static readonly Regex MiniProgressRegex = new(
-        @"\[miniprogress:(\d+)(?::(\d+))?\]",
+        @"\[miniprogress:(\d+)(?::(\d+))?(?::([^\]]+))?\]",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex TableHeaderRegex = new(
@@ -45,8 +49,9 @@ public class WidgetProtocolParser
         @"\[divider(?::([^:]+))?(?::(\w+))?\]",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+    // Updated to support gradient with arrow character: [graph:VALUES:COLOR/GRADIENT:LABEL:MIN-MAX:WIDTH]
     private static readonly Regex GraphRegex = new(
-        @"\[graph:([\d\.,\s]+)(?::(\w+))?(?::([^\]]+))?\]",
+        @"\[graph:([\d\.,\s]+)(?::([^\]:]+))?(?::([^\]:]+))?(?::([^\]:]+))?(?::(\d+))?\]",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     /// <summary>
@@ -188,7 +193,8 @@ public class WidgetProtocolParser
         {
             var values = ParseDataPoints(match.Groups[1].Value);
             var color = match.Groups[2].Success ? match.Groups[2].Value : "grey70";
-            return InlineElementRenderer.RenderSparkline(values, color);
+            var width = match.Groups[3].Success ? int.Parse(match.Groups[3].Value) : 30;
+            return InlineElementRenderer.RenderSparkline(values, color, width);
         });
 
         // Process mini progress directives
@@ -196,7 +202,8 @@ public class WidgetProtocolParser
         {
             var value = int.Parse(match.Groups[1].Value);
             var width = match.Groups[2].Success ? int.Parse(match.Groups[2].Value) : 10;
-            return InlineElementRenderer.RenderMiniProgress(value, width);
+            var gradient = match.Groups[3].Success ? match.Groups[3].Value : null;
+            return InlineElementRenderer.RenderMiniProgress(value, width, gradient);
         });
 
         // Sanitize remaining content (strip ANSI, escape invalid brackets)
@@ -237,19 +244,39 @@ public class WidgetProtocolParser
         if (progressMatch.Success)
         {
             var value = int.Parse(progressMatch.Groups[1].Value);
-            var style = progressMatch.Groups[2].Success
-                ? progressMatch.Groups[2].Value.ToLowerInvariant() switch
+
+            // Group 2 can be either gradient or style - detect by content
+            string? gradient = null;
+            var style = ProgressStyle.Inline;
+
+            if (progressMatch.Groups[2].Success)
+            {
+                var secondParam = progressMatch.Groups[2].Value;
+                // If it's "inline" or "chart", it's a style; otherwise it's a gradient
+                if (secondParam.Equals("inline", StringComparison.OrdinalIgnoreCase))
+                    style = ProgressStyle.Inline;
+                else if (secondParam.Equals("chart", StringComparison.OrdinalIgnoreCase))
+                    style = ProgressStyle.Chart;
+                else
+                    gradient = secondParam;
+            }
+
+            // Group 3 is always style if present
+            if (progressMatch.Groups[3].Success)
+            {
+                style = progressMatch.Groups[3].Value.ToLowerInvariant() switch
                 {
                     "chart" => ProgressStyle.Chart,
                     "inline" => ProgressStyle.Inline,
                     _ => ProgressStyle.Inline
-                }
-                : ProgressStyle.Inline;
+                };
+            }
 
             row.Progress = new WidgetProgress
             {
                 Value = Math.Clamp(value, 0, 100),
-                Style = style
+                Style = style,
+                Gradient = gradient
             };
 
             // Remove the progress tag from display content
@@ -263,7 +290,8 @@ public class WidgetProtocolParser
             row.Sparkline = new WidgetSparkline
             {
                 Values = ParseDataPoints(sparklineMatch.Groups[1].Value),
-                Color = sparklineMatch.Groups[2].Success ? sparklineMatch.Groups[2].Value : null
+                Color = sparklineMatch.Groups[2].Success ? sparklineMatch.Groups[2].Value : null,
+                Width = sparklineMatch.Groups[3].Success ? int.Parse(sparklineMatch.Groups[3].Value) : 30
             };
             row.Content = SparklineRegex.Replace(row.Content, "");
         }
@@ -274,10 +302,12 @@ public class WidgetProtocolParser
         {
             var value = int.Parse(miniProgressMatch.Groups[1].Value);
             var width = miniProgressMatch.Groups[2].Success ? int.Parse(miniProgressMatch.Groups[2].Value) : 10;
+            var gradient = miniProgressMatch.Groups[3].Success ? miniProgressMatch.Groups[3].Value : null;
             row.MiniProgress = new WidgetMiniProgress
             {
                 Value = Math.Clamp(value, 0, 100),
-                Width = Math.Clamp(width, 3, 20)
+                Width = Math.Clamp(width, 3, 20),
+                Gradient = gradient
             };
             row.Content = MiniProgressRegex.Replace(row.Content, "");
         }
@@ -298,11 +328,30 @@ public class WidgetProtocolParser
         var graphMatch = GraphRegex.Match(row.Content);
         if (graphMatch.Success)
         {
+            // Parse optional min-max range (format: "0-100" or "0,100")
+            double? minValue = null;
+            double? maxValue = null;
+            if (graphMatch.Groups[4].Success)
+            {
+                var rangeStr = graphMatch.Groups[4].Value;
+                var parts = rangeStr.Split(new[] { '-', ',' }, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 2)
+                {
+                    if (double.TryParse(parts[0].Trim(), out var min))
+                        minValue = min;
+                    if (double.TryParse(parts[1].Trim(), out var max))
+                        maxValue = max;
+                }
+            }
+
             row.Graph = new WidgetGraph
             {
                 Values = ParseDataPoints(graphMatch.Groups[1].Value),
                 Color = graphMatch.Groups[2].Success ? graphMatch.Groups[2].Value : null,
-                Label = graphMatch.Groups[3].Success ? graphMatch.Groups[3].Value : null
+                Label = graphMatch.Groups[3].Success ? graphMatch.Groups[3].Value : null,
+                MinValue = minValue,
+                MaxValue = maxValue,
+                Width = graphMatch.Groups[5].Success ? int.Parse(graphMatch.Groups[5].Value) : 30
             };
             row.Content = GraphRegex.Replace(row.Content, "");
         }

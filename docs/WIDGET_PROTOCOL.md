@@ -104,57 +104,108 @@ row: [status:error] Disk full
 
 ### Progress Bar
 
-Displays a visual progress bar.
+Displays a visual progress bar with optional gradient coloring.
 
 ```
 [progress:VALUE]
+[progress:VALUE:GRADIENT]
+[progress:VALUE:GRADIENT:STYLE]
 [progress:VALUE:STYLE]
 ```
 
 - **VALUE**: Integer 0-100
+- **GRADIENT**: Optional gradient name or custom gradient (see Gradients section)
 - **STYLE**: `inline` (default) or `chart`
+
+**Default Behavior** (no gradient specified):
+- Green for 0-69%
+- Yellow for 70-89%
+- Red for 90-100%
+
+**Predefined Gradients:**
+- `cool` - Blue to cyan (temperature/load themes)
+- `warm` - Yellow to orange to red (heat/pressure themes)
+- `spectrum` - Blue to green to yellow to red (full range)
+- `grayscale` - Grey11 to grey100 (monochrome)
+
+**Custom Gradients:**
+- Two colors: `blue→red`
+- Multiple colors: `blue→green→yellow→red`
 
 Example:
 ```
-row: [progress:75]
-row: [progress:45:inline]
-row: [progress:90:chart]
+row: [progress:75]                          # Default threshold colors
+row: [progress:45:inline]                   # Default with explicit style
+row: [progress:90:warm]                     # Warm gradient
+row: [progress:75:cool:inline]              # Cool gradient with style
+row: [progress:60:blue→green→red]           # Custom gradient
 ```
 
-### Braille Sparkline
+### Sparkline
 
-Displays an inline mini-graph using braille characters for compact trend visualization.
+Displays an inline mini-graph using smooth Unicode block characters for compact trend visualization.
 
 ```
 [sparkline:VALUES]
 [sparkline:VALUES:COLOR]
+[sparkline:VALUES:COLOR:WIDTH]
+[sparkline:VALUES:GRADIENT]
+[sparkline:VALUES:GRADIENT:WIDTH]
 ```
 
 - **VALUES**: Comma-separated numbers (e.g., `10,20,15,25,30`)
 - **COLOR**: Optional Spectre.Console color (default: `grey70`)
+- **GRADIENT**: Optional gradient name or custom gradient (see Gradients section)
+- **WIDTH**: Optional character width (default: 30, pads with background if data points < width)
+
+**Character Set:** Uses Unicode block characters (▁▂▃▄▅▆▇█) for smooth visualization
+
+**Predefined Gradients:**
+- `cool`, `warm`, `spectrum`, `grayscale`
+
+**Custom Gradients:**
+- `blue→red`, `green→yellow→red`, etc.
 
 Example:
 ```
-row: Load trend: [sparkline:45,48,52,55,50,53:green]
-row: Memory: [sparkline:60,62,65,70,68,72,75:yellow] 75%
+row: Load trend: [sparkline:45,48,52,55,50,53:green]         # Solid color, default width (30)
+row: Memory: [sparkline:60,62,65,70,68,72,75:warm] 75%       # Warm gradient, default width
+row: CPU: [sparkline:10,20,30,40,50:blue→red]                # Custom gradient, default width
+row: Traffic: [sparkline:5,10,15,20:green:15]                # Narrow sparkline (15 chars)
 ```
 
 ### Mini Progress Bar
 
-Displays a compact inline progress indicator (smaller than the standard progress bar).
+Displays a compact inline progress indicator with optional gradient coloring.
 
 ```
 [miniprogress:VALUE]
 [miniprogress:VALUE:WIDTH]
+[miniprogress:VALUE:WIDTH:GRADIENT]
 ```
 
 - **VALUE**: Integer 0-100
 - **WIDTH**: Character width 3-20 (default: 10)
+- **GRADIENT**: Optional gradient name or custom gradient (see Gradients section)
+
+**Default Behavior** (no gradient specified):
+- Green for 0-69%
+- Yellow for 70-89%
+- Red for 90-100%
+
+**Predefined Gradients:**
+- `cool`, `warm`, `spectrum`, `grayscale`
+
+**Custom Gradients:**
+- `blue→red`, `green→yellow→red`, etc.
 
 Example:
 ```
-row: CPU: [miniprogress:75] 75%
-row: RAM: [miniprogress:85:15] 85%
+row: CPU: [miniprogress:75] 75%                         # Default threshold colors
+row: RAM: [miniprogress:85:15] 85%                      # Default with custom width
+row: Temp: [miniprogress:60:12:cool] 60°C               # Cool gradient
+row: Load: [miniprogress:90:10:warm]                    # Warm gradient
+row: Disk: [miniprogress:45:15:blue→green→red]          # Custom gradient
 ```
 
 ### Multi-Column Table
@@ -203,22 +254,46 @@ row: [divider:═:cyan1]
 
 ### Multi-Line Graph
 
-Displays a braille chart for data visualization (4 lines tall).
+Displays a smooth block character chart for data visualization (4 lines tall) with optional gradient coloring.
 
 ```
 [graph:VALUES]
 [graph:VALUES:COLOR]
 [graph:VALUES:COLOR:LABEL]
+[graph:VALUES:COLOR:LABEL:MIN-MAX]
+[graph:VALUES:COLOR:LABEL:MIN-MAX:WIDTH]
+[graph:VALUES:GRADIENT]
+[graph:VALUES:GRADIENT:LABEL]
+[graph:VALUES:GRADIENT:LABEL:MIN-MAX]
+[graph:VALUES:GRADIENT:LABEL:MIN-MAX:WIDTH]
 ```
 
 - **VALUES**: Comma-separated numbers
 - **COLOR**: Optional Spectre.Console color (default: `cyan1`)
+- **GRADIENT**: Optional gradient name or custom gradient (see Gradients section)
 - **LABEL**: Optional label text
+- **MIN-MAX**: Optional fixed scale range (e.g., `0-100` for percentage graphs)
+- **WIDTH**: Optional character width (default: 30, pads with background if data points < width)
+
+**Character Set:** Uses Unicode block characters (▁▂▃▄▅▆▇█) for smooth visualization with 36 vertical levels (4 rows × 9 levels)
+
+**Predefined Gradients:**
+- `cool` - Blue to cyan (temperature/load themes)
+- `warm` - Yellow to orange to red (heat/pressure themes)
+- `spectrum` - Blue to green to yellow to red (full range)
+- `grayscale` - Grey11 to grey100 (monochrome)
+
+**Custom Gradients:**
+- `blue→red`, `green→yellow→red`, etc.
 
 Example:
 ```
-row: [graph:10,20,15,25,30,28,35,40:green:CPU Load]
-row: [graph:60,62,65,70,68,72,75,78:yellow]
+row: [graph:10,20,15,25,30,28,35,40:green:CPU Load]        # Solid color, default width (30)
+row: [graph:60,62,65,70,68,72,75,78:warm:Temperature]      # Warm gradient
+row: [graph:5,10,15,20,25,30:blue→red:Load]                # Custom gradient
+row: [graph:45,50,55,60,58,62:cool]                        # Cool gradient no label
+row: [graph:45,50,62,58,65,70:cool:CPU %:0-100]            # Fixed 0-100% scale
+row: [graph:10,15,20,25:green:Load:0-100:40]               # Custom width (40 chars)
 ```
 
 ## Spectre.Console Markup
