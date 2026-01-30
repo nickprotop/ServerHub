@@ -62,10 +62,10 @@ public static class ActionExecutionDialog
             .WithBorderStyle(BorderStyle.Single)
             .WithBorderColor(Color.Grey35)
             .HideTitle()
-            .Resizable(false)
-            .Movable(false)
+            .Resizable(true)
+            .Movable(true)
             .Minimizable(false)
-            .Maximizable(false)
+            .Maximizable(true)
             .WithColors(Color.Grey15, Color.Grey93);
 
         if (parentWindow != null)

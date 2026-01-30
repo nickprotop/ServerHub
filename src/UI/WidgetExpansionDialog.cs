@@ -54,10 +54,10 @@ public static class WidgetExpansionDialog
             .WithBorderStyle(BorderStyle.Single)
             .WithBorderColor(Color.Grey35)      // Subtle border matching aesthetic
             .HideTitle()                        // No title bar
-            .Resizable(false)                   // Fixed size
-            .Movable(false)                     // Cannot be dragged
+            .Resizable(true)                    // User can resize
+            .Movable(true)                      // User can drag
             .Minimizable(false)                 // No minimize button
-            .Maximizable(false)                 // No maximize button
+            .Maximizable(true)                  // User can maximize
             .WithColors(Color.Grey15, Color.Grey93)  // Dark bg, light text
             .Build();
 
