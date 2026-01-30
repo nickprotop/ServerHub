@@ -262,7 +262,7 @@ widgets:
     location: bundled  # Optional: bundled, custom, or auto (default)
 
   memory:
-    path: memory.sh
+    path: memory.py
     refresh: 2
 
   docker:

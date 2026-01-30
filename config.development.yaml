@@ -11,7 +11,7 @@ widgets:
     refresh: 2
     enabled: true
   memory:
-    path: memory.sh
+    path: memory.py
     location: custom
     refresh: 2
     enabled: true

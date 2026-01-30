@@ -1,5 +1,5 @@
 #!/bin/bash
-# Generates BundledWidgets.g.cs from widgets/*.sh before build
+# Generates BundledWidgets.g.cs from widgets/*.sh and widgets/*.py before build
 # This file contains hardcoded SHA256 checksums for bundled widgets
 
 set -e
@@ -38,9 +38,9 @@ public static class BundledWidgets
     {
 HEADER
 
-# Generate checksum entries for each widget
+# Generate checksum entries for each widget (both .sh and .py)
 WIDGET_COUNT=0
-for file in "$WIDGETS_DIR"/*.sh; do
+for file in "$WIDGETS_DIR"/*.sh "$WIDGETS_DIR"/*.py; do
     if [ -f "$file" ]; then
         filename=$(basename "$file")
 

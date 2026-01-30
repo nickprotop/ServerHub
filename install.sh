@@ -77,8 +77,8 @@ if ! curl -L -f -o "/tmp/widgets.tar.gz" "$WIDGETS_URL"; then
 fi
 
 tar -xzf "/tmp/widgets.tar.gz" -C "$WIDGETS_DIR/"
-chmod +x "$WIDGETS_DIR/"*.sh 2>/dev/null || true
-widget_count=$(ls -1 "$WIDGETS_DIR/"*.sh 2>/dev/null | wc -l)
+chmod +x "$WIDGETS_DIR/"*.sh "$WIDGETS_DIR/"*.py 2>/dev/null || true
+widget_count=$(ls -1 "$WIDGETS_DIR/"*.sh "$WIDGETS_DIR/"*.py 2>/dev/null | wc -l)
 echo "✓ Installed $widget_count bundled widgets to $WIDGETS_DIR"
 
 # Clean up

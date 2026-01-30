@@ -729,8 +729,6 @@ public static class WidgetExpansionDialog
     /// </summary>
     private static void UpdateWidgetContent(MarkupControl markup, WidgetData widgetData, WidgetRenderer renderer)
     {
-        // Build content using private BuildWidgetContent method via reflection
-        // Or just build it directly here to avoid reflection
         var lines = new List<string>();
 
         if (widgetData.HasError)
@@ -756,7 +754,22 @@ public static class WidgetExpansionDialog
         }
         lines.Add(infoLine);
 
-        markup.SetContent(lines);
+        // Expand embedded newlines into separate list items
+        // This fixes ScrollablePanel height calculation
+        var expandedLines = new List<string>();
+        foreach (var line in lines)
+        {
+            if (line.Contains('\n'))
+            {
+                expandedLines.AddRange(line.Split('\n'));
+            }
+            else
+            {
+                expandedLines.Add(line);
+            }
+        }
+
+        markup.SetContent(expandedLines);
     }
 
     /// <summary>

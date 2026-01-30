@@ -21,7 +21,7 @@ widgets:
     location: bundled
 
   memory:
-    path: memory.sh
+    path: memory.py
     refresh: 2
     location: bundled
 

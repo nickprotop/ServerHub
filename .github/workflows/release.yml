@@ -51,7 +51,7 @@ jobs:
       - name: Package widgets
         run: |
           cd widgets
-          tar -czf ../publish/widgets.tar.gz *.sh
+          tar -czf ../publish/widgets.tar.gz *.sh *.py
           cd ..
 
       - name: Copy install script
