@@ -26,7 +26,7 @@ echo "  • Binary: $BINARY_PATH"
 [ -d "$CONFIG_DIR" ] && echo "  • Configuration: $CONFIG_DIR (optional - will ask)"
 echo ""
 
-read -p "Continue with uninstallation? [y/N] " -n 1 -r
+read -p "Continue with uninstallation? [y/N] " -n 1 -r < /dev/tty
 echo
 if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     echo "Uninstallation cancelled."
@@ -56,7 +56,7 @@ if [ -d "$CONFIG_DIR" ]; then
     echo ""
     echo "Configuration directory found: $CONFIG_DIR"
     echo "This contains your config.yaml and any custom widgets."
-    read -p "Remove configuration directory? [y/N] " -n 1 -r
+    read -p "Remove configuration directory? [y/N] " -n 1 -r < /dev/tty
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         rm -rf "$CONFIG_DIR"
