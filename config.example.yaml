@@ -26,7 +26,7 @@ widgets:
     # location: bundled  # bundled, custom, or auto (default)
 
   memory:
-    path: memory.py
+    path: memory.sh
     refresh: 2
     # No expanded_refresh - real-time monitoring
     pinned: false
