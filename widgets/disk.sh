@@ -32,6 +32,16 @@ if [ "$EXTENDED" = false ]; then
         # Store history for trending
         mount_safe=$(echo "$mount" | tr '/' '_')
         history_file="$CACHE_DIR/disk${mount_safe}-usage.txt"
+
+        # Clear history if file is older than expected (stale data)
+        if [ -f "$history_file" ]; then
+            file_age=$(($(date +%s) - $(stat -c %Y "$history_file" 2>/dev/null || echo 0)))
+            max_age=$((10 * 10 * 5))  # 10 samples, refresh=10s, grace=5x
+            if [ "$file_age" -gt "$max_age" ]; then
+                rm -f "$history_file"
+            fi
+        fi
+
         echo "$pct" >> "$history_file"
         tail -n 10 "$history_file" > "${history_file}.tmp" 2>/dev/null
         mv "${history_file}.tmp" "$history_file" 2>/dev/null
@@ -49,7 +59,7 @@ if [ "$EXTENDED" = false ]; then
         mount_short=$(echo "$mount" | cut -c1-12)
         device_short=$(echo "$device" | awk -F'/' '{print $NF}' | cut -c1-12)
 
-        echo "[tablerow:${mount_short}|${device_short}|${size}|${used}|${avail}|[miniprogress:${pct}:10]]"
+        echo "[tablerow:${mount_short}|${device_short}|${size}|${used}|${avail}|[miniprogress:${pct}:10:warm]]"
     done
 
     # Inode usage summary
@@ -74,6 +84,16 @@ else
         # Store history
         mount_safe=$(echo "$mount" | tr '/' '_')
         history_file="$CACHE_DIR/disk${mount_safe}-usage.txt"
+
+        # Clear history if file is older than expected (stale data)
+        if [ -f "$history_file" ]; then
+            file_age=$(($(date +%s) - $(stat -c %Y "$history_file" 2>/dev/null || echo 0)))
+            max_age=$((30 * 10 * 5))  # 30 samples, refresh=10s, grace=5x
+            if [ "$file_age" -gt "$max_age" ]; then
+                rm -f "$history_file"
+            fi
+        fi
+
         echo "$pct" >> "$history_file"
         tail -n 30 "$history_file" > "${history_file}.tmp" 2>/dev/null
         mv "${history_file}.tmp" "$history_file" 2>/dev/null
@@ -115,7 +135,8 @@ else
 
                 echo "row: "
                 echo "row: [cyan1]${mount_short}[/] [grey70](${percent} full)[/]"
-                echo "row: [graph:${history}:yellow:Usage %]"
+                # Use 0-100 fixed scale for percentage graph
+                echo "row: [graph:${history}:warm:Usage %:0-100]"
             fi
         fi
     done

@@ -34,13 +34,25 @@ else
     MAX_SAMPLES=10
 fi
 
-# Store load history
+# Store load history (clear if stale)
 load_history_file="$CACHE_DIR/cpu-load.txt"
+
+# Clear history if file is older than expected (stale data)
+# Expected: MAX_SAMPLES * refresh_interval seconds (e.g., 30 * 2 = 60s)
+# Grace period: 5x expected (e.g., 300s = 5 minutes)
+if [ -f "$load_history_file" ]; then
+    file_age=$(($(date +%s) - $(stat -c %Y "$load_history_file" 2>/dev/null || echo 0)))
+    max_age=$((MAX_SAMPLES * 2 * 5))  # refresh=2s, grace=5x
+    if [ "$file_age" -gt "$max_age" ]; then
+        rm -f "$load_history_file"
+    fi
+fi
+
 echo "$load_percent" >> "$load_history_file"
 tail -n "$MAX_SAMPLES" "$load_history_file" > "${load_history_file}.tmp" 2>/dev/null
 mv "${load_history_file}.tmp" "$load_history_file" 2>/dev/null
 
-# Read history for sparkline
+# Read history for sparkline/graph
 if [ -f "$load_history_file" ] && [ -s "$load_history_file" ]; then
     load_history=$(paste -sd',' "$load_history_file")
 else
@@ -56,10 +68,11 @@ else
     status="error"
 fi
 
-# Dashboard mode: Compact overview with sparklines
+# Dashboard mode: Compact overview
 if [ "$EXTENDED" = false ]; then
-    echo "row: [status:$status] Load: ${load1} / ${cpu_cores} cores [sparkline:${load_history}:green]"
-    echo "row: [progress:${load_percent}]"
+    # Use gradient progress bar for btop-style appearance
+    echo "row: [status:$status] Load: ${load1} / ${cpu_cores} cores"
+    echo "row: [progress:${load_percent}:warm]"
     echo "row: "
     echo "row: Load Average: ${load1}, ${load5}, ${load15}"
 
@@ -74,7 +87,7 @@ if [ "$EXTENDED" = false ]; then
 else
     # Extended mode: Detailed view with graphs and tables
     echo "row: [status:$status] Load: ${load1} / ${cpu_cores} cores"
-    echo "row: [progress:${load_percent}]"
+    echo "row: [progress:${load_percent}:warm]"
     echo "row: "
     echo "row: Load Average: ${load1} (1m), ${load5} (5m), ${load15} (15m)"
 
@@ -100,56 +113,93 @@ else
         fi
     fi
 
-    # Load history graph
+    # Load history graph with gradient
     echo "row: "
     echo "row: [divider]"
     echo "row: "
     echo "row: [bold]Load History (last 60s):[/]"
-    echo "row: [graph:${load_history}:cyan1:Load %]"
+    # Use 0-100 fixed scale for percentage graph
+    echo "row: [graph:${load_history}:cool:Load %:0-100]"
 
-    # Per-core detailed table
+    # Per-core detailed table (need delta calculation)
     echo "row: "
     echo "row: [divider]"
     echo "row: "
     echo "row: [bold]Per-Core Usage:[/]"
     echo "[table:Core|Usage|User|System|Idle|I/O Wait]"
 
-    core_num=0
-    grep "^cpu[0-9]" /proc/stat | while read -r line; do
-        read -r _ user nice system idle iowait irq softirq _ <<< "$line"
-        total=$((user + nice + system + idle + iowait + irq + softirq))
-        if [ "$total" -gt 0 ]; then
-            busy=$((user + nice + system))
-            usage=$((busy * 100 / total))
-            user_pct=$(((user + nice) * 100 / total))
-            sys_pct=$((system * 100 / total))
-            idle_pct=$((idle * 100 / total))
-            iowait_pct=$((iowait * 100 / total))
+    # First sample (both aggregate and per-core)
+    cpu_agg1=$(grep "^cpu " /proc/stat)
+    stat1=$(grep "^cpu[0-9]" /proc/stat)
 
-            echo "[tablerow:Core $core_num|[miniprogress:${usage}:10]|${user_pct}%|${sys_pct}%|${idle_pct}%|${iowait_pct}%]"
+    # Wait for delta (1 second for accurate measurement)
+    sleep 1
+
+    # Second sample (both aggregate and per-core)
+    cpu_agg2=$(grep "^cpu " /proc/stat)
+    stat2=$(grep "^cpu[0-9]" /proc/stat)
+
+    # Process each core
+    core_num=0
+    while IFS= read -r line1 && IFS= read -r line2 <&3; do
+        read -r _ user1 nice1 system1 idle1 iowait1 irq1 softirq1 _ <<< "$line1"
+        read -r _ user2 nice2 system2 idle2 iowait2 irq2 softirq2 _ <<< "$line2"
+
+        user_delta=$((user2 - user1))
+        nice_delta=$((nice2 - nice1))
+        system_delta=$((system2 - system1))
+        idle_delta=$((idle2 - idle1))
+        iowait_delta=$((iowait2 - iowait1))
+        irq_delta=$((irq2 - irq1))
+        softirq_delta=$((softirq2 - softirq1))
+
+        total_delta=$((user_delta + nice_delta + system_delta + idle_delta + iowait_delta + irq_delta + softirq_delta))
+
+        if [ "$total_delta" -gt 0 ]; then
+            busy_delta=$((user_delta + nice_delta + system_delta))
+            usage=$((busy_delta * 100 / total_delta))
+            user_pct=$(((user_delta + nice_delta) * 100 / total_delta))
+            sys_pct=$((system_delta * 100 / total_delta))
+            idle_pct=$((idle_delta * 100 / total_delta))
+            iowait_pct=$((iowait_delta * 100 / total_delta))
+
+            echo "[tablerow:Core $core_num|[miniprogress:${usage}:10:warm]|${user_pct}%|${sys_pct}%|${idle_pct}%|${iowait_pct}%]"
         fi
         ((core_num++))
-    done
+    done <<< "$stat1" 3<<< "$stat2"
 
-    # CPU time breakdown summary
-    if [ -f /proc/stat ]; then
-        read -r _ user nice system idle iowait irq softirq _ < /proc/stat
-        total=$((user + nice + system + idle + iowait + irq + softirq))
-        if [ "$total" -gt 0 ]; then
-            user_pct=$((user * 100 / total))
-            sys_pct=$((system * 100 / total))
-            idle_pct=$((idle * 100 / total))
-            iowait_pct=$((iowait * 100 / total))
+    # CPU time breakdown summary (uses same samples as per-core to avoid extra delay)
+    if [ -n "$cpu_agg1" ] && [ -n "$cpu_agg2" ]; then
+        # Parse aggregate CPU line from the samples we already took
+        read -r _ user1 nice1 system1 idle1 iowait1 irq1 softirq1 _ <<< "$cpu_agg1"
+        read -r _ user2 nice2 system2 idle2 iowait2 irq2 softirq2 _ <<< "$cpu_agg2"
+
+        # Calculate deltas
+        user_delta=$((user2 - user1))
+        nice_delta=$((nice2 - nice1))
+        system_delta=$((system2 - system1))
+        idle_delta=$((idle2 - idle1))
+        iowait_delta=$((iowait2 - iowait1))
+        irq_delta=$((irq2 - irq1))
+        softirq_delta=$((softirq2 - softirq1))
+
+        total_delta=$((user_delta + nice_delta + system_delta + idle_delta + iowait_delta + irq_delta + softirq_delta))
+
+        if [ "$total_delta" -gt 0 ]; then
+            user_pct=$(((user_delta + nice_delta) * 100 / total_delta))
+            sys_pct=$((system_delta * 100 / total_delta))
+            idle_pct=$((idle_delta * 100 / total_delta))
+            iowait_pct=$((iowait_delta * 100 / total_delta))
 
             echo "row: "
             echo "row: [divider]"
             echo "row: "
             echo "row: [bold]CPU Time Breakdown:[/]"
             echo "[table:Type|Percentage]"
-            echo "[tablerow:User|[miniprogress:${user_pct}:15]]"
-            echo "[tablerow:System|[miniprogress:${sys_pct}:15]]"
-            echo "[tablerow:Idle|[miniprogress:${idle_pct}:15]]"
-            echo "[tablerow:I/O Wait|[miniprogress:${iowait_pct}:15]]"
+            echo "[tablerow:User|[miniprogress:${user_pct}:15:spectrum]]"
+            echo "[tablerow:System|[miniprogress:${sys_pct}:15:spectrum]]"
+            echo "[tablerow:Idle|[miniprogress:${idle_pct}:15:cool]]"
+            echo "[tablerow:I/O Wait|[miniprogress:${iowait_pct}:15:warm]]"
         fi
     fi
 

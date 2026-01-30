@@ -44,7 +44,7 @@ if [ "$EXTENDED" = false ]; then
         if (length(cmd) > 18) cmd = substr(cmd, 1, 18)
         cpu = int($3 + 0.5)
         mem = int($4 + 0.5)
-        printf "[tablerow:%s|[miniprogress:%d:8]|[miniprogress:%d:8]|%s]\n", cmd, cpu, mem, $2
+        printf "[tablerow:%s|[miniprogress:%d:8:warm]|[miniprogress:%d:8:warm]|%s]\n", cmd, cpu, mem, $2
     }'
 
     echo "row: "
@@ -58,7 +58,7 @@ if [ "$EXTENDED" = false ]; then
         if (length(cmd) > 18) cmd = substr(cmd, 1, 18)
         cpu = int($3 + 0.5)
         mem = int($4 + 0.5)
-        printf "[tablerow:%s|[miniprogress:%d:8]|[miniprogress:%d:8]|%s]\n", cmd, mem, cpu, $2
+        printf "[tablerow:%s|[miniprogress:%d:8:warm]|[miniprogress:%d:8:warm]|%s]\n", cmd, mem, cpu, $2
     }'
 
     # Process states summary
@@ -84,7 +84,7 @@ else
         if (length(user) > 12) user = substr(user, 1, 12)
         cpu = int($3 + 0.5)
         mem = int($4 + 0.5)
-        printf "[tablerow:%s|[miniprogress:%d:8]|[miniprogress:%d:8]|%s|%s]\n", cmd, cpu, mem, user, $2
+        printf "[tablerow:%s|[miniprogress:%d:8:warm]|[miniprogress:%d:8:warm]|%s|%s]\n", cmd, cpu, mem, user, $2
     }'
 
     # Process state breakdown
@@ -126,7 +126,7 @@ else
         if (length(user) > 12) user = substr(user, 1, 12)
         cpu = int($3 + 0.5)
         mem = int($4 + 0.5)
-        printf "[tablerow:%s|[miniprogress:%d:8]|[miniprogress:%d:8]|%s|%s]\n", cmd, mem, cpu, user, $2
+        printf "[tablerow:%s|[miniprogress:%d:8:warm]|[miniprogress:%d:8:spectrum]|%s|%s]\n", cmd, mem, cpu, user, $2
     }'
 
     # Zombie process details

@@ -33,7 +33,7 @@ if ! command -v sensors &> /dev/null; then
             fi
 
             echo "row: [status:$status] CPU: [yellow]${temp_c}°C[/]"
-            echo "row: [miniprogress:$temp_c:15] Temperature"
+            echo "row: [miniprogress:$temp_c:15:warm] Temperature"
 
             # Extended: show all thermal zones
             if [ "$EXTENDED" = true ]; then
@@ -92,7 +92,7 @@ if [ -n "$cpu_temp" ]; then
     fi
 
     echo "row: [status:$status] CPU: [yellow]${cpu_temp}°C[/]"
-    echo "row: [miniprogress:$cpu_temp:15] Temperature"
+    echo "row: [miniprogress:$cpu_temp:15:warm] Temperature"
 fi
 
 # Dashboard mode: compact tables

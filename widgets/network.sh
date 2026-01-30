@@ -89,6 +89,17 @@ else
     MAX_SAMPLES=10
 fi
 
+# Clear history if files are older than expected (stale data)
+for history_file in "$RX_SPEED_HISTORY" "$TX_SPEED_HISTORY"; do
+    if [ -f "$history_file" ]; then
+        file_age=$(($(date +%s) - $(stat -c %Y "$history_file" 2>/dev/null || echo 0)))
+        max_age=$((MAX_SAMPLES * 2 * 5))  # refresh=2s, grace=5x
+        if [ "$file_age" -gt "$max_age" ]; then
+            rm -f "$history_file"
+        fi
+    fi
+done
+
 # Only store speed in history if the sample is fresh (not stale)
 if [ "$should_store_history" = true ]; then
     store_history "$RX_SPEED_HISTORY" "$rx_speed_kb" "$MAX_SAMPLES"
@@ -145,9 +156,17 @@ if [ -n "$ip_addr" ]; then
     echo "row: [grey70]IP: $ip_addr[/]"
 fi
 
-# Show current speed with sparklines
-echo "row: ↓ RX: [green]${rx_speed_display}[/] [sparkline:${rx_history}:green] [grey70](total: ${rx_display})[/]"
-echo "row: ↑ TX: [yellow]${tx_speed_display}[/] [sparkline:${tx_history}:yellow] [grey70](total: ${tx_display})[/]"
+# Dashboard mode: show sparklines with current speed in table
+if [ "$EXTENDED" = false ]; then
+    echo "row: "
+    echo "[table:Direction|Speed|Traffic|Total]"
+    echo "[tablerow:↓ RX|[green]${rx_speed_display}[/]|[sparkline:${rx_history}:green:15]|[grey70]${rx_display}[/]]"
+    echo "[tablerow:↑ TX|[yellow]${tx_speed_display}[/]|[sparkline:${tx_history}:yellow:15]|[grey70]${tx_display}[/]]"
+else
+    # Extended mode: show current speed without sparklines (graphs below)
+    echo "row: ↓ RX: [green]${rx_speed_display}[/] [grey70](total: ${rx_display})[/]"
+    echo "row: ↑ TX: [yellow]${tx_speed_display}[/] [grey70](total: ${tx_display})[/]"
+fi
 
 # Active connections count
 if command -v ss &> /dev/null; then
@@ -161,9 +180,8 @@ if [ "$EXTENDED" = true ]; then
     echo "row: [divider]"
     echo "row: "
     echo "row: [bold]Traffic History (last 60s):[/]"
-    echo "row: [graph:${rx_history}:green:Download (KB/s)]"
-    echo "row: "
-    echo "row: [graph:${tx_history}:yellow:Upload (KB/s)]"
+    echo "row: [graph:${rx_history}:cool:Download (KB/s)]"
+    echo "row: [graph:${tx_history}:warm:Upload (KB/s)]"
 
     # All network interfaces table
     echo "row: "

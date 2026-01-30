@@ -179,7 +179,7 @@ else
         else
             pct=$((mem_mb * 100 / max_mem))
         fi
-        echo "[tablerow:$svc_short|${mem_mb}MB|[miniprogress:$pct:10]]"
+        echo "[tablerow:$svc_short|${mem_mb}MB|[miniprogress:$pct:10:warm]]"
     done
 
     # Service ports

@@ -35,13 +35,23 @@ else
     MAX_SAMPLES=10
 fi
 
-# Store memory history
+# Store memory history (clear if stale)
 mem_history_file="$CACHE_DIR/memory-usage.txt"
+
+# Clear history if file is older than expected (stale data)
+if [ -f "$mem_history_file" ]; then
+    file_age=$(($(date +%s) - $(stat -c %Y "$mem_history_file" 2>/dev/null || echo 0)))
+    max_age=$((MAX_SAMPLES * 2 * 5))  # refresh=2s, grace=5x
+    if [ "$file_age" -gt "$max_age" ]; then
+        rm -f "$mem_history_file"
+    fi
+fi
+
 echo "$percent" >> "$mem_history_file"
 tail -n "$MAX_SAMPLES" "$mem_history_file" > "${mem_history_file}.tmp" 2>/dev/null
 mv "${mem_history_file}.tmp" "$mem_history_file" 2>/dev/null
 
-# Read history for sparkline
+# Read history for graph
 if [ -f "$mem_history_file" ] && [ -s "$mem_history_file" ]; then
     mem_history=$(paste -sd',' "$mem_history_file")
 else
@@ -71,19 +81,19 @@ else
     status="error"
 fi
 
-# Dashboard mode: Compact overview with sparklines
+# Dashboard mode: Compact overview
 if [ "$EXTENDED" = false ]; then
-    echo "row: [status:$status] Memory: ${used}MB / ${total}MB [sparkline:${mem_history}:yellow]"
-    echo "row: [progress:${percent}]"
+    echo "row: [status:$status] Memory: ${used}MB / ${total}MB"
+    echo "row: [progress:${percent}:warm]"
     echo "row: "
 
-    # Memory breakdown table
+    # Memory breakdown table with gradients
     echo "row: [bold]Memory Breakdown:[/]"
     echo "[table:Type|Usage]"
-    echo "[tablerow:RAM Used|[miniprogress:${percent}:12]]"
+    echo "[tablerow:RAM Used|[miniprogress:${percent}:12:warm]]"
 
     if [ "$swap_total" -gt 0 ]; then
-        echo "[tablerow:Swap Used|[miniprogress:${swap_percent}:12]]"
+        echo "[tablerow:Swap Used|[miniprogress:${swap_percent}:12:cool]]"
     else
         echo "[tablerow:Swap|[grey70]Not configured[/]]"
     fi
@@ -102,25 +112,27 @@ if [ "$EXTENDED" = false ]; then
 else
     # Extended mode: Detailed view with graphs and tables
     echo "row: [status:$status] Memory: ${used}MB / ${total}MB (${percent}%)"
-    echo "row: [progress:${percent}]"
+    echo "row: [progress:${percent}:warm]"
     echo "row: "
     echo "row: Available: ${available}MB"
 
-    # Memory history graph
+    # Memory history graph with gradient
     echo "row: "
     echo "row: [divider]"
     echo "row: "
     echo "row: [bold]Memory Usage History (last 60s):[/]"
-    echo "row: [graph:${mem_history}:yellow:Memory %]"
+    # Use 0-100 fixed scale for percentage graph
+    echo "row: [graph:${mem_history}:warm:Memory %:0-100]"
 
-    # Swap graph if configured
+    # Swap graph if configured with gradient
     if [ "$swap_total" -gt 0 ]; then
         echo "row: "
         echo "row: [bold]Swap Usage History:[/]"
-        echo "row: [graph:${swap_history}:red:Swap %]"
+        # Use 0-100 fixed scale for percentage graph
+        echo "row: [graph:${swap_history}:cool:Swap %:0-100]"
     fi
 
-    # Detailed breakdown table
+    # Detailed breakdown table with gradients
     echo "row: "
     echo "row: [divider]"
     echo "row: "
@@ -129,7 +141,7 @@ else
 
     # RAM breakdown
     echo "[tablerow:Total RAM|${total}MB|100%]"
-    echo "[tablerow:Used|${used}MB|[miniprogress:${percent}:10]]"
+    echo "[tablerow:Used|${used}MB|${percent}%]"
     echo "[tablerow:Available|${available}MB|$((available * 100 / total))%]"
     echo "[tablerow:Buffers|${buffers}MB|$((buffers * 100 / total))%]"
     echo "[tablerow:Cache|${cached}MB|$((cached * 100 / total))%]"
@@ -138,7 +150,7 @@ else
     if [ "$swap_total" -gt 0 ]; then
         swap_avail=$((swap_total - swap_used))
         echo "[tablerow:Swap Total|${swap_total}MB|100%]"
-        echo "[tablerow:Swap Used|${swap_used}MB|[miniprogress:${swap_percent}:10]]"
+        echo "[tablerow:Swap Used|${swap_used}MB|${swap_percent}%]"
         echo "[tablerow:Swap Free|${swap_avail}MB|$((swap_avail * 100 / swap_total))%]"
     fi
 

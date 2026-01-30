@@ -92,9 +92,21 @@ if [ $running -gt 0 ]; then
             [ "$mem_pct" -gt 100 ] && mem_pct=100
             [ "$mem_pct" -lt 0 ] && mem_pct=0
 
-            # Store history
+            # Clear history if files are older than expected (stale data)
             cpu_history_file="$CACHE_DIR/docker-${name}-cpu.txt"
             mem_history_file="$CACHE_DIR/docker-${name}-mem.txt"
+
+            for history_file in "$cpu_history_file" "$mem_history_file"; do
+                if [ -f "$history_file" ]; then
+                    file_age=$(($(date +%s) - $(stat -c %Y "$history_file" 2>/dev/null || echo 0)))
+                    max_age=$((MAX_SAMPLES * 5 * 5))  # refresh=5s, grace=5x
+                    if [ "$file_age" -gt "$max_age" ]; then
+                        rm -f "$history_file"
+                    fi
+                fi
+            done
+
+            # Store history
             store_history "$cpu_history_file" "$cpu_pct" "$MAX_SAMPLES"
             store_history "$mem_history_file" "$mem_pct" "$MAX_SAMPLES"
 
@@ -113,7 +125,7 @@ if [ $running -gt 0 ]; then
             name_short=$(echo "$name" | cut -c1-15)
 
             # Format CPU and Memory with mini progress bars
-            echo "[tablerow:${name_short}|${status_col}|${image}|[miniprogress:${cpu_pct}:8]|[miniprogress:${mem_pct}:8]]"
+            echo "[tablerow:${name_short}|${status_col}|${image}|[miniprogress:${cpu_pct}:8:spectrum]|[miniprogress:${mem_pct}:8:warm]]"
         done
 
         if [ $running -gt 5 ]; then
@@ -141,9 +153,21 @@ if [ $running -gt 0 ]; then
             [ "$mem_pct" -gt 100 ] && mem_pct=100
             [ "$mem_pct" -lt 0 ] && mem_pct=0
 
-            # Store history
+            # Clear history if files are older than expected (stale data)
             cpu_history_file="$CACHE_DIR/docker-${name}-cpu.txt"
             mem_history_file="$CACHE_DIR/docker-${name}-mem.txt"
+
+            for history_file in "$cpu_history_file" "$mem_history_file"; do
+                if [ -f "$history_file" ]; then
+                    file_age=$(($(date +%s) - $(stat -c %Y "$history_file" 2>/dev/null || echo 0)))
+                    max_age=$((MAX_SAMPLES * 5 * 5))  # refresh=5s, grace=5x
+                    if [ "$file_age" -gt "$max_age" ]; then
+                        rm -f "$history_file"
+                    fi
+                fi
+            done
+
+            # Store history
             store_history "$cpu_history_file" "$cpu_pct" "$MAX_SAMPLES"
             store_history "$mem_history_file" "$mem_pct" "$MAX_SAMPLES"
 
@@ -177,8 +201,9 @@ if [ $running -gt 0 ]; then
 
             echo "row: "
             echo "row: [cyan1]${name_short}[/]"
-            echo "row: [graph:${cpu_history}:green:CPU %]"
-            echo "row: [graph:${mem_history}:yellow:Memory %]"
+            # Use 0-100 fixed scale for percentage graphs
+            echo "row: [graph:${cpu_history}:spectrum:CPU %:0-100]"
+            echo "row: [graph:${mem_history}:warm:Memory %:0-100]"
         done
 
         # Cleanup temp file
