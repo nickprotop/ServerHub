@@ -8,6 +8,11 @@ if [[ "$1" == "--extended" ]]; then
     EXTENDED=true
 fi
 
+# Helper function to strip ANSI codes and escape markup characters
+strip_ansi() {
+    sed 's/\x1b\[[0-9;]*m//g' | sed 's/\[/⦗/g' | sed 's/\]/⦘/g'
+}
+
 echo "title: Recent Logs"
 echo "refresh: 10"
 
@@ -47,7 +52,7 @@ if [ "$EXTENDED" = false ]; then
         echo "[table:Time|Message]"
         journalctl --since "1 hour ago" -p err --no-pager -q -n 5 --output=short-precise 2>/dev/null | while read -r line; do
             timestamp=$(echo "$line" | awk '{print $1, $2, $3}')
-            message=$(echo "$line" | cut -d' ' -f5- | cut -c1-45)
+            message=$(echo "$line" | cut -d' ' -f5- | cut -c1-45 | strip_ansi)
             time_short=$(echo "$timestamp" | awk -F'.' '{print $1}' | awk -F'T' '{print $2}' | cut -c1-8)
             [ -z "$time_short" ] && time_short=$(echo "$timestamp" | awk '{print $3}' | cut -c1-8)
 
@@ -62,7 +67,7 @@ if [ "$EXTENDED" = false ]; then
         echo "[table:Time|Message]"
         journalctl --since "30 minutes ago" -p warning --no-pager -q -n 5 --output=short-precise 2>/dev/null | while read -r line; do
             timestamp=$(echo "$line" | awk '{print $1, $2, $3}')
-            message=$(echo "$line" | cut -d' ' -f5- | cut -c1-45)
+            message=$(echo "$line" | cut -d' ' -f5- | cut -c1-45 | strip_ansi)
             time_short=$(echo "$timestamp" | awk -F'.' '{print $1}' | awk -F'T' '{print $2}' | cut -c1-8)
             [ -z "$time_short" ] && time_short=$(echo "$timestamp" | awk '{print $3}' | cut -c1-8)
 
@@ -76,7 +81,7 @@ if [ "$EXTENDED" = false ]; then
     echo "[table:Time|Event]"
     journalctl --since "10 minutes ago" -p notice --no-pager -q -n 5 --output=short-precise 2>/dev/null | while read -r line; do
         timestamp=$(echo "$line" | awk '{print $1, $2, $3}')
-        message=$(echo "$line" | cut -d' ' -f5- | cut -c1-45)
+        message=$(echo "$line" | cut -d' ' -f5- | cut -c1-45 | strip_ansi)
         time_short=$(echo "$timestamp" | awk -F'.' '{print $1}' | awk -F'T' '{print $2}' | cut -c1-8)
         [ -z "$time_short" ] && time_short=$(echo "$timestamp" | awk '{print $3}' | cut -c1-8)
 
@@ -93,7 +98,7 @@ else
     journalctl --since "1 hour ago" -p err --no-pager -q -n 20 --output=short-precise 2>/dev/null | while read -r line; do
         timestamp=$(echo "$line" | awk '{print $1, $2, $3}')
         unit=$(echo "$line" | awk '{print $4}' | tr -d ':' | cut -c1-15)
-        message=$(echo "$line" | cut -d' ' -f5- | cut -c1-40)
+        message=$(echo "$line" | cut -d' ' -f5- | cut -c1-40 | strip_ansi)
         time_short=$(echo "$timestamp" | awk -F'.' '{print $1}' | awk -F'T' '{print $2}' | cut -c1-8)
         [ -z "$time_short" ] && time_short=$(echo "$timestamp" | awk '{print $3}' | cut -c1-8)
 
@@ -109,7 +114,7 @@ else
     journalctl --since "1 hour ago" -p warning --no-pager -q -n 20 --output=short-precise 2>/dev/null | while read -r line; do
         timestamp=$(echo "$line" | awk '{print $1, $2, $3}')
         unit=$(echo "$line" | awk '{print $4}' | tr -d ':' | cut -c1-15)
-        message=$(echo "$line" | cut -d' ' -f5- | cut -c1-40)
+        message=$(echo "$line" | cut -d' ' -f5- | cut -c1-40 | strip_ansi)
         time_short=$(echo "$timestamp" | awk -F'.' '{print $1}' | awk -F'T' '{print $2}' | cut -c1-8)
         [ -z "$time_short" ] && time_short=$(echo "$timestamp" | awk '{print $3}' | cut -c1-8)
 
@@ -139,7 +144,7 @@ else
             timestamp=$(echo "$line" | awk '{print $1, $2, $3}')
             time_short=$(echo "$timestamp" | awk -F'.' '{print $1}' | awk -F'T' '{print $2}' | cut -c1-8)
             [ -z "$time_short" ] && time_short=$(echo "$timestamp" | awk '{print $3}' | cut -c1-8)
-            message=$(echo "$line" | cut -d' ' -f5- | cut -c1-45)
+            message=$(echo "$line" | cut -d' ' -f5- | cut -c1-45 | strip_ansi)
             echo "[tablerow:[grey70]$time_short[/]|$message]"
         done
     fi
@@ -165,7 +170,7 @@ else
         timestamp=$(echo "$line" | awk '{print $1, $2, $3}')
         time_short=$(echo "$timestamp" | awk -F'.' '{print $1}' | awk -F'T' '{print $2}' | cut -c1-8)
         [ -z "$time_short" ] && time_short=$(echo "$timestamp" | awk '{print $3}' | cut -c1-8)
-        message=$(echo "$line" | cut -d' ' -f5- | cut -c1-40)
+        message=$(echo "$line" | cut -d' ' -f5- | cut -c1-40 | strip_ansi)
         echo "[tablerow:[grey70]$time_short[/]|$message]"
     done
 

@@ -133,16 +133,15 @@ public static class WidgetExpansionDialog
         loadingPanel.Visible = true;
         modal.AddControl(loadingPanel);
 
-        // Build full content using existing WidgetRenderer (NO truncation, NO duplication)
-        var widgetPanel = renderer.CreateWidgetPanel(
-            "modal_widget",               // Name for updating
-            widgetData,
-            isPinned: false,              // Always show full widget, not pinned version
-            backgroundColor: Color.Grey15,
-            onClickCallback: null,
-            maxLines: null,               // NO truncation - show all content
-            showTruncationIndicator: false
-        );
+        // Build content directly without panel wrapper (dialog already has border)
+        var widgetPanel = Controls.Markup()
+            .WithName("modal_widget")
+            .WithBackgroundColor(Color.Grey15)
+            .WithMargin(1, 0, 1, 0)  // Left and right margins for padding
+            .Build();
+
+        // Populate with initial content
+        UpdateWidgetContent(widgetPanel, widgetData, renderer);
 
         // Create side-by-side layout: Content (left) + Actions (right)
         var mainGrid = Controls.HorizontalGrid()
@@ -696,9 +695,9 @@ public static class WidgetExpansionDialog
         UpdateHeader(context, newData, false, 0);
 
         // Update widget content
-        if (context.WidgetPanel != null)
+        if (context.WidgetPanel != null && context.WidgetPanel is MarkupControl markup)
         {
-            context.Renderer.UpdateWidgetPanel(context.WidgetPanel, newData, maxLines: null, showTruncationIndicator: false);
+            UpdateWidgetContent(markup, newData, context.Renderer!);
         }
 
         // Update actions list only if actions changed
@@ -723,6 +722,55 @@ public static class WidgetExpansionDialog
                 context.ActionsList.Visible = newData.HasActions;
             }
         }
+    }
+
+    /// <summary>
+    /// Updates widget content directly in a MarkupControl (no panel wrapper)
+    /// </summary>
+    private static void UpdateWidgetContent(MarkupControl markup, WidgetData widgetData, WidgetRenderer renderer)
+    {
+        // Build content using private BuildWidgetContent method via reflection
+        // Or just build it directly here to avoid reflection
+        var lines = new List<string>();
+
+        if (widgetData.HasError)
+        {
+            lines.Add($"[red]Error:[/] {widgetData.Error}");
+        }
+        else
+        {
+            foreach (var row in widgetData.Rows)
+            {
+                lines.Add(FormatRowForExpansion(row, renderer));
+            }
+        }
+
+        // Add footer info
+        lines.Add("");
+        var infoLine = $"[grey70]Updated: {widgetData.Timestamp:HH:mm:ss}[/]";
+        if (widgetData.HasActions)
+        {
+            var actionCount = widgetData.Actions.Count;
+            var actionText = actionCount == 1 ? "action" : "actions";
+            infoLine += $"  [grey70]•[/]  [cyan1]{actionCount} {actionText}[/]";
+        }
+        lines.Add(infoLine);
+
+        markup.SetContent(lines);
+    }
+
+    /// <summary>
+    /// Formats a row for expansion view (uses renderer's internal logic)
+    /// </summary>
+    private static string FormatRowForExpansion(WidgetRow row, WidgetRenderer renderer)
+    {
+        // Use reflection to access the private FormatRow method
+        var method = typeof(WidgetRenderer).GetMethod("FormatRow", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        if (method != null)
+        {
+            return (string?)method.Invoke(renderer, new object[] { row }) ?? "";
+        }
+        return row.Content;
     }
 
     /// <summary>
