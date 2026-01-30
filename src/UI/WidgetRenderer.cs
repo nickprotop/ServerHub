@@ -274,59 +274,119 @@ public class WidgetRenderer
     }
 
     /// <summary>
-    /// Creates a multi-column table layout
+    /// Creates a multi-column table layout with support for multi-line cells.
+    /// Cells containing newlines are rendered across multiple output lines,
+    /// with proper alignment and padding.
     /// </summary>
     private string CreateTable(WidgetTable table)
     {
         if (table.Headers.Count == 0)
             return "";
 
-        var columnWidths = new int[table.Headers.Count];
-        for (int i = 0; i < table.Headers.Count; i++)
+        var columnCount = table.Headers.Count;
+
+        // Step 1: Split all cells into lines and calculate column widths
+        // For multi-line cells, we need to check each line's width
+        var columnWidths = new int[columnCount];
+
+        // Initialize with header widths
+        for (int i = 0; i < columnCount; i++)
         {
             columnWidths[i] = table.Headers[i].Length;
-            foreach (var row in table.Rows)
+        }
+
+        // Pre-split all cells into lines for efficiency
+        var splitRows = new List<string[][]>();
+        foreach (var row in table.Rows)
+        {
+            var splitRow = new string[columnCount][];
+            for (int col = 0; col < columnCount; col++)
             {
-                if (i < row.Count)
+                var cellValue = col < row.Count ? row[col] : "";
+                var cellLines = cellValue.Split('\n');
+                splitRow[col] = cellLines;
+
+                // Update column width based on each line
+                foreach (var line in cellLines)
                 {
-                    var plainText = Markup.Remove(row[i]);
-                    columnWidths[i] = Math.Max(columnWidths[i], plainText.Length);
+                    var plainText = Markup.Remove(line);
+                    columnWidths[col] = Math.Max(columnWidths[col], plainText.Length);
                 }
             }
+            splitRows.Add(splitRow);
+        }
+
+        // Add padding to column widths
+        for (int i = 0; i < columnCount; i++)
+        {
             columnWidths[i] += 2;
         }
 
-        var lines = new List<string>();
+        // Step 2: Build output lines
+        var outputLines = new List<string>();
+
+        // Header row
         var headerRow = new StringBuilder();
-        for (int i = 0; i < table.Headers.Count; i++)
+        for (int i = 0; i < columnCount; i++)
         {
             headerRow.Append($"[bold cyan1]{table.Headers[i].PadRight(columnWidths[i])}[/]");
         }
-        lines.Add(headerRow.ToString().TrimEnd());
+        outputLines.Add(headerRow.ToString().TrimEnd());
 
+        // Separator
         var separator = new StringBuilder();
-        for (int i = 0; i < table.Headers.Count; i++)
+        for (int i = 0; i < columnCount; i++)
         {
             separator.Append(new string('─', columnWidths[i]));
         }
-        lines.Add($"[grey70]{separator}[/]");
+        outputLines.Add($"[grey70]{separator}[/]");
 
-        foreach (var row in table.Rows)
+        // Step 3: Render each data row (potentially multiple output lines)
+        for (int rowIdx = 0; rowIdx < splitRows.Count; rowIdx++)
         {
-            var rowBuilder = new StringBuilder();
-            for (int i = 0; i < table.Headers.Count; i++)
+            var splitRow = splitRows[rowIdx];
+
+            // Calculate row height (max lines across all cells)
+            int rowHeight = 1;
+            for (int col = 0; col < columnCount; col++)
             {
-                var cellValue = i < row.Count ? row[i] : "";
-                var plainText = Markup.Remove(cellValue);
-                var padding = columnWidths[i] - plainText.Length;
-                rowBuilder.Append(cellValue);
-                if (padding > 0)
-                    rowBuilder.Append(new string(' ', padding));
+                rowHeight = Math.Max(rowHeight, splitRow[col].Length);
             }
-            lines.Add(rowBuilder.ToString().TrimEnd());
+
+            // Render each line of this row
+            for (int lineIdx = 0; lineIdx < rowHeight; lineIdx++)
+            {
+                var lineBuilder = new StringBuilder();
+                for (int col = 0; col < columnCount; col++)
+                {
+                    var cellLines = splitRow[col];
+                    string cellLine;
+
+                    if (lineIdx < cellLines.Length)
+                    {
+                        // Cell has content for this line
+                        cellLine = cellLines[lineIdx];
+                    }
+                    else
+                    {
+                        // Cell is shorter - use empty padding
+                        cellLine = "";
+                    }
+
+                    var plainText = Markup.Remove(cellLine);
+                    var padding = columnWidths[col] - plainText.Length;
+
+                    lineBuilder.Append(cellLine);
+                    if (padding > 0)
+                    {
+                        lineBuilder.Append(new string(' ', padding));
+                    }
+                }
+                outputLines.Add(lineBuilder.ToString().TrimEnd());
+            }
         }
 
-        return string.Join("\n", lines);
+        return string.Join("\n", outputLines);
     }
 
     /// <summary>

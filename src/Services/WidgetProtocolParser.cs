@@ -176,13 +176,14 @@ public class WidgetProtocolParser
     }
 
     /// <summary>
-    /// Processes inline directives in table cell content and replaces them with rendered markup
+    /// Processes inline directives in table cell content and replaces them with rendered markup.
+    /// Also sanitizes content to strip ANSI codes and escape invalid brackets.
     /// </summary>
     private static string ProcessCellContent(string cellContent)
     {
         var content = cellContent;
 
-        // Process sparkline directives
+        // Process sparkline directives (before sanitization to preserve tag format)
         content = SparklineRegex.Replace(content, match =>
         {
             var values = ParseDataPoints(match.Groups[1].Value);
@@ -197,6 +198,10 @@ public class WidgetProtocolParser
             var width = match.Groups[2].Success ? int.Parse(match.Groups[2].Value) : 10;
             return InlineElementRenderer.RenderMiniProgress(value, width);
         });
+
+        // Sanitize remaining content (strip ANSI, escape invalid brackets)
+        // This protects against system data containing brackets like [kworker/0:1]
+        content = ContentSanitizer.Sanitize(content);
 
         return content;
     }
@@ -301,6 +306,10 @@ public class WidgetProtocolParser
             };
             row.Content = GraphRegex.Replace(row.Content, "");
         }
+
+        // Sanitize final content (strip ANSI codes, escape invalid brackets)
+        // This protects against system data containing brackets like [kworker/0:1]
+        row.Content = ContentSanitizer.Sanitize(row.Content);
 
         return row;
     }

@@ -120,9 +120,13 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 if [ "$PATH_ADDED" = true ]; then
-    echo "Run this command to get started:"
+    echo "To get started, either reload your shell config:"
     echo ""
-    echo "  source $SHELL_RC && serverhub"
+    echo "  source $SHELL_RC"
+    echo ""
+    echo "Or run directly with the full path:"
+    echo ""
+    echo "  ~/.local/bin/serverhub"
     echo ""
 else
     echo "Run 'serverhub' to get started!"
