@@ -175,7 +175,7 @@ class Program
                 TopStatus = _devMode
                     ? "DEV MODE - Custom widget checksums DISABLED"
                     : "ServerHub - Server Monitoring Dashboard",
-                BottomStatus = "Press Ctrl+Q to quit | F5 to refresh | ? for help",
+                BottomStatus = "F1: Help | F2: Config | F3: Marketplace | F5: Refresh | Space: Pause | Ctrl+Q: Quit",
             };
 
             // Setup graceful shutdown
@@ -260,7 +260,7 @@ class Program
         // Initialize FocusManager
         _focusManager = new FocusManager();
         _focusManager.Initialize(_mainWindow, placements);
-        _focusManager.FocusFirst(); // Focus first widget on startup
+        // No widget focused on startup - user must click or tab to focus
 
         // Build widget layout
         BuildWidgetLayout(placements, terminalWidth, useCache: false);
@@ -324,10 +324,7 @@ class Program
             {
                 _focusManager?.FocusWidget(currentFocusedId);
             }
-            else
-            {
-                _focusManager?.FocusFirst();
-            }
+            // If no widget was focused before rebuild, keep it that way
 
             // Update status
             _windowSystem.BottomStatus =
@@ -553,8 +550,8 @@ class Program
         if (_windowSystem != null)
         {
             var status = _isPaused
-                ? "[yellow]PAUSED[/] - Press Space to resume | Ctrl+Q to quit | ? for help"
-                : $"Press Ctrl+Q to quit | F5 to refresh | Space to pause | ? for help | {DateTime.Now:HH:mm:ss}";
+                ? "[yellow]PAUSED[/] - Space: Resume | F1: Help | F2: Config | F3: Marketplace | Ctrl+Q: Quit"
+                : "F1: Help | F2: Config | F3: Marketplace | F5: Refresh | Space: Pause | Ctrl+Q: Quit";
 
             _windowSystem.BottomStatus = status;
         }
@@ -570,19 +567,26 @@ class Program
         var terminalHeight = Console.WindowHeight;
 
         // Dialog size: larger for better readability
-        var dialogWidth = Math.Min(80, terminalWidth - 10);
-        var dialogHeight = Math.Min(22, terminalHeight - 6);
+        var dialogWidth = Math.Min(78, terminalWidth - 10);
+        var dialogHeight = Math.Min(24, terminalHeight - 6);
 
         // Center the dialog
         var dialogX = (terminalWidth - dialogWidth) / 2;
         var dialogY = (terminalHeight - dialogHeight) / 2;
 
-        // Create help window without borders, centered with explicit bounds
+        // Create help window with rounded borders
         var helpWindow = new WindowBuilder(_windowSystem)
             .WithName("HelpOverlay")
             .WithBounds(dialogX, dialogY, dialogWidth, dialogHeight)
-            .Borderless()
-            .WithColors(Color.Grey11, Color.Grey93)
+            .WithBorderStyle(BorderStyle.Rounded)
+            .WithBorderColor(Color.Grey35)
+            .WithColors(Color.Grey15, Color.Grey93)
+            .HideTitle()
+            .AsModal()
+            .Minimizable(false)
+            .Maximizable(false)
+            .Resizable(false)
+            .Movable(false)
             .OnKeyPressed(
                 (sender, e) =>
                 {
@@ -603,40 +607,35 @@ class Program
 
         var helpContent =
             @"
-  [bold cyan1]╔══════════════════════════════════════════════════════════════════╗[/]
-  [bold cyan1]║[/]  [bold yellow]ServerHub - Server Monitoring Dashboard[/]                         [bold cyan1]║[/]
-  [bold cyan1]╚══════════════════════════════════════════════════════════════════╝[/]
+  [bold cyan1]ServerHub[/] [grey70]v0.1.0[/] [grey50]•[/] [grey70]Server Monitoring Dashboard[/]
 
-  [bold white]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/]
+  [bold cyan1]▸ Navigation[/]
+    [cyan1]Tab[/] [grey50]/[/] [cyan1]Shift+Tab[/]       Move between widgets
+    [cyan1]Arrow keys[/]            Scroll within widget
+    [cyan1]Ctrl[/] [grey50]+[/] [cyan1]←/→[/]             Swap widget left/right in row
+    [cyan1]Ctrl[/] [grey50]+[/] [cyan1]↑/↓[/]             Swap widget with row above/below
+    [cyan1]Ctrl+Shift[/] [grey50]+[/] [cyan1]←/→[/]       Decrease/increase widget width
+    [cyan1]Ctrl+Shift[/] [grey50]+[/] [cyan1]↑/↓[/]       Decrease/increase widget height
 
-  [bold cyan1]Navigation[/]
-  [grey]─────────────────────────────────────────────────────────────────────[/]
-    [cyan1]Tab / Shift+Tab[/]      [white]Move between widgets[/]
-    [cyan1]Arrow keys[/]           [white]Scroll within widget[/]
-    [cyan1]Ctrl+←/→[/]             [white]Swap widget left/right in row[/]
-    [cyan1]Ctrl+↑/↓[/]             [white]Swap widget with row above/below[/]
-    [cyan1]Ctrl+Shift+←/→[/]       [white]Decrease/increase widget width[/]
-    [cyan1]Ctrl+Shift+↑/↓[/]       [white]Decrease/increase widget height[/]
+  [bold cyan1]▸ Widget Actions[/]
+    [cyan1]Click[/]                   Focus widget
+    [cyan1]Double-click[/] [grey50]or[/] [cyan1]Enter[/]   Open expanded view
 
-  [bold cyan1]Actions[/]
-  [grey]─────────────────────────────────────────────────────────────────────[/]
-    [cyan1]F2[/]                   [white]Configure widgets (add/remove/edit)[/]
-    [cyan1]F3[/]                   [white]Browse marketplace (install widgets)[/]
-    [cyan1]F5[/]                   [white]Refresh all widgets[/]
-    [cyan1]Space[/]                [white]Pause / resume widget refresh[/]
-    [cyan1]? or F1[/]              [white]Show this help dialog[/]
+  [bold cyan1]▸ Application[/]
+    [cyan1]F2[/]                      Configure widgets [grey50](add/remove/edit)[/]
+    [cyan1]F3[/]                      Browse marketplace [grey50](install widgets)[/]
+    [cyan1]F5[/]                      Refresh all widgets
+    [cyan1]Space[/]                   Pause / resume auto-refresh
+    [cyan1]? [/][grey50]or[/] [cyan1]F1[/]                Show this help
+    [cyan1]Ctrl+Q[/]                  Exit ServerHub
 
-  [bold cyan1]Exit[/]
-  [grey]─────────────────────────────────────────────────────────────────────[/]
-    [cyan1]Ctrl+Q[/]               [white]Exit ServerHub[/]
-
-  [bold white]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/]
-  [grey]Press ESC, Enter, ?, or F1 to close[/]
+  [grey50]───────────────────────────────────────────────────────────────────────[/]
+  [grey70]Press [cyan1]ESC[/], [cyan1]Enter[/], [cyan1]?[/], or [cyan1]F1[/] to close this help[/]
 ";
 
         var helpBuilder = Controls
             .Markup()
-            .WithBackgroundColor(Color.Grey11)
+            .WithBackgroundColor(Color.Grey15)
             .WithMargin(2, 1, 2, 1);
 
         // Split content into lines and add them
@@ -1585,8 +1584,8 @@ class Program
         var memUsage = GetSystemMemory();
 
         var status = _isPaused
-            ? $"[yellow]PAUSED[/] | {enabledCount} widgets ({disabledCount} disabled) | Press Space to resume | [dim]F2: Config  F1: Help[/]"
-            : $"ServerHub | {enabledCount} widgets ({okWidgets} ok, {errorWidgets} error{(disabledCount > 0 ? $", {disabledCount} disabled" : "")}) | CPU {cpuUsage}% MEM {memUsage}% | {DateTime.Now:HH:mm:ss} | [dim]F2: Config  F1: Help[/]";
+            ? $"[yellow]PAUSED[/] | {enabledCount} widgets ({disabledCount} disabled) | Space: Resume | [dim]F1: Help  F2: Config  F3: Marketplace  Ctrl+Q: Quit[/]"
+            : $"ServerHub | {enabledCount} widgets ({okWidgets} ok, {errorWidgets} error{(disabledCount > 0 ? $", {disabledCount} disabled" : "")}) | CPU {cpuUsage}% MEM {memUsage}% | {DateTime.Now:HH:mm:ss} | [dim]F1: Help  F2: Config  F3: Marketplace  Ctrl+Q: Quit[/]";
 
         _windowSystem.BottomStatus = status;
     }
