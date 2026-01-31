@@ -2,6 +2,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using ServerHub.Marketplace.Models;
+using ServerHub.Models;
+using ServerHub.Services;
 using ServerHub.Utils;
 
 namespace ServerHub.Marketplace.Services;
@@ -204,6 +206,68 @@ public class WidgetInstaller
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Uninstalls a widget from the marketplace
+    /// </summary>
+    /// <param name="widgetId">ID of the widget to uninstall</param>
+    /// <param name="configPath">Path to the configuration file</param>
+    /// <returns>Tuple of (success, message)</returns>
+    public async Task<(bool success, string message)> UninstallWidgetAsync(string widgetId, string configPath)
+    {
+        try
+        {
+            // 1. Load config
+            var configManager = new ConfigManager();
+            var config = configManager.LoadConfig(configPath);
+
+            if (!config.Widgets.TryGetValue(widgetId, out var widgetConfig))
+            {
+                return (false, $"Widget '{widgetId}' not found in configuration");
+            }
+
+            // 2. Check if it's a bundled widget (cannot uninstall)
+            if (widgetConfig.Location == WidgetLocation.Bundled)
+            {
+                return (false, "Cannot uninstall bundled widgets");
+            }
+
+            // 3. Resolve widget file path
+            var (widgetPath, actualLocation) = WidgetPaths.ResolveWidgetPathWithLocation(
+                widgetConfig.Path,
+                widgetConfig.Location);
+
+            // Additional check: prevent uninstalling bundled widgets even if location is Auto
+            if (actualLocation == WidgetLocation.Bundled)
+            {
+                return (false, "Cannot uninstall bundled widgets");
+            }
+
+            // 4. Delete widget file if it exists
+            if (!string.IsNullOrEmpty(widgetPath) && File.Exists(widgetPath))
+            {
+                File.Delete(widgetPath);
+            }
+
+            // 5. Remove from config
+            config.Widgets.Remove(widgetId);
+
+            // 6. Remove from layout order if present
+            if (config.Layout?.Order != null)
+            {
+                config.Layout.Order.Remove(widgetId);
+            }
+
+            // 7. Save updated config
+            configManager.SaveConfig(config, configPath);
+
+            return (true, $"Widget '{widgetId}' uninstalled successfully");
+        }
+        catch (Exception ex)
+        {
+            return (false, $"Uninstall failed: {ex.Message}");
+        }
     }
 
     /// <summary>

@@ -4,6 +4,7 @@
 using ServerHub.Marketplace.Models;
 using ServerHub.Marketplace.Services;
 using ServerHub.Services;
+using ServerHub.Utils;
 using SharpConsoleUI;
 using SharpConsoleUI.Builders;
 using SharpConsoleUI.Controls;
@@ -755,15 +756,114 @@ public static class MarketplaceBrowserDialog
 
     private static void HandleUninstall(MarketplaceManager.MarketplaceWidgetInfo widget)
     {
-        // TODO: Implement uninstall functionality
-        // For now, just show a message
-        if (_windowSystem != null)
+        if (_windowSystem == null || _manager == null || _configPath == null)
+            return;
+
+        // Show confirmation dialog
+        ShowUninstallConfirmDialog(widget);
+    }
+
+    private static void ShowUninstallConfirmDialog(MarketplaceManager.MarketplaceWidgetInfo widget)
+    {
+        if (_windowSystem == null)
+            return;
+
+        var confirmDialog = new WindowBuilder(_windowSystem)
+            .WithTitle("Confirm Uninstall")
+            .WithSize(70, 13)
+            .Centered()
+            .AsModal()
+            .WithBorderStyle(BorderStyle.Single)
+            .WithBorderColor(Color.Orange3)
+            .Resizable(false)
+            .Movable(false)
+            .Minimizable(false)
+            .Maximizable(false)
+            .WithColors(Color.Grey15, Color.Grey93)
+            .WithParent(_dialogWindow!)
+            .Build();
+
+        var messageBuilder = Controls
+            .Markup()
+            .AddLine("")
+            .AddLine($"[orange3 bold]Uninstall widget:[/] [cyan1]{widget.Name}[/]")
+            .AddLine("")
+            .AddLine("[grey70]This will:[/]")
+            .AddLine("  [grey70]•[/] Remove the widget file")
+            .AddLine("  [grey70]•[/] Remove from configuration")
+            .AddLine("  [grey70]•[/] Remove from dashboard")
+            .AddLine("")
+            .AddLine("[yellow]Are you sure you want to continue?[/]")
+            .AddLine("");
+
+        confirmDialog.AddControl(messageBuilder.WithMargin(1, 0, 1, 0).Build());
+
+        var cancelButton = Controls
+            .Button("  Cancel  ")
+            .OnClick((s, e) => confirmDialog.Close())
+            .Build();
+
+        var uninstallButton = Controls
+            .Button("  Uninstall  ")
+            .OnClick((s, e) =>
+            {
+                confirmDialog.Close();
+                PerformUninstall(widget);
+            })
+            .Build();
+
+        var buttonGrid = HorizontalGridControl.ButtonRow(cancelButton, uninstallButton);
+        buttonGrid.HorizontalAlignment = SharpConsoleUI.Layout.HorizontalAlignment.Center;
+        buttonGrid.StickyPosition = StickyPosition.Bottom;
+        confirmDialog.AddControl(buttonGrid);
+
+        confirmDialog.KeyPressed += (s, e) =>
         {
+            if (e.KeyInfo.Key == ConsoleKey.Escape)
+            {
+                confirmDialog.Close();
+                e.Handled = true;
+            }
+        };
+
+        _windowSystem.AddWindow(confirmDialog);
+    }
+
+    private static async void PerformUninstall(MarketplaceManager.MarketplaceWidgetInfo widget)
+    {
+        if (_windowSystem == null || _manager == null || _configPath == null)
+            return;
+
+        // Get the installer from the manager
+        var installer = new WidgetInstaller(new RegistryClient(), WidgetPaths.GetMarketplaceInstallPath());
+
+        // Call uninstall
+        var (success, message) = await installer.UninstallWidgetAsync(widget.Id, _configPath);
+
+        if (success)
+        {
+            // Show success notification
             _windowSystem.NotificationStateService.ShowNotification(
-                "Not Implemented",
-                "Uninstall functionality coming soon. Please remove from config manually.",
-                NotificationSeverity.Info,
+                "Uninstall Complete",
+                message,
+                NotificationSeverity.Success,
                 timeout: 5000
+            );
+
+            // Refresh marketplace to update widget status
+            RefreshMarketplace();
+
+            // Trigger dashboard reload callback
+            _onWidgetInstalled?.Invoke();
+        }
+        else
+        {
+            // Show error notification
+            _windowSystem.NotificationStateService.ShowNotification(
+                "Uninstall Failed",
+                message,
+                NotificationSeverity.Danger,
+                timeout: 7000
             );
         }
     }
