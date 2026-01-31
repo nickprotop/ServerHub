@@ -459,7 +459,8 @@ class Program
             {
                 builtRowGrid.Columns[i].BackgroundColor = widgetBgColors[i];
 
-                // Wire up click and double-click events for widget columns (skip spacer columns)
+                // Wire up click events for widget columns (skip spacer columns)
+                // Note: Double-click handler is already registered on PanelControl in CreateWidgetPanel
                 if (i < widgetIdByColumnIndex.Count && widgetIdByColumnIndex[i] != null)
                 {
                     var widgetId = widgetIdByColumnIndex[i]!;
@@ -477,11 +478,8 @@ class Program
                         }
                     };
 
-                    // Double-click: open expansion dialog
-                    builtRowGrid.Columns[i].MouseDoubleClick += (sender, e) =>
-                    {
-                        ShowWidgetDialog(widgetId);
-                    };
+                    // REMOVED: Duplicate MouseDoubleClick handler that was causing two modals to open
+                    // The handler is already registered on the PanelControl via CreateWidgetPanel (line 438)
                 }
             }
 
@@ -1456,6 +1454,15 @@ class Program
     /// </summary>
     private static void ShowWidgetDialog(string widgetId)
     {
+        // CRITICAL FIX: Prevent duplicate modal dialogs from race condition
+        // When scroll happens between double-click events, multiple hit tests can find different
+        // controls, causing the same double-click to be dispatched to multiple widgets.
+        // This guard prevents opening a second modal if one is already open.
+        if (_openModalWidgetId != null)
+        {
+            return;
+        }
+
         if (!_fullWidgetData.TryGetValue(widgetId, out var widgetData))
             return;
 
