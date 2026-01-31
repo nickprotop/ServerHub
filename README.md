@@ -53,6 +53,7 @@ That's it! You now have a working dashboard with 14 bundled widgets. Press `F3` 
 - [What Makes ServerHub Different](#what-makes-serverhub-different)
 - [Core Features](#core-features)
 - [Marketplace](#marketplace) - Browse and install community widgets
+- [Widget Testing](#widget-testing) - Validate widgets before deployment
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Usage](#usage)
@@ -63,6 +64,7 @@ That's it! You now have a working dashboard with 14 bundled widgets. Press `F3` 
 - [Screenshots](docs/SCREENSHOTS.md)
 - [Examples](docs/EXAMPLES.md)
 - [Widget Protocol](docs/WIDGET_PROTOCOL.md)
+- [Widget Testing](docs/WIDGET_TESTING.md)
 
 ## What Makes ServerHub Different
 
@@ -104,7 +106,14 @@ Press `F3` in the dashboard to open the interactive marketplace browser:
 - Filter by verification status (Verified, Community, Unverified)
 - View dependencies and system requirements
 - One-click installation with automatic config integration
+- One-click uninstall for installed widgets (removes file and config)
 - Respects `--widgets-path` if you started ServerHub with a custom widgets directory
+
+**Widget management:**
+- **Install**: Click "Install" button on any available widget
+- **Uninstall**: Click "Uninstall" button on installed widgets (confirmation required)
+- **Update**: Click "Update to X.X.X" when newer versions are available
+- Bundled widgets cannot be uninstalled (only custom/marketplace widgets)
 
 **[View all screenshots](docs/SCREENSHOTS.md)**
 
@@ -137,7 +146,23 @@ serverhub marketplace install username/widget-name@1.0.0
 
 # View installed marketplace widgets
 serverhub marketplace list-installed
+
+# Uninstall marketplace widgets via interactive browser (F3 in dashboard)
 ```
+
+## Widget Testing
+
+Validate widget scripts before deployment with the `test-widget` command:
+
+```bash
+serverhub test-widget mywidget.sh              # Interactive test
+serverhub test-widget mywidget.sh --yes        # Skip confirmation (CI/CD)
+serverhub test-widget mywidget.sh --extended   # Test extended mode
+```
+
+The test command validates protocol compliance, checks action syntax, and provides warnings and suggestions. Returns exit code 0 on success, 1 on failure (CI/CD friendly).
+
+**[Full Widget Testing Documentation](docs/WIDGET_TESTING.md)**
 
 ### Security & Verification
 
@@ -213,6 +238,7 @@ serverhub --init-config config.yaml          # Create config by discovering widg
 serverhub --discover                         # Find and add custom widgets
 serverhub --verify-checksums                 # Verify all widget checksums
 serverhub --dev-mode                         # Development mode (see Security section)
+serverhub test-widget <script> [--yes]       # Test widget protocol compliance
 serverhub --help                             # Show all options
 ```
 
