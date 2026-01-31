@@ -22,6 +22,8 @@ namespace ServerHub.Services;
 /// </summary>
 public class WidgetProtocolParser
 {
+    private readonly List<string> _validationErrors = new();
+
     private static readonly Regex StatusRegex = new(@"\[status:(ok|info|warn|error)\]", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     // Updated to support gradient parameter: [progress:VALUE:GRADIENT:STYLE] or [progress:VALUE:GRADIENT] or [progress:VALUE:STYLE]
@@ -55,12 +57,21 @@ public class WidgetProtocolParser
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     /// <summary>
+    /// Gets the validation errors from the last parse operation
+    /// </summary>
+    public List<string> GetValidationErrors()
+    {
+        return new List<string>(_validationErrors);
+    }
+
+    /// <summary>
     /// Parses widget script output into structured WidgetData
     /// </summary>
     /// <param name="output">Raw script output</param>
     /// <returns>Parsed widget data</returns>
     public WidgetData Parse(string output)
     {
+        _validationErrors.Clear();
         var data = new WidgetData();
         var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
 

@@ -20,7 +20,7 @@ using YamlDotNet.Serialization.NamingConventions;
 
 namespace ServerHub;
 
-class Program
+public class Program
 {
     private static ConsoleWindowSystem? _windowSystem;
     private static Window? _mainWindow;
@@ -46,7 +46,7 @@ class Program
     private static string? _configPath;
     private static DateTime _lastConfigLoadTime = DateTime.MinValue;
 
-    static async Task<int> Main(string[] args)
+    public static async Task<int> Main(string[] args)
     {
         try
         {
@@ -76,6 +76,24 @@ class Program
 
                 var marketplaceCmd = new MarketplaceCommand(marketplaceInstallPath, marketplaceConfigPath);
                 return await marketplaceCmd.ExecuteAsync(options.MarketplaceArgs);
+            }
+
+            // Handle test-widget command
+            if (options.TestWidgetArgs != null && options.TestWidgetArgs.Length > 0)
+            {
+                if (options.TestWidgetArgs.Length < 1)
+                {
+                    Console.WriteLine("Usage: serverhub test-widget <widget-script> [--extended] [--ui] [--yes]");
+                    return 1;
+                }
+
+                var widgetPath = options.TestWidgetArgs[0];
+                var extended = options.TestWidgetArgs.Contains("--extended");
+                var uiMode = options.TestWidgetArgs.Contains("--ui");
+                var skipConfirmation = options.TestWidgetArgs.Contains("--yes") || options.TestWidgetArgs.Contains("-y");
+
+                var testCmd = new TestWidgetCommand();
+                return await testCmd.ExecuteAsync(widgetPath, extended, uiMode, skipConfirmation);
             }
 
             // Set custom widgets path if provided (before other operations)
@@ -1742,6 +1760,11 @@ Select a disabled widget and check 'Enabled' to show it on the dashboard.";
                     options.MarketplaceArgs = args.Skip(i + 1).ToArray();
                     return options;
 
+                case "test-widget":
+                    // Capture all remaining args for test-widget command
+                    options.TestWidgetArgs = args.Skip(i + 1).ToArray();
+                    return options;
+
                 case "--help":
                 case "-h":
                     options.ShowHelp = true;
@@ -2245,6 +2268,20 @@ Select a disabled widget and check 'Enabled' to show it on the dashboard.";
             "  serverhub marketplace install <widget-id>    Install widget from marketplace"
         );
         Console.WriteLine();
+        Console.WriteLine("Widget Testing:");
+        Console.WriteLine(
+            "  serverhub test-widget <script> [options]     Test and validate widget scripts"
+        );
+        Console.WriteLine(
+            "    --extended                                 Test with --extended flag"
+        );
+        Console.WriteLine(
+            "    --ui                                       Launch UI preview mode"
+        );
+        Console.WriteLine(
+            "    --yes, -y                                  Skip confirmation prompt"
+        );
+        Console.WriteLine();
         Console.WriteLine("Widget Search Paths (in priority order):");
         Console.WriteLine("  1. Custom path (if --widgets-path specified)");
         Console.WriteLine("  2. ~/.config/serverhub/widgets/              User custom widgets");
@@ -2271,5 +2308,6 @@ Select a disabled widget and check 'Enabled' to show it on the dashboard.";
         public bool DevMode { get; set; }
         public string? InitConfig { get; set; }
         public string[]? MarketplaceArgs { get; set; }
+        public string[]? TestWidgetArgs { get; set; }
     }
 }

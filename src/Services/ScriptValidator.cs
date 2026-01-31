@@ -133,6 +133,12 @@ public class ScriptValidator
     /// </summary>
     private bool IsPathAllowed(string path)
     {
+        // In test mode, allow any path (security warning already shown to user)
+        if (ApplicationState.IsTestMode)
+        {
+            return true;
+        }
+
         var normalizedPath = Path.GetFullPath(path);
 
         foreach (var searchPath in WidgetPaths.GetSearchPaths())
@@ -152,6 +158,12 @@ public class ScriptValidator
     /// </summary>
     private bool IsExecutable(string path)
     {
+        // In test mode, skip executable check (scripts executed via bash)
+        if (ApplicationState.IsTestMode)
+        {
+            return true;
+        }
+
         // On Windows, all files are "executable" via their extension
         if (OperatingSystem.IsWindows())
         {
