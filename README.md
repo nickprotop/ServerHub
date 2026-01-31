@@ -53,7 +53,7 @@ That's it! You now have a working dashboard with 14 bundled widgets. Press `F3` 
 - [What Makes ServerHub Different](#what-makes-serverhub-different)
 - [Core Features](#core-features)
 - [Marketplace](#marketplace) - Browse and install community widgets
-- [Widget Testing](#widget-testing) - Validate widgets before deployment
+- [Widget Development](docs/WIDGET_DEVELOPMENT.md) - Create and test widgets
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Usage](#usage)
@@ -64,7 +64,7 @@ That's it! You now have a working dashboard with 14 bundled widgets. Press `F3` 
 - [Screenshots](docs/SCREENSHOTS.md)
 - [Examples](docs/EXAMPLES.md)
 - [Widget Protocol](docs/WIDGET_PROTOCOL.md)
-- [Widget Testing](docs/WIDGET_TESTING.md)
+- [Widget Development](docs/WIDGET_DEVELOPMENT.md)
 
 ## What Makes ServerHub Different
 
@@ -411,7 +411,12 @@ Place custom widget scripts in `~/.config/serverhub/widgets/`.
 
 **All custom widgets require SHA256 checksum validation** (see Security section below).
 
+**[Widget Development Guide](docs/WIDGET_DEVELOPMENT.md)** - Create, test, and deploy widgets
+
 ```bash
+# Create widget from template
+serverhub new-widget
+
 # Discover new widgets interactively (recommended)
 serverhub --discover
 

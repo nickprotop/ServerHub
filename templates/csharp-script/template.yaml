@@ -1,0 +1,50 @@
+name: csharp-script
+display_name: C# Script Widget
+description: C# widget using dotnet-script (no compilation required)
+language: csharp
+difficulty: intermediate
+author: ServerHub Team
+tags:
+  - csharp
+  - dotnet-script
+  - scripting
+
+template_file: widget.csx
+
+variables:
+  WIDGET_NAME:
+    description: Widget identifier (lowercase, hyphens, no spaces)
+    required: true
+    pattern: "^[a-z0-9-]+$"
+    example: "service-monitor"
+
+  WIDGET_TITLE:
+    description: Display title shown in dashboard
+    required: false
+    default: "{{WIDGET_NAME}}"
+    example: "Service Monitor"
+
+  REFRESH_INTERVAL:
+    description: Refresh interval in seconds
+    required: false
+    default: "5"
+    pattern: "^[0-9]+$"
+    example: "10"
+
+  AUTHOR:
+    description: Widget author name
+    required: false
+    default: "{{USER}}"
+    example: "John Doe"
+
+  DESCRIPTION:
+    description: Widget description
+    required: false
+    default: "Monitors {{WIDGET_TITLE}}"
+    example: "Monitors system services"
+
+post_creation:
+  - "Install dotnet-script if not already installed: dotnet tool install -g dotnet-script"
+  - "Make the widget executable: chmod +x {{OUTPUT_FILE}}"
+  - "Test the widget: serverhub test-widget {{OUTPUT_FILE}}"
+  - "Add to config: serverhub --discover"

@@ -1,0 +1,49 @@
+name: powershell
+display_name: PowerShell Widget
+description: Cross-platform PowerShell widget
+language: powershell
+difficulty: beginner
+author: ServerHub Team
+tags:
+  - powershell
+  - windows
+  - cross-platform
+
+template_file: widget.ps1
+
+variables:
+  WIDGET_NAME:
+    description: Widget identifier (lowercase, hyphens, no spaces)
+    required: true
+    pattern: "^[a-z0-9-]+$"
+    example: "process-monitor"
+
+  WIDGET_TITLE:
+    description: Display title shown in dashboard
+    required: false
+    default: "{{WIDGET_NAME}}"
+    example: "Process Monitor"
+
+  REFRESH_INTERVAL:
+    description: Refresh interval in seconds
+    required: false
+    default: "5"
+    pattern: "^[0-9]+$"
+    example: "10"
+
+  AUTHOR:
+    description: Widget author name
+    required: false
+    default: "{{USER}}"
+    example: "Jane Smith"
+
+  DESCRIPTION:
+    description: Widget description
+    required: false
+    default: "Monitors {{WIDGET_TITLE}}"
+    example: "Monitors system processes"
+
+post_creation:
+  - "Test the widget: serverhub test-widget {{OUTPUT_FILE}}"
+  - "Add to config: serverhub --discover"
+  - "Note: Ensure PowerShell Core is installed for cross-platform support"

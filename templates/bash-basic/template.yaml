@@ -1,0 +1,49 @@
+name: bash-basic
+display_name: Basic Bash Widget
+description: Simple shell script with status indicators and actions
+language: bash
+difficulty: beginner
+author: ServerHub Team
+tags:
+  - shell
+  - basic
+  - monitoring
+
+template_file: widget.sh
+
+variables:
+  WIDGET_NAME:
+    description: Widget identifier (lowercase, hyphens, no spaces)
+    required: true
+    pattern: "^[a-z0-9-]+$"
+    example: "cpu-monitor"
+
+  WIDGET_TITLE:
+    description: Display title shown in dashboard
+    required: false
+    default: "{{WIDGET_NAME}}"
+    example: "CPU Monitor"
+
+  REFRESH_INTERVAL:
+    description: Refresh interval in seconds
+    required: false
+    default: "5"
+    pattern: "^[0-9]+$"
+    example: "10"
+
+  AUTHOR:
+    description: Widget author name
+    required: false
+    default: "{{USER}}"
+    example: "John Doe"
+
+  DESCRIPTION:
+    description: Widget description
+    required: false
+    default: "Monitors {{WIDGET_TITLE}}"
+    example: "Monitors CPU usage and load"
+
+post_creation:
+  - "Make the widget executable: chmod +x {{OUTPUT_FILE}}"
+  - "Test the widget: serverhub test-widget {{OUTPUT_FILE}}"
+  - "Add to config: serverhub --discover"

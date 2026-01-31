@@ -1,0 +1,51 @@
+name: python-advanced
+display_name: Advanced Python Widget
+description: Python widget with rich visualizations and error handling
+language: python
+difficulty: advanced
+author: ServerHub Team
+tags:
+  - python
+  - graphs
+  - tables
+  - advanced
+
+template_file: widget.py
+
+variables:
+  WIDGET_NAME:
+    description: Widget identifier (lowercase, hyphens, no spaces)
+    required: true
+    pattern: "^[a-z0-9-]+$"
+    example: "api-monitor"
+
+  WIDGET_TITLE:
+    description: Display title shown in dashboard
+    required: false
+    default: "{{WIDGET_NAME}}"
+    example: "API Monitor"
+
+  REFRESH_INTERVAL:
+    description: Refresh interval in seconds
+    required: false
+    default: "5"
+    pattern: "^[0-9]+$"
+    example: "10"
+
+  AUTHOR:
+    description: Widget author name
+    required: false
+    default: "{{USER}}"
+    example: "Jane Smith"
+
+  DESCRIPTION:
+    description: Widget description
+    required: false
+    default: "Advanced monitoring for {{WIDGET_TITLE}}"
+    example: "Advanced API monitoring with statistics"
+
+post_creation:
+  - "Make the widget executable: chmod +x {{OUTPUT_FILE}}"
+  - "Test the widget: serverhub test-widget {{OUTPUT_FILE}}"
+  - "Test extended mode: serverhub test-widget {{OUTPUT_FILE}} --extended"
+  - "Add to config: serverhub --discover"

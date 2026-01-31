@@ -96,6 +96,13 @@ public class Program
                 return await testCmd.ExecuteAsync(widgetPath, extended, uiMode, skipConfirmation);
             }
 
+            // Handle new-widget command
+            if (options.NewWidgetArgs != null)
+            {
+                var newWidgetCmd = new NewWidgetCommand();
+                return await newWidgetCmd.ExecuteAsync(options.NewWidgetArgs);
+            }
+
             // Set custom widgets path if provided (before other operations)
             if (!string.IsNullOrEmpty(options.WidgetsPath))
             {
@@ -1765,6 +1772,11 @@ Select a disabled widget and check 'Enabled' to show it on the dashboard.";
                     options.TestWidgetArgs = args.Skip(i + 1).ToArray();
                     return options;
 
+                case "new-widget":
+                    // Capture all remaining args for new-widget command
+                    options.NewWidgetArgs = args.Skip(i + 1).ToArray();
+                    return options;
+
                 case "--help":
                 case "-h":
                     options.ShowHelp = true;
@@ -2268,6 +2280,26 @@ Select a disabled widget and check 'Enabled' to show it on the dashboard.";
             "  serverhub marketplace install <widget-id>    Install widget from marketplace"
         );
         Console.WriteLine();
+        Console.WriteLine("Widget Creation:");
+        Console.WriteLine(
+            "  serverhub new-widget                         Interactive widget creation wizard"
+        );
+        Console.WriteLine(
+            "  serverhub new-widget list                    List available templates"
+        );
+        Console.WriteLine(
+            "  serverhub new-widget <template> [options]    Create from specific template"
+        );
+        Console.WriteLine(
+            "    --name <name>                              Widget name (identifier)"
+        );
+        Console.WriteLine(
+            "    --output <path>                            Output file path"
+        );
+        Console.WriteLine(
+            "    --<variable> <value>                       Set template variable"
+        );
+        Console.WriteLine();
         Console.WriteLine("Widget Testing:");
         Console.WriteLine(
             "  serverhub test-widget <script> [options]     Test and validate widget scripts"
@@ -2309,5 +2341,6 @@ Select a disabled widget and check 'Enabled' to show it on the dashboard.";
         public string? InitConfig { get; set; }
         public string[]? MarketplaceArgs { get; set; }
         public string[]? TestWidgetArgs { get; set; }
+        public string[]? NewWidgetArgs { get; set; }
     }
 }

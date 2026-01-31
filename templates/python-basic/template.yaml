@@ -1,0 +1,49 @@
+name: python-basic
+display_name: Basic Python Widget
+description: Python widget with basic protocol implementation
+language: python
+difficulty: beginner
+author: ServerHub Team
+tags:
+  - python
+  - basic
+  - monitoring
+
+template_file: widget.py
+
+variables:
+  WIDGET_NAME:
+    description: Widget identifier (lowercase, hyphens, no spaces)
+    required: true
+    pattern: "^[a-z0-9-]+$"
+    example: "network-monitor"
+
+  WIDGET_TITLE:
+    description: Display title shown in dashboard
+    required: false
+    default: "{{WIDGET_NAME}}"
+    example: "Network Monitor"
+
+  REFRESH_INTERVAL:
+    description: Refresh interval in seconds
+    required: false
+    default: "5"
+    pattern: "^[0-9]+$"
+    example: "10"
+
+  AUTHOR:
+    description: Widget author name
+    required: false
+    default: "{{USER}}"
+    example: "Jane Smith"
+
+  DESCRIPTION:
+    description: Widget description
+    required: false
+    default: "Monitors {{WIDGET_TITLE}}"
+    example: "Monitors network traffic and connections"
+
+post_creation:
+  - "Make the widget executable: chmod +x {{OUTPUT_FILE}}"
+  - "Test the widget: serverhub test-widget {{OUTPUT_FILE}}"
+  - "Add to config: serverhub --discover"
