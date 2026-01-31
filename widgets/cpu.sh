@@ -36,17 +36,19 @@ fi
 
 # Store load history (clear if stale)
 load_history_file="$CACHE_DIR/cpu-load.txt"
+last_run_file="$CACHE_DIR/cpu-last-run.txt"
 
-# Clear history if file is older than expected (stale data)
-# Expected: MAX_SAMPLES * refresh_interval seconds (e.g., 30 * 2 = 60s)
-# Grace period: 5x expected (e.g., 300s = 5 minutes)
-if [ -f "$load_history_file" ]; then
-    file_age=$(($(date +%s) - $(stat -c %Y "$load_history_file" 2>/dev/null || echo 0)))
-    max_age=$((MAX_SAMPLES * 2 * 5))  # refresh=2s, grace=5x
-    if [ "$file_age" -gt "$max_age" ]; then
+# Check for stale data based on last run timestamp
+current_time=$(date +%s)
+if [ -f "$last_run_file" ]; then
+    read -r last_time < "$last_run_file"
+    time_diff=$((current_time - last_time))
+    # If gap > 6 seconds (3x refresh interval), clear history
+    if [ "$time_diff" -gt 6 ]; then
         rm -f "$load_history_file"
     fi
 fi
+echo "$current_time" > "$last_run_file"
 
 echo "$load_percent" >> "$load_history_file"
 tail -n "$MAX_SAMPLES" "$load_history_file" > "${load_history_file}.tmp" 2>/dev/null

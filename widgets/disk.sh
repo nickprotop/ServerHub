@@ -15,6 +15,19 @@ echo "refresh: 10"
 CACHE_DIR="$HOME/.cache/serverhub"
 mkdir -p "$CACHE_DIR"
 
+# Check for stale data based on last run timestamp
+last_run_file="$CACHE_DIR/disk-last-run.txt"
+current_time=$(date +%s)
+if [ -f "$last_run_file" ]; then
+    read -r last_time < "$last_run_file"
+    time_diff=$((current_time - last_time))
+    # If gap > 30 seconds (3x refresh interval), clear all disk history
+    if [ "$time_diff" -gt 30 ]; then
+        rm -f "$CACHE_DIR"/disk*-usage.txt
+    fi
+fi
+echo "$current_time" > "$last_run_file"
+
 # Dashboard mode: Quick overview of main filesystems
 if [ "$EXTENDED" = false ]; then
     echo "row: [bold]Main Filesystems:[/]"
@@ -32,15 +45,6 @@ if [ "$EXTENDED" = false ]; then
         # Store history for trending
         mount_safe=$(echo "$mount" | tr '/' '_')
         history_file="$CACHE_DIR/disk${mount_safe}-usage.txt"
-
-        # Clear history if file is older than expected (stale data)
-        if [ -f "$history_file" ]; then
-            file_age=$(($(date +%s) - $(stat -c %Y "$history_file" 2>/dev/null || echo 0)))
-            max_age=$((10 * 10 * 5))  # 10 samples, refresh=10s, grace=5x
-            if [ "$file_age" -gt "$max_age" ]; then
-                rm -f "$history_file"
-            fi
-        fi
 
         echo "$pct" >> "$history_file"
         tail -n 10 "$history_file" > "${history_file}.tmp" 2>/dev/null
@@ -84,15 +88,6 @@ else
         # Store history
         mount_safe=$(echo "$mount" | tr '/' '_')
         history_file="$CACHE_DIR/disk${mount_safe}-usage.txt"
-
-        # Clear history if file is older than expected (stale data)
-        if [ -f "$history_file" ]; then
-            file_age=$(($(date +%s) - $(stat -c %Y "$history_file" 2>/dev/null || echo 0)))
-            max_age=$((30 * 10 * 5))  # 30 samples, refresh=10s, grace=5x
-            if [ "$file_age" -gt "$max_age" ]; then
-                rm -f "$history_file"
-            fi
-        fi
 
         echo "$pct" >> "$history_file"
         tail -n 30 "$history_file" > "${history_file}.tmp" 2>/dev/null

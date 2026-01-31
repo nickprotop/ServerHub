@@ -78,7 +78,7 @@ public class WidgetProtocolParser
             // Parse protocol elements
             if (trimmedLine.StartsWith("title:", StringComparison.OrdinalIgnoreCase))
             {
-                data.Title = trimmedLine.Substring(6).Trim();
+                data.Title = ContentSanitizer.Sanitize(trimmedLine.Substring(6).Trim());
             }
             else if (trimmedLine.StartsWith("refresh:", StringComparison.OrdinalIgnoreCase))
             {

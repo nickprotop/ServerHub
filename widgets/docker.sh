@@ -15,6 +15,19 @@ echo "refresh: 5"
 CACHE_DIR="$HOME/.cache/serverhub"
 mkdir -p "$CACHE_DIR"
 
+# Check for stale data based on last run timestamp
+last_run_file="$CACHE_DIR/docker-last-run.txt"
+current_time=$(date +%s)
+if [ -f "$last_run_file" ]; then
+    read -r last_time < "$last_run_file"
+    time_diff=$((current_time - last_time))
+    # If gap > 15 seconds (3x refresh interval), clear all docker history
+    if [ "$time_diff" -gt 15 ]; then
+        rm -f "$CACHE_DIR"/docker-*-cpu.txt "$CACHE_DIR"/docker-*-mem.txt
+    fi
+fi
+echo "$current_time" > "$last_run_file"
+
 # Check if docker is installed and accessible
 if ! command -v docker &> /dev/null; then
     echo "row: [status:error] Docker not installed"
@@ -92,21 +105,9 @@ if [ $running -gt 0 ]; then
             [ "$mem_pct" -gt 100 ] && mem_pct=100
             [ "$mem_pct" -lt 0 ] && mem_pct=0
 
-            # Clear history if files are older than expected (stale data)
+            # Store history
             cpu_history_file="$CACHE_DIR/docker-${name}-cpu.txt"
             mem_history_file="$CACHE_DIR/docker-${name}-mem.txt"
-
-            for history_file in "$cpu_history_file" "$mem_history_file"; do
-                if [ -f "$history_file" ]; then
-                    file_age=$(($(date +%s) - $(stat -c %Y "$history_file" 2>/dev/null || echo 0)))
-                    max_age=$((MAX_SAMPLES * 5 * 5))  # refresh=5s, grace=5x
-                    if [ "$file_age" -gt "$max_age" ]; then
-                        rm -f "$history_file"
-                    fi
-                fi
-            done
-
-            # Store history
             store_history "$cpu_history_file" "$cpu_pct" "$MAX_SAMPLES"
             store_history "$mem_history_file" "$mem_pct" "$MAX_SAMPLES"
 
@@ -153,21 +154,9 @@ if [ $running -gt 0 ]; then
             [ "$mem_pct" -gt 100 ] && mem_pct=100
             [ "$mem_pct" -lt 0 ] && mem_pct=0
 
-            # Clear history if files are older than expected (stale data)
+            # Store history
             cpu_history_file="$CACHE_DIR/docker-${name}-cpu.txt"
             mem_history_file="$CACHE_DIR/docker-${name}-mem.txt"
-
-            for history_file in "$cpu_history_file" "$mem_history_file"; do
-                if [ -f "$history_file" ]; then
-                    file_age=$(($(date +%s) - $(stat -c %Y "$history_file" 2>/dev/null || echo 0)))
-                    max_age=$((MAX_SAMPLES * 5 * 5))  # refresh=5s, grace=5x
-                    if [ "$file_age" -gt "$max_age" ]; then
-                        rm -f "$history_file"
-                    fi
-                fi
-            done
-
-            # Store history
             store_history "$cpu_history_file" "$cpu_pct" "$MAX_SAMPLES"
             store_history "$mem_history_file" "$mem_pct" "$MAX_SAMPLES"
 

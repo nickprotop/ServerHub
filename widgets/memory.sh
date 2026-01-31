@@ -37,15 +37,20 @@ fi
 
 # Store memory history (clear if stale)
 mem_history_file="$CACHE_DIR/memory-usage.txt"
+swap_history_file="$CACHE_DIR/swap-usage.txt"
+last_run_file="$CACHE_DIR/memory-last-run.txt"
 
-# Clear history if file is older than expected (stale data)
-if [ -f "$mem_history_file" ]; then
-    file_age=$(($(date +%s) - $(stat -c %Y "$mem_history_file" 2>/dev/null || echo 0)))
-    max_age=$((MAX_SAMPLES * 2 * 5))  # refresh=2s, grace=5x
-    if [ "$file_age" -gt "$max_age" ]; then
-        rm -f "$mem_history_file"
+# Check for stale data based on last run timestamp
+current_time=$(date +%s)
+if [ -f "$last_run_file" ]; then
+    read -r last_time < "$last_run_file"
+    time_diff=$((current_time - last_time))
+    # If gap > 6 seconds (3x refresh interval), clear history
+    if [ "$time_diff" -gt 6 ]; then
+        rm -f "$mem_history_file" "$swap_history_file"
     fi
 fi
+echo "$current_time" > "$last_run_file"
 
 echo "$percent" >> "$mem_history_file"
 tail -n "$MAX_SAMPLES" "$mem_history_file" > "${mem_history_file}.tmp" 2>/dev/null
@@ -60,7 +65,6 @@ fi
 
 # Store swap history if swap exists
 if [ "$swap_total" -gt 0 ]; then
-    swap_history_file="$CACHE_DIR/swap-usage.txt"
     echo "$swap_percent" >> "$swap_history_file"
     tail -n "$MAX_SAMPLES" "$swap_history_file" > "${swap_history_file}.tmp" 2>/dev/null
     mv "${swap_history_file}.tmp" "$swap_history_file" 2>/dev/null

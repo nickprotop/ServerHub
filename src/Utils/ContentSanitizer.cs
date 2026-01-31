@@ -3,6 +3,7 @@
 
 using System.Text;
 using System.Text.RegularExpressions;
+using Spectre.Console;
 
 namespace ServerHub.Utils;
 
@@ -168,9 +169,27 @@ public static class ContentSanitizer
 
     /// <summary>
     /// Checks if a bracket expression is a valid Spectre.Console markup tag.
+    /// Uses Spectre.Console's own parser to validate.
     /// </summary>
     private static bool IsValidMarkupTag(string tag)
     {
-        return ValidMarkupPattern.IsMatch(tag);
+        // Closing tag [/] is always valid
+        if (tag == "[/]")
+            return true;
+
+        // First check with regex for basic structure
+        if (!ValidMarkupPattern.IsMatch(tag))
+            return false;
+
+        // Then validate with Spectre.Console to ensure color/style actually exists
+        try
+        {
+            _ = new Markup(tag + "[/]"); // Try to parse it
+            return true;
+        }
+        catch
+        {
+            return false; // Invalid Spectre markup
+        }
     }
 }

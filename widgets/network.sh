@@ -50,8 +50,9 @@ if [ -f "$LAST_SAMPLE_FILE" ]; then
         rx_speed_kb=$((rx_diff / 1024 / time_diff))
         tx_speed_kb=$((tx_diff / 1024 / time_diff))
     elif [ "$time_diff" -gt 5 ]; then
-        # Sample is stale - don't store in history, just update baseline
+        # Sample is stale - clear old history and update baseline
         should_store_history=false
+        rm -f "$RX_SPEED_HISTORY" "$TX_SPEED_HISTORY"
     fi
 fi
 
@@ -122,13 +123,13 @@ format_bytes() {
     fi
 }
 
-# Format speed
+# Format speed with fixed width (9 chars, right-aligned)
 format_speed() {
     local speed_kb=$1
     if [ "$speed_kb" -ge 1024 ]; then
-        awk "BEGIN {printf \"%.1f MB/s\", $speed_kb/1024}"
+        awk "BEGIN {printf \"%9s\", sprintf(\"%.1f MB/s\", $speed_kb/1024)}"
     else
-        awk "BEGIN {printf \"%.0f KB/s\", $speed_kb}"
+        awk "BEGIN {printf \"%9s\", sprintf(\"%.0f KB/s\", $speed_kb)}"
     fi
 }
 

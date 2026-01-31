@@ -8,9 +8,10 @@ if [[ "$1" == "--extended" ]]; then
     EXTENDED=true
 fi
 
-# Helper function to strip ANSI codes and escape markup characters
+# Helper function to strip ANSI codes
+# Note: Bracket escaping is handled by ContentSanitizer in the C# code
 strip_ansi() {
-    sed 's/\x1b\[[0-9;]*m//g' | sed 's/\[/⦗/g' | sed 's/\]/⦘/g'
+    sed 's/\x1b\[[0-9;]*m//g'
 }
 
 echo "title: Recent Logs"

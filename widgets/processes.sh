@@ -126,7 +126,7 @@ else
         if (length(user) > 12) user = substr(user, 1, 12)
         cpu = int($3 + 0.5)
         mem = int($4 + 0.5)
-        printf "[tablerow:%s|[miniprogress:%d:8:warm]|[miniprogress:%d:8:spectrum]|%s|%s]\n", cmd, mem, cpu, user, $2
+        printf "[tablerow:%s|[miniprogress:%d:8:warm]|[miniprogress:%d:8:warm]|%s|%s]\n", cmd, mem, cpu, user, $2
     }'
 
     # Zombie process details
@@ -140,9 +140,7 @@ else
             pid = $1
             ppid = $2
             cmd = $4
-            # Escape brackets in process names to prevent markup conflicts
-            gsub(/\[/, "⦗", cmd)
-            gsub(/\]/, "⦘", cmd)
+            # Note: Bracket escaping is handled by ContentSanitizer in the C# code
             if (length(cmd) > 25) cmd = substr(cmd, 1, 25)
             printf "[tablerow:%s|[yellow]%s[/]|%s]\n", pid, cmd, ppid
         }' | head -n 10

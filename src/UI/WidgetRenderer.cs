@@ -114,13 +114,11 @@ public class WidgetRenderer
             }
 
             // Apply truncation if maxLines specified
-            bool wasTruncated = false;
             if (maxLines.HasValue)
             {
                 // Check if we need to truncate based on actual line count
                 if (expandedLines.Count > maxLines.Value)
                 {
-                    wasTruncated = true;
                     // Truncate to maxLines
                     lines = expandedLines.Take(maxLines.Value).ToList();
                 }
@@ -148,10 +146,6 @@ public class WidgetRenderer
                 infoLine += $"  [grey70]•[/]  [cyan1]{actionCount} {actionText}[/]";
             }
 
-            if (wasTruncated && showTruncationIndicator)
-            {
-                infoLine += "  [grey70]•[/]  [cyan1]⏎ Press Enter[/] [grey70]or[/] [cyan1]Double-Click[/] [grey70]to expand[/]";
-            }
             lines.Add(infoLine);
         }
 
