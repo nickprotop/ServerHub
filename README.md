@@ -1,10 +1,28 @@
 # ServerHub
 
+<div align="center">
+  <img src=".github/logo.svg" alt="ServerHub Logo" width="600">
+</div>
+
+<div align="center">
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-9.0-purple.svg)](https://dotnet.microsoft.com/)
 [![Platform](https://img.shields.io/badge/Platform-Linux-orange.svg)]()
 
+</div>
+
 **An extensible server dashboard that doesn't just watch—it acts.**
+
+<div align="center">
+
+### ⭐ If you find ServerHub useful, please consider giving it a star! ⭐
+
+It helps others discover the project and motivates continued development.
+
+[![GitHub stars](https://img.shields.io/github/stars/nickprotop/ServerHub?style=for-the-badge&logo=github&color=yellow)](https://github.com/nickprotop/ServerHub/stargazers)
+
+</div>
 
 ServerHub is a terminal control panel for servers and homelabs. Monitor your system, execute actions, and build custom monitoring for your specific setup—all without touching the codebase.
 
