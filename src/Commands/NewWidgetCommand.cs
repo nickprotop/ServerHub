@@ -427,9 +427,9 @@ public class NewWidgetCommand
 
         if (!string.IsNullOrEmpty(varDef.Default))
         {
-            // Substitute existing variables in default
+            // Substitute existing variables in default - escape to prevent markup issues
             var defaultValue = _substitution.Substitute(varDef.Default, existingVariables);
-            prompt.DefaultValue(defaultValue);
+            prompt.DefaultValue(Markup.Escape(defaultValue));
             prompt.AllowEmpty();
         }
         else if (!varDef.Required)
