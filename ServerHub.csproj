@@ -26,12 +26,13 @@
 
   <!-- Production/CI: use NuGet package -->
   <ItemGroup Condition="!Exists('../ConsoleEx/SharpConsoleUI/SharpConsoleUI.csproj')">
-    <PackageReference Include="SharpConsoleUI" Version="2.4.11" />
+    <PackageReference Include="SharpConsoleUI" Version="2.4.12" />
   </ItemGroup>
 
   <!-- Exclude generated files from auto-discovery, we'll add them explicitly -->
   <ItemGroup>
     <Compile Remove="src/Config/*.g.cs" />
+    <Compile Remove="tests/**/*.cs" />
   </ItemGroup>
 
   <!-- Generate bundled widget checksums before compilation -->
