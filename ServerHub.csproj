@@ -32,6 +32,7 @@
   <!-- Exclude generated files from auto-discovery, we'll add them explicitly -->
   <ItemGroup>
     <Compile Remove="src/Config/*.g.cs" />
+    <Compile Remove="tests/**/*.cs" />
   </ItemGroup>
 
   <!-- Generate bundled widget checksums before compilation -->
