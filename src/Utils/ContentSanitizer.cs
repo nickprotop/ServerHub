@@ -44,11 +44,20 @@ public static class ContentSanitizer
         if (string.IsNullOrEmpty(content))
             return content;
 
-        // Step 1: Strip ANSI escape codes
-        var stripped = StripAnsiCodes(content);
+        try
+        {
+            // Step 1: Strip ANSI escape codes
+            var stripped = StripAnsiCodes(content);
 
-        // Step 2: Escape brackets that aren't valid Spectre markup
-        return EscapeInvalidBrackets(stripped);
+            // Step 2: Escape brackets that aren't valid Spectre markup
+            return EscapeInvalidBrackets(stripped);
+        }
+        catch (Exception)
+        {
+            // Fallback: If sanitization fails, use aggressive escaping (escape ALL brackets)
+            // This ensures content is always safe, even if less sophisticated
+            return EscapeAllBrackets(content);
+        }
     }
 
     /// <summary>
@@ -60,7 +69,15 @@ public static class ContentSanitizer
         if (string.IsNullOrEmpty(text))
             return text;
 
-        return AnsiEscapeRegex.Replace(text, "");
+        try
+        {
+            return AnsiEscapeRegex.Replace(text, "");
+        }
+        catch
+        {
+            // If regex fails, return original text (safer than empty)
+            return text;
+        }
     }
 
     /// <summary>
@@ -73,70 +90,78 @@ public static class ContentSanitizer
         if (string.IsNullOrEmpty(text))
             return text;
 
-        var result = new StringBuilder(text.Length + 16);
-        int i = 0;
-
-        while (i < text.Length)
+        try
         {
-            if (text[i] == '[')
+            var result = new StringBuilder(text.Length + 16);
+            int i = 0;
+
+            while (i < text.Length)
             {
-                // Check if already escaped [[
-                if (i + 1 < text.Length && text[i + 1] == '[')
+                if (text[i] == '[')
                 {
-                    result.Append("[[");
-                    i += 2;
-                    continue;
-                }
-
-                // Find the closing bracket
-                int closeBracket = FindClosingBracket(text, i);
-                if (closeBracket > i)
-                {
-                    var potentialTag = text.Substring(i, closeBracket - i + 1);
-
-                    if (IsValidMarkupTag(potentialTag))
+                    // Check if already escaped [[
+                    if (i + 1 < text.Length && text[i + 1] == '[')
                     {
-                        // Valid markup - keep as is
-                        result.Append(potentialTag);
-                        i = closeBracket + 1;
+                        result.Append("[[");
+                        i += 2;
+                        continue;
+                    }
+
+                    // Find the closing bracket
+                    int closeBracket = FindClosingBracket(text, i);
+                    if (closeBracket > i)
+                    {
+                        var potentialTag = text.Substring(i, closeBracket - i + 1);
+
+                        if (IsValidMarkupTag(potentialTag))
+                        {
+                            // Valid markup - keep as is
+                            result.Append(potentialTag);
+                            i = closeBracket + 1;
+                        }
+                        else
+                        {
+                            // Not valid markup - escape the opening bracket
+                            result.Append("[[");
+                            i++;
+                        }
                     }
                     else
                     {
-                        // Not valid markup - escape the opening bracket
+                        // No closing bracket found - escape it
                         result.Append("[[");
+                        i++;
+                    }
+                }
+                else if (text[i] == ']')
+                {
+                    // Check if already escaped ]]
+                    if (i + 1 < text.Length && text[i + 1] == ']')
+                    {
+                        result.Append("]]");
+                        i += 2;
+                    }
+                    else
+                    {
+                        // Lone closing bracket - escape it
+                        result.Append("]]");
                         i++;
                     }
                 }
                 else
                 {
-                    // No closing bracket found - escape it
-                    result.Append("[[");
+                    result.Append(text[i]);
                     i++;
                 }
             }
-            else if (text[i] == ']')
-            {
-                // Check if already escaped ]]
-                if (i + 1 < text.Length && text[i + 1] == ']')
-                {
-                    result.Append("]]");
-                    i += 2;
-                }
-                else
-                {
-                    // Lone closing bracket - escape it
-                    result.Append("]]");
-                    i++;
-                }
-            }
-            else
-            {
-                result.Append(text[i]);
-                i++;
-            }
-        }
 
-        return result.ToString();
+            return result.ToString();
+        }
+        catch
+        {
+            // Fallback: Use aggressive escaping if sophisticated logic fails
+            return text.Replace("[", "[[").Replace("]", "]]");
+        }
     }
 
     /// <summary>
@@ -190,6 +215,33 @@ public static class ContentSanitizer
         catch
         {
             return false; // Invalid Spectre markup
+        }
+    }
+
+    /// <summary>
+    /// Fallback sanitization: Aggressively escapes ALL brackets without validation.
+    /// Used when sophisticated sanitization fails. Strips ANSI codes and escapes all [ and ].
+    /// This sacrifices markup preservation for guaranteed safety.
+    /// </summary>
+    private static string EscapeAllBrackets(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return text;
+
+        try
+        {
+            // Strip ANSI codes first
+            var stripped = AnsiEscapeRegex.Replace(text, "");
+
+            // Escape ALL brackets (no validation)
+            return stripped
+                .Replace("[", "[[")
+                .Replace("]", "]]");
+        }
+        catch
+        {
+            // Ultimate fallback: return empty string rather than crash
+            return string.Empty;
         }
     }
 }

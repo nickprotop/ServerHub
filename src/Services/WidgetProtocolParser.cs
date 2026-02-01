@@ -89,7 +89,15 @@ public class WidgetProtocolParser
             // Parse protocol elements
             if (trimmedLine.StartsWith("title:", StringComparison.OrdinalIgnoreCase))
             {
-                data.Title = ContentSanitizer.Sanitize(trimmedLine.Substring(6).Trim());
+                try
+                {
+                    data.Title = ContentSanitizer.Sanitize(trimmedLine.Substring(6).Trim());
+                }
+                catch
+                {
+                    // Fallback: Use raw title without sanitization (risky but better than crashing)
+                    data.Title = trimmedLine.Substring(6).Trim();
+                }
             }
             else if (trimmedLine.StartsWith("refresh:", StringComparison.OrdinalIgnoreCase))
             {
@@ -219,7 +227,15 @@ public class WidgetProtocolParser
 
         // Sanitize remaining content (strip ANSI, escape invalid brackets)
         // This protects against system data containing brackets like [kworker/0:1]
-        content = ContentSanitizer.Sanitize(content);
+        try
+        {
+            content = ContentSanitizer.Sanitize(content);
+        }
+        catch
+        {
+            // Fallback: Return unsanitized content (risky but better than losing data)
+            // ContentSanitizer has its own fallback, so this should rarely happen
+        }
 
         return content;
     }
@@ -369,7 +385,15 @@ public class WidgetProtocolParser
 
         // Sanitize final content (strip ANSI codes, escape invalid brackets)
         // This protects against system data containing brackets like [kworker/0:1]
-        row.Content = ContentSanitizer.Sanitize(row.Content);
+        try
+        {
+            row.Content = ContentSanitizer.Sanitize(row.Content);
+        }
+        catch
+        {
+            // Fallback: Keep unsanitized content (risky but better than losing data)
+            // ContentSanitizer has its own fallback, so this should rarely happen
+        }
 
         return row;
     }

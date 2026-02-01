@@ -133,11 +133,12 @@ public static class WidgetExpansionDialog
         loadingPanel.Visible = true;
         modal.AddControl(loadingPanel);
 
-        // Build content directly without panel wrapper (dialog already has border)
-        var widgetPanel = Controls.Markup()
+        // Build content using borderless PanelControl (avoids double-escaping from MarkupControl)
+        var widgetPanel = Controls.Panel()
             .WithName("modal_widget")
             .WithBackgroundColor(Color.Grey15)
-            .WithMargin(1, 0, 1, 0)  // Left and right margins for padding
+            .WithPadding(1, 0, 1, 0)  // Left and right padding
+            .NoBorder()  // No border (dialog already has border)
             .Build();
 
         // Populate with initial content
@@ -555,10 +556,42 @@ public static class WidgetExpansionDialog
                         firstLoad = false;
                     }
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
                     // Ensure flag is reset on error
                     refreshState.IsRefreshing = false;
+
+                    // Show error message in widget panel
+                    if (context.WidgetPanel is PanelControl errorPanel)
+                    {
+                        try
+                        {
+                            var errorMessage = string.Join("\n", new[]
+                            {
+                                "",
+                                "[red bold]⚠ Refresh Error[/]",
+                                "",
+                                "[grey70]Failed to refresh widget data.[/]",
+                                $"[grey50]{ex.GetType().Name}: {ex.Message}[/]",
+                                "",
+                                "[grey50]The widget will retry automatically.[/]"
+                            });
+                            errorPanel.SetContent(errorMessage);
+                        }
+                        catch
+                        {
+                            // Fallback: plain text error
+                            errorPanel.SetContent("Refresh error. Will retry automatically.");
+                        }
+                    }
+
+                    // Still show content if first load failed
+                    if (firstLoad && context.LoadingPanel != null && context.MainGrid != null)
+                    {
+                        context.LoadingPanel.Visible = false;
+                        context.MainGrid.Visible = true;
+                        firstLoad = false;
+                    }
                 }
             });
         }
@@ -597,6 +630,61 @@ public static class WidgetExpansionDialog
         catch (OperationCanceledException)
         {
             // Expected when modal closes
+        }
+        catch (Exception ex)
+        {
+            // Initial refresh failed - show error message
+            refreshState.IsRefreshing = false;
+
+            if (context.WidgetPanel is PanelControl errorPanel)
+            {
+                try
+                {
+                    var errorMessage = string.Join("\n", new[]
+                    {
+                        "",
+                        "[red bold]⚠ Initial Load Error[/]",
+                        "",
+                        "[grey70]Failed to load widget data.[/]",
+                        $"[grey50]{ex.GetType().Name}: {ex.Message}[/]",
+                        "",
+                        "[grey50]The widget will retry automatically.[/]"
+                    });
+                    errorPanel.SetContent(errorMessage);
+                }
+                catch
+                {
+                    // Fallback: plain text error
+                    errorPanel.SetContent("Failed to load widget data. Will retry automatically.");
+                }
+            }
+
+            // Show content panel even if load failed
+            if (context.LoadingPanel != null && context.MainGrid != null)
+            {
+                context.LoadingPanel.Visible = false;
+                context.MainGrid.Visible = true;
+                firstLoad = false;
+            }
+
+            // Still create timer to retry
+            timer = new Timer(
+                RefreshCallback,
+                null,
+                TimeSpan.FromSeconds(refreshInterval),
+                TimeSpan.FromSeconds(refreshInterval)
+            );
+            setAutoRefreshTimer(timer);
+
+            // Wait for cancellation
+            try
+            {
+                await Task.Delay(Timeout.Infinite, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected when modal closes
+            }
         }
         finally
         {
@@ -695,9 +783,9 @@ public static class WidgetExpansionDialog
         UpdateHeader(context, newData, false, 0);
 
         // Update widget content
-        if (context.WidgetPanel != null && context.WidgetPanel is MarkupControl markup)
+        if (context.WidgetPanel != null && context.WidgetPanel is PanelControl panel)
         {
-            UpdateWidgetContent(markup, newData, context.Renderer!);
+            UpdateWidgetContent(panel, newData, context.Renderer!);
         }
 
         // Update actions list only if actions changed
@@ -725,51 +813,86 @@ public static class WidgetExpansionDialog
     }
 
     /// <summary>
-    /// Updates widget content directly in a MarkupControl (no panel wrapper)
+    /// Updates widget content in a borderless PanelControl (avoids double-escaping)
     /// </summary>
-    private static void UpdateWidgetContent(MarkupControl markup, WidgetData widgetData, WidgetRenderer renderer)
+    private static void UpdateWidgetContent(PanelControl panel, WidgetData widgetData, WidgetRenderer renderer)
     {
-        var lines = new List<string>();
+        try
+        {
+            var lines = new List<string>();
 
-        if (widgetData.HasError)
-        {
-            lines.Add($"[red]Error:[/] {widgetData.Error}");
-        }
-        else
-        {
-            foreach (var row in widgetData.Rows)
+            if (widgetData.HasError)
             {
-                lines.Add(FormatRowForExpansion(row, renderer));
-            }
-        }
-
-        // Add footer info
-        lines.Add("");
-        var infoLine = $"[grey70]Updated: {widgetData.Timestamp:HH:mm:ss}[/]";
-        if (widgetData.HasActions)
-        {
-            var actionCount = widgetData.Actions.Count;
-            var actionText = actionCount == 1 ? "action" : "actions";
-            infoLine += $"  [grey70]•[/]  [cyan1]{actionCount} {actionText}[/]";
-        }
-        lines.Add(infoLine);
-
-        // Expand embedded newlines into separate list items
-        // This fixes ScrollablePanel height calculation
-        var expandedLines = new List<string>();
-        foreach (var line in lines)
-        {
-            if (line.Contains('\n'))
-            {
-                expandedLines.AddRange(line.Split('\n'));
+                lines.Add($"[red]Error:[/] {widgetData.Error}");
             }
             else
             {
-                expandedLines.Add(line);
+                foreach (var row in widgetData.Rows)
+                {
+                    try
+                    {
+                        lines.Add(FormatRowForExpansion(row, renderer));
+                    }
+                    catch (Exception ex)
+                    {
+                        // If a single row fails, show error and continue with other rows
+                        lines.Add($"[red]⚠ Row Rendering Error:[/] [grey50]{ex.Message}[/]");
+                    }
+                }
+            }
+
+            // Add footer info
+            lines.Add("");
+            var infoLine = $"[grey70]Updated: {widgetData.Timestamp:HH:mm:ss}[/]";
+            if (widgetData.HasActions)
+            {
+                var actionCount = widgetData.Actions.Count;
+                var actionText = actionCount == 1 ? "action" : "actions";
+                infoLine += $"  [grey70]•[/]  [cyan1]{actionCount} {actionText}[/]";
+            }
+            lines.Add(infoLine);
+
+            // Expand embedded newlines into separate list items
+            // This fixes ScrollablePanel height calculation
+            var expandedLines = new List<string>();
+            foreach (var line in lines)
+            {
+                if (line.Contains('\n'))
+                {
+                    expandedLines.AddRange(line.Split('\n'));
+                }
+                else
+                {
+                    expandedLines.Add(line);
+                }
+            }
+
+            panel.SetContent(string.Join("\n", expandedLines));
+        }
+        catch (Exception ex)
+        {
+            // Critical failure: Show friendly error message
+            try
+            {
+                var errorMessage = string.Join("\n", new[]
+                {
+                    "",
+                    "[red bold]⚠ Widget Rendering Error[/]",
+                    "",
+                    "[grey70]Unable to display widget content.[/]",
+                    $"[grey50]{ex.GetType().Name}: {ex.Message}[/]",
+                    "",
+                    "[grey50]The widget data may contain invalid formatting.[/]",
+                    "[grey50]Check widget script output and logs for details.[/]"
+                });
+                panel.SetContent(errorMessage);
+            }
+            catch
+            {
+                // Ultimate fallback: Set plain text error (no markup)
+                panel.SetContent("Widget rendering error. See logs for details.");
             }
         }
-
-        markup.SetContent(expandedLines);
     }
 
     /// <summary>

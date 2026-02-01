@@ -31,8 +31,28 @@ public class WidgetRenderer
     /// <returns>Control to display the widget</returns>
     public IWindowControl CreateWidgetPanel(string widgetId, WidgetData widgetData, bool isPinned, Color? backgroundColor = null, Color? borderColor = null, Action<string>? onClickCallback = null, Action<string>? onDoubleClickCallback = null, int? maxLines = null, bool showTruncationIndicator = true)
     {
-        var lines = BuildWidgetContent(widgetData, isPinned, maxLines, showTruncationIndicator);
-        var content = string.Join("\n", lines);
+        string content;
+        string title;
+
+        try
+        {
+            var lines = BuildWidgetContent(widgetData, isPinned, maxLines, showTruncationIndicator);
+            content = string.Join("\n", lines);
+            title = widgetData.Title;
+        }
+        catch (Exception ex)
+        {
+            // Fallback: Show error in widget
+            content = string.Join("\n", new[]
+            {
+                "",
+                "[red]⚠ Widget Error[/]",
+                "",
+                $"[grey50]{ex.GetType().Name}[/]",
+                $"[grey50]{ex.Message}[/]"
+            });
+            title = widgetData.Title ?? "Error";
+        }
 
         var bgColor = backgroundColor ?? Color.Grey11;
         var borderCol = borderColor ?? Color.Grey35;
@@ -42,7 +62,7 @@ public class WidgetRenderer
             .WithContent(content)
             .Rounded()
             .WithBorderColor(borderCol)
-            .WithHeader(widgetData.Title)
+            .WithHeader(title)
             .HeaderLeft()  // Left-aligned title
             .WithPadding(1, 0, 1, 0)
             .WithBackgroundColor(bgColor)
@@ -95,7 +115,15 @@ public class WidgetRenderer
             {
                 foreach (var row in widgetData.Rows)
                 {
-                    lines.Add(FormatRow(row));
+                    try
+                    {
+                        lines.Add(FormatRow(row));
+                    }
+                    catch (Exception ex)
+                    {
+                        // If a row fails, show error and continue with other rows
+                        lines.Add($"[red]⚠ Row Error:[/] [grey50]{ex.Message}[/]");
+                    }
                 }
             }
 
@@ -385,13 +413,37 @@ public class WidgetRenderer
     {
         if (control is PanelControl panel)
         {
-            // Determine if pinned based on control name
-            var isPinned = control.Name?.Contains("_pinned") ?? false;
-            var lines = BuildWidgetContent(widgetData, isPinned, maxLines, showTruncationIndicator);
-            var content = string.Join("\n", lines);
+            try
+            {
+                // Determine if pinned based on control name
+                var isPinned = control.Name?.Contains("_pinned") ?? false;
+                var lines = BuildWidgetContent(widgetData, isPinned, maxLines, showTruncationIndicator);
+                var content = string.Join("\n", lines);
 
-            panel.SetContent(content);
-            panel.Header = widgetData.Title;
+                panel.SetContent(content);
+                panel.Header = widgetData.Title;
+            }
+            catch (Exception ex)
+            {
+                // Fallback: Show error in panel
+                try
+                {
+                    var errorContent = string.Join("\n", new[]
+                    {
+                        "",
+                        "[red]⚠ Update Error[/]",
+                        "",
+                        $"[grey50]{ex.GetType().Name}[/]",
+                        $"[grey50]{ex.Message}[/]"
+                    });
+                    panel.SetContent(errorContent);
+                }
+                catch
+                {
+                    // Ultimate fallback: plain text
+                    panel.SetContent("Update error. See logs.");
+                }
+            }
         }
     }
 }
