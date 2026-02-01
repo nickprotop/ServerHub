@@ -151,11 +151,11 @@ public class NewWidgetCommand
             };
 
             table.AddRow(
-                $"[cyan]{template.Id}[/]",
-                template.Name,
-                template.Language,
-                $"[{difficultyColor}]{template.Difficulty}[/]",
-                $"[dim]{template.Description}[/]"
+                $"[cyan]{Markup.Escape(template.Id)}[/]",
+                Markup.Escape(template.Name),
+                Markup.Escape(template.Language),
+                $"[{difficultyColor}]{Markup.Escape(template.Difficulty)}[/]",
+                $"[dim]{Markup.Escape(template.Description)}[/]"
             );
         }
 
@@ -179,7 +179,7 @@ public class NewWidgetCommand
         if (metadata == null)
             return 1;
 
-        AnsiConsole.MarkupLine($"[bold cyan]Creating widget from template:[/] {metadata.DisplayName}");
+        AnsiConsole.MarkupLine($"[bold cyan]Creating widget from template:[/] {Markup.Escape(metadata.DisplayName)}");
         AnsiConsole.WriteLine();
 
         // Collect variable values (from options or prompt)
@@ -256,8 +256,8 @@ public class NewWidgetCommand
             return 1;
 
         AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine($"[bold]Template:[/] {metadata.DisplayName}");
-        AnsiConsole.MarkupLine($"[dim]{metadata.Description}[/]");
+        AnsiConsole.MarkupLine($"[bold]Template:[/] {Markup.Escape(metadata.DisplayName)}");
+        AnsiConsole.MarkupLine($"[dim]{Markup.Escape(metadata.Description)}[/]");
         AnsiConsole.WriteLine();
 
         // 4. Collect variable values
@@ -290,7 +290,7 @@ public class NewWidgetCommand
                 {
                     if (!Regex.IsMatch(value, varDef.Pattern))
                     {
-                        AnsiConsole.MarkupLine($"[red]Invalid format. Pattern: {varDef.Pattern}[/]");
+                        AnsiConsole.MarkupLine($"[red]Invalid format. Pattern: {Markup.Escape(varDef.Pattern)}[/]");
                         value = null;
                         continue;
                     }
@@ -366,13 +366,13 @@ public class NewWidgetCommand
         catch (HttpRequestException ex)
         {
             AnsiConsole.MarkupLine($"[red]Error: Failed to fetch template index from GitHub[/]");
-            AnsiConsole.MarkupLine($"[dim]{ex.Message}[/]");
+            AnsiConsole.MarkupLine($"[dim]{Markup.Escape(ex.Message)}[/]");
             return null;
         }
         catch (JsonException ex)
         {
             AnsiConsole.MarkupLine($"[red]Error: Failed to parse template index[/]");
-            AnsiConsole.MarkupLine($"[dim]{ex.Message}[/]");
+            AnsiConsole.MarkupLine($"[dim]{Markup.Escape(ex.Message)}[/]");
             return null;
         }
     }
@@ -387,14 +387,14 @@ public class NewWidgetCommand
         }
         catch (HttpRequestException ex)
         {
-            AnsiConsole.MarkupLine($"[red]Error: Template '{templateId}' not found[/]");
-            AnsiConsole.MarkupLine($"[dim]{ex.Message}[/]");
+            AnsiConsole.MarkupLine($"[red]Error: Template '{Markup.Escape(templateId)}' not found[/]");
+            AnsiConsole.MarkupLine($"[dim]{Markup.Escape(ex.Message)}[/]");
             return null;
         }
         catch (Exception ex)
         {
             AnsiConsole.MarkupLine($"[red]Error: Failed to parse template metadata[/]");
-            AnsiConsole.MarkupLine($"[dim]{ex.Message}[/]");
+            AnsiConsole.MarkupLine($"[dim]{Markup.Escape(ex.Message)}[/]");
             return null;
         }
     }
@@ -408,8 +408,8 @@ public class NewWidgetCommand
         }
         catch (HttpRequestException ex)
         {
-            AnsiConsole.MarkupLine($"[red]Error: Failed to fetch template file '{fileName}'[/]");
-            AnsiConsole.MarkupLine($"[dim]{ex.Message}[/]");
+            AnsiConsole.MarkupLine($"[red]Error: Failed to fetch template file '{Markup.Escape(fileName)}'[/]");
+            AnsiConsole.MarkupLine($"[dim]{Markup.Escape(ex.Message)}[/]");
             return null;
         }
     }
@@ -491,7 +491,7 @@ public class NewWidgetCommand
     private void DisplaySuccess(string outputFile, TemplateMetadata metadata, Dictionary<string, string> variables)
     {
         AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine($"[green]✓ Widget created successfully:[/] {outputFile}");
+        AnsiConsole.MarkupLine($"[green]✓ Widget created successfully:[/] {Markup.Escape(outputFile)}");
 
         if (metadata.PostCreationInstructions.Count > 0)
         {
@@ -500,7 +500,7 @@ public class NewWidgetCommand
             foreach (var instruction in metadata.PostCreationInstructions)
             {
                 var substitutedInstruction = _substitution.Substitute(instruction, variables, outputFile);
-                AnsiConsole.MarkupLine($"  • {substitutedInstruction}");
+                AnsiConsole.MarkupLine($"  • {Markup.Escape(substitutedInstruction)}");
             }
         }
     }
