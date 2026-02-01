@@ -26,25 +26,25 @@ def main():
             # Dashboard mode (compact)
             status = "ok" if current_value < 80 else "error"
             print(f"row: [status:{status}] Current: {current_value}")
-            print(f"row: sparkline:{' '.join(map(str, history))}")
+            print(f"row: [sparkline:{','.join(map(str, history))}]")
             print(f"row: Average: {sum(history) // len(history)}")
         else:
             # Extended mode (detailed)
-            print("row: [bold]Current Status[/bold]")
+            print("row: [bold]Current Status[/]")
             status = "ok" if current_value < 80 else "error"
             print(f"row: [status:{status}] Value: {current_value}")
 
             print("row:")
-            print("row: [bold]History Graph[/bold]")
-            print(f"row: graph:{' '.join(map(str, history))}")
+            print("row: [bold]History Graph[/]")
+            print(f"row: [graph:{','.join(map(str, history))}]")
 
             print("row:")
-            print("row: [bold]Statistics[/bold]")
-            print("row: table:Metric|Value")
-            print(f"row: table:Average|{sum(history) // len(history)}")
-            print(f"row: table:Minimum|{min(history)}")
-            print(f"row: table:Maximum|{max(history)}")
-            print(f"row: table:Samples|{len(history)}")
+            print("row: [bold]Statistics[/]")
+            print("[table:Metric|Value]")
+            print(f"[tablerow:Average|{sum(history) // len(history)}]")
+            print(f"[tablerow:Minimum|{min(history)}]")
+            print(f"[tablerow:Maximum|{max(history)}]")
+            print(f"[tablerow:Samples|{len(history)}]")
 
         # Actions
         print(f"action: Refresh:python3 {{OUTPUT_FILE}}")

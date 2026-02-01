@@ -36,42 +36,42 @@ if [[ "$EXTENDED_MODE" == "false" ]]; then
     if (( CURRENT_VALUE > 80 )); then
         echo "row: [status:error] Current: ${CURRENT_VALUE}%"
     elif (( CURRENT_VALUE > 50 )); then
-        echo "row: [status:warning] Current: ${CURRENT_VALUE}%"
+        echo "row: [status:warn] Current: ${CURRENT_VALUE}%"
     else
         echo "row: [status:ok] Current: ${CURRENT_VALUE}%"
     fi
 
     # Show sparkline (compact trend)
-    echo "row: sparkline:${HISTORY[*]}"
+    echo "row: [sparkline:${HISTORY[*]}]"
 
     # Show average
     AVG=$(awk '{s+=$1} END {print int(s/NR)}' <<< "${HISTORY[*]}")
     echo "row: Average: ${AVG}%"
 else
     # Extended mode (detailed view)
-    echo "row: [bold]Current Status[/bold]"
+    echo "row: [bold]Current Status[/]"
     if (( CURRENT_VALUE > 80 )); then
         echo "row: [status:error] Value: ${CURRENT_VALUE}%"
     elif (( CURRENT_VALUE > 50 )); then
-        echo "row: [status:warning] Value: ${CURRENT_VALUE}%"
+        echo "row: [status:warn] Value: ${CURRENT_VALUE}%"
     else
         echo "row: [status:ok] Value: ${CURRENT_VALUE}%"
     fi
 
     echo "row:"
-    echo "row: [bold]History Graph[/bold]"
-    echo "row: graph:${HISTORY[*]}"
+    echo "row: [bold]History Graph[/]"
+    echo "row: [graph:${HISTORY[*]}]"
 
     echo "row:"
-    echo "row: [bold]Statistics[/bold]"
-    echo "row: table:Metric|Value"
+    echo "row: [bold]Statistics[/]"
+    echo "[table:Metric|Value]"
     AVG=$(awk '{s+=$1} END {print int(s/NR)}' <<< "${HISTORY[*]}")
     MIN=$(printf '%s\n' "${HISTORY[@]}" | sort -n | head -n1)
     MAX=$(printf '%s\n' "${HISTORY[@]}" | sort -n | tail -n1)
-    echo "row: table:Average|${AVG}%"
-    echo "row: table:Minimum|${MIN}%"
-    echo "row: table:Maximum|${MAX}%"
-    echo "row: table:Samples|${#HISTORY[@]}"
+    echo "[tablerow:Average|${AVG}%]"
+    echo "[tablerow:Minimum|${MIN}%]"
+    echo "[tablerow:Maximum|${MAX}%]"
+    echo "[tablerow:Samples|${#HISTORY[@]}]"
 fi
 
 # Actions
