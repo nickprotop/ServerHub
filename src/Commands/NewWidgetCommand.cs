@@ -247,7 +247,7 @@ public class NewWidgetCommand
                 .Title("Select a [green]widget template[/]:")
                 .PageSize(10)
                 .AddChoices(index.Templates)
-                .UseConverter(t => $"{t.Name} - {t.Description} [{t.Language}]")
+                .UseConverter(t => $"{t.Name} - {t.Description} ({t.Language})")
         );
 
         // 3. Fetch template metadata
