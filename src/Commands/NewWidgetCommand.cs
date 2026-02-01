@@ -326,7 +326,7 @@ public class NewWidgetCommand
         if (AnsiConsole.Confirm("Preview generated content?", defaultValue: false))
         {
             AnsiConsole.WriteLine();
-            var panel = new Panel(substituted)
+            var panel = new Panel(Markup.Escape(substituted))
                 .Header("Preview")
                 .BorderColor(Color.Cyan1);
             AnsiConsole.Write(panel);
