@@ -420,7 +420,7 @@ public class NewWidgetCommand
         var promptText = $"[yellow]{Markup.Escape(varDef.Description)}[/]";
         if (!string.IsNullOrEmpty(varDef.Example))
         {
-            promptText += $" [dim](e.g., {Markup.Escape(varDef.Example)})[/dim]";
+            promptText += $" [dim](e.g., {Markup.Escape(varDef.Example)})[/]";
         }
 
         var prompt = new TextPrompt<string>(promptText);
