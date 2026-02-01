@@ -1,54 +1,60 @@
 {
   "schema_version": "1.0",
-  "updated_at": "2026-02-01T00:00:00Z",
+  "updated_at": "2026-02-01T00:15:53Z",
   "templates": [
     {
-      "id": "bash-basic",
-      "name": "Basic Bash Widget",
-      "description": "Simple shell script with status indicators and actions",
-      "language": "bash",
-      "difficulty": "beginner",
-      "tags": ["shell", "basic", "monitoring"]
-    },
-    {
       "id": "bash-advanced",
-      "name": "Advanced Bash Widget",
-      "description": "Shell script with sparklines, graphs, tables, and history tracking",
-      "language": "bash",
-      "difficulty": "intermediate",
-      "tags": ["shell", "graphs", "tables", "history"]
-    },
+      "name": Advanced Bash Widget,
+      "description": Shell script with sparklines, graphs, tables, and history tracking,
+      "language": bash,
+      "difficulty": intermediate,
+      "tags": ["shell","graphs","tables","history"]
+    }
+,
     {
-      "id": "python-basic",
-      "name": "Basic Python Widget",
-      "description": "Python widget with basic protocol implementation",
-      "language": "python",
-      "difficulty": "beginner",
-      "tags": ["python", "basic", "monitoring"]
-    },
-    {
-      "id": "python-advanced",
-      "name": "Advanced Python Widget",
-      "description": "Python widget with rich visualizations and error handling",
-      "language": "python",
-      "difficulty": "advanced",
-      "tags": ["python", "graphs", "tables", "advanced"]
-    },
+      "id": "bash-basic",
+      "name": Basic Bash Widget,
+      "description": Simple shell script with status indicators and actions,
+      "language": bash,
+      "difficulty": beginner,
+      "tags": ["shell","basic","monitoring"]
+    }
+,
     {
       "id": "csharp-script",
-      "name": "C# Script Widget",
-      "description": "C# widget using dotnet-script (no compilation required)",
-      "language": "csharp",
-      "difficulty": "intermediate",
-      "tags": ["csharp", "dotnet-script", "scripting"]
-    },
+      "name": C# Script Widget,
+      "description": C# widget using dotnet-script (no compilation required),
+      "language": csharp,
+      "difficulty": intermediate,
+      "tags": ["csharp","dotnet-script","scripting"]
+    }
+,
     {
       "id": "powershell",
-      "name": "PowerShell Widget",
-      "description": "Cross-platform PowerShell widget",
-      "language": "powershell",
-      "difficulty": "beginner",
-      "tags": ["powershell", "windows", "cross-platform"]
+      "name": PowerShell Widget,
+      "description": Cross-platform PowerShell widget,
+      "language": powershell,
+      "difficulty": beginner,
+      "tags": ["powershell","windows","cross-platform"]
     }
+,
+    {
+      "id": "python-advanced",
+      "name": Advanced Python Widget,
+      "description": Python widget with rich visualizations and error handling,
+      "language": python,
+      "difficulty": advanced,
+      "tags": ["python","graphs","tables","advanced"]
+    }
+,
+    {
+      "id": "python-basic",
+      "name": Basic Python Widget,
+      "description": Python widget with basic protocol implementation,
+      "language": python,
+      "difficulty": beginner,
+      "tags": ["python","basic","monitoring"]
+    }
+
   ]
 }
