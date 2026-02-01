@@ -416,11 +416,11 @@ public class NewWidgetCommand
 
     private string? PromptForVariableValue(string varName, TemplateVariable varDef, Dictionary<string, string> existingVariables)
     {
-        // Build prompt text with example if available
-        var promptText = $"[yellow]{varDef.Description}[/]";
+        // Build prompt text with example if available - escape user text to prevent markup issues
+        var promptText = $"[yellow]{Markup.Escape(varDef.Description)}[/]";
         if (!string.IsNullOrEmpty(varDef.Example))
         {
-            promptText += $" [dim](e.g., {varDef.Example})[/dim]";
+            promptText += $" [dim](e.g., {Markup.Escape(varDef.Example)})[/dim]";
         }
 
         var prompt = new TextPrompt<string>(promptText);
