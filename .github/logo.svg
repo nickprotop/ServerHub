@@ -24,23 +24,28 @@
   <circle cx="70" cy="55" r="4" fill="#f59e0b"/>
   <circle cx="85" cy="55" r="4" fill="#10b981"/>
 
-  <!-- Server/Hub icon - stylized nodes connected in a hub pattern -->
+  <!-- Dashboard icon - widget grid layout -->
   <g filter="url(#glow)">
-    <!-- Center hub -->
-    <circle cx="100" cy="110" r="8" fill="url(#gradient1)"/>
+    <!-- Dashboard widgets (2x2 grid) -->
+    <!-- Top left widget -->
+    <rect x="60" y="75" width="30" height="25" rx="3" fill="none" stroke="url(#gradient1)" stroke-width="2"/>
+    <line x1="65" y1="82" x2="85" y2="82" stroke="#00d4ff" stroke-width="1.5"/>
+    <rect x="65" y="86" width="20" height="3" rx="1" fill="#00d4ff" opacity="0.6"/>
+    <rect x="65" y="91" width="15" height="3" rx="1" fill="#00d4ff" opacity="0.4"/>
 
-    <!-- Connected nodes (representing servers) -->
-    <line x1="100" y1="110" x2="70" y2="85" stroke="url(#gradient1)" stroke-width="2"/>
-    <circle cx="70" cy="85" r="5" fill="#00d4ff"/>
+    <!-- Top right widget -->
+    <rect x="95" y="75" width="30" height="25" rx="3" fill="none" stroke="url(#gradient1)" stroke-width="2"/>
+    <circle cx="110" cy="87" r="6" fill="none" stroke="#00d4ff" stroke-width="2"/>
+    <path d="M 105 87 L 108 90 L 115 83" stroke="#10b981" stroke-width="2" fill="none"/>
 
-    <line x1="100" y1="110" x2="130" y2="85" stroke="url(#gradient1)" stroke-width="2"/>
-    <circle cx="130" cy="85" r="5" fill="#00d4ff"/>
+    <!-- Bottom left widget -->
+    <rect x="60" y="105" width="30" height="25" rx="3" fill="none" stroke="url(#gradient1)" stroke-width="2"/>
+    <rect x="65" y="110" width="8" height="12" rx="1" fill="#00d4ff" opacity="0.8"/>
+    <rect x="75" y="115" width="8" height="7" rx="1" fill="#00d4ff" opacity="0.6"/>
 
-    <line x1="100" y1="110" x2="70" y2="135" stroke="url(#gradient1)" stroke-width="2"/>
-    <circle cx="70" cy="135" r="5" fill="#00d4ff"/>
-
-    <line x1="100" y1="110" x2="130" y2="135" stroke="url(#gradient1)" stroke-width="2"/>
-    <circle cx="130" cy="135" r="5" fill="#00d4ff"/>
+    <!-- Bottom right widget -->
+    <rect x="95" y="105" width="30" height="25" rx="3" fill="none" stroke="url(#gradient1)" stroke-width="2"/>
+    <path d="M 100 122 Q 105 115, 110 122 T 120 122" stroke="#00d4ff" stroke-width="2" fill="none"/>
   </g>
 
   <!-- Text: ServerHub -->
