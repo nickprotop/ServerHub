@@ -1451,7 +1451,7 @@ public class Program
             // Create a temporary copy for display only (HasError is computed from Error)
             displayData = new WidgetData
             {
-                Title = $"{widgetData.Title} {_spinnerFrames[_spinnerFrame % 4]}",
+                Title = widgetData.Title,
                 Rows = widgetData.Rows,
                 Error = widgetData.Error,
                 Timestamp = widgetData.Timestamp,

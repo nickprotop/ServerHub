@@ -946,7 +946,7 @@ public static class WidgetExpansionDialog
 
             if (action.RequiresSudo)
             {
-                icons.Add("!");
+                icons.Add("🔒");
             }
             if (action.IsDanger)
             {
