@@ -17,6 +17,8 @@
   <ItemGroup>
     <!-- YAML configuration -->
     <PackageReference Include="YamlDotNet" Version="16.2.0" />
+    <!-- Command line parsing -->
+    <PackageReference Include="Spectre.Console.Cli" Version="0.49.1" />
   </ItemGroup>
 
   <!-- Local development: use project reference if available -->

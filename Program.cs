@@ -48,138 +48,56 @@ public class Program
 
     public static async Task<int> Main(string[] args)
     {
+        var app = new Spectre.Console.Cli.CommandApp();
+
+        app.Configure(config =>
+        {
+            // Marketplace commands - using full paths
+            config.AddCommand<Commands.Cli.MarketplaceSearchCommand>("marketplace-search")
+                .WithDescription("Search for community widgets");
+
+            config.AddCommand<Commands.Cli.MarketplaceListCommand>("marketplace-list")
+                .WithDescription("List all available widgets");
+
+            config.AddCommand<Commands.Cli.MarketplaceInfoCommand>("marketplace-info")
+                .WithDescription("Show widget details");
+
+            config.AddCommand<Commands.Cli.MarketplaceInstallCommand>("marketplace-install")
+                .WithDescription("Install widget from marketplace");
+
+            config.AddCommand<Commands.Cli.MarketplaceListInstalledCommand>("marketplace-list-installed")
+                .WithDescription("List installed marketplace widgets");
+
+            // Test widget command
+            config.AddCommand<Commands.Cli.TestWidgetCommandCli>("test-widget")
+                .WithDescription("Test and validate widget scripts");
+
+            // New widget command
+            config.AddCommand<Commands.Cli.NewWidgetCommandCli>("new-widget")
+                .WithDescription("Interactive widget creation wizard");
+        });
+
+        app.SetDefaultCommand<Commands.Cli.DefaultCommand>();
+
+        return await app.RunAsync(args);
+    }
+
+    /// <summary>
+    /// Runs the ServerHub dashboard (called by DefaultCommand)
+    /// </summary>
+    public static async Task<int> RunDashboardAsync(string[] args, string configPath, bool devMode)
+    {
         try
         {
-            // Parse command-line arguments
-            var options = ParseArguments(args);
-
-            if (options.ShowHelp)
-            {
-                ShowHelp();
-                return 0;
-            }
-
-            if (options.ShowVersion)
-            {
-                Console.WriteLine("ServerHub v0.1.0");
-                return 0;
-            }
-
-            // Handle marketplace commands
-            if (options.MarketplaceArgs != null && options.MarketplaceArgs.Length > 0)
-            {
-                // Determine installation path using centralized logic
-                var marketplaceInstallPath = WidgetPaths.GetMarketplaceInstallPath();
-
-                // Determine config path: custom config or default
-                var marketplaceConfigPath = options.ConfigPath ?? ConfigManager.GetDefaultConfigPath();
-
-                var marketplaceCmd = new MarketplaceCommand(marketplaceInstallPath, marketplaceConfigPath);
-                return await marketplaceCmd.ExecuteAsync(options.MarketplaceArgs);
-            }
-
-            // Handle test-widget command
-            if (options.TestWidgetArgs != null && options.TestWidgetArgs.Length > 0)
-            {
-                if (options.TestWidgetArgs.Length < 1)
-                {
-                    Console.WriteLine("Usage: serverhub test-widget <widget-script> [--extended] [--ui] [--yes]");
-                    return 1;
-                }
-
-                var widgetPath = options.TestWidgetArgs[0];
-                var extended = options.TestWidgetArgs.Contains("--extended");
-                var uiMode = options.TestWidgetArgs.Contains("--ui");
-                var skipConfirmation = options.TestWidgetArgs.Contains("--yes") || options.TestWidgetArgs.Contains("-y");
-
-                var testCmd = new TestWidgetCommand();
-                return await testCmd.ExecuteAsync(widgetPath, extended, uiMode, skipConfirmation);
-            }
-
-            // Handle new-widget command
-            if (options.NewWidgetArgs != null)
-            {
-                var newWidgetCmd = new NewWidgetCommand();
-                return await newWidgetCmd.ExecuteAsync(options.NewWidgetArgs);
-            }
-
-            // Set custom widgets path if provided (before other operations)
-            if (!string.IsNullOrEmpty(options.WidgetsPath))
-            {
-                if (!Directory.Exists(options.WidgetsPath))
-                {
-                    Console.Error.WriteLine(
-                        $"Error: Widgets path does not exist: {options.WidgetsPath}"
-                    );
-                    return 1;
-                }
-                WidgetPaths.SetCustomWidgetsPath(options.WidgetsPath);
-                Console.WriteLine($"Using custom widgets path: {options.WidgetsPath}");
-            }
-
-            if (options.Discover)
-            {
-                return await DiscoverWidgetsAsync();
-            }
-
-            if (options.VerifyChecksums)
-            {
-                return await VerifyChecksumsAsync(options.ConfigPath);
-            }
-
-            // Handle --init-config command
-            if (!string.IsNullOrEmpty(options.InitConfig))
-            {
-                return await InitConfigAsync(options.InitConfig, options.WidgetsPath);
-            }
-
-            // Ensure directories exist
-            WidgetPaths.EnsureDirectoriesExist();
-
-            // Load configuration
-            var configPath = options.ConfigPath ?? ConfigManager.GetDefaultConfigPath();
             _configPath = configPath;
+            _devMode = devMode;
+
             var configMgr = new ConfigManager();
-
-            // Auto-create ONLY the default config path for first-time users
-            var isDefaultPath = configPath == ConfigManager.GetDefaultConfigPath();
-
-            if (!File.Exists(configPath))
-            {
-                if (isDefaultPath)
-                {
-                    // First-time user: silent auto-create with production template
-                    // Uses existing CreateDefaultConfig() - just bundled widgets, no custom widget scanning
-                    Console.WriteLine("First-time setup: Creating default configuration...");
-                    configMgr.CreateDefaultConfig(configPath);
-                    Console.WriteLine($"Created: {configPath}");
-                    Console.WriteLine("Starting ServerHub...");
-                    Console.WriteLine();
-                }
-                else
-                {
-                    // Custom path: fail with helpful error
-                    Console.Error.WriteLine($"Configuration file not found: {configPath}");
-                    Console.Error.WriteLine();
-                    Console.Error.WriteLine("To create this configuration file:");
-                    Console.Error.WriteLine($"  serverhub --init-config {Path.GetFileName(configPath)}");
-                    if (!string.IsNullOrEmpty(options.WidgetsPath))
-                        Console.Error.WriteLine($"            --widgets-path {options.WidgetsPath}");
-                    Console.Error.WriteLine();
-                    Console.Error.WriteLine("Or use the default configuration:");
-                    Console.Error.WriteLine("  serverhub");
-                    return 1;
-                }
-            }
-
             _config = configMgr.LoadConfig(configPath);
             _lastConfigLoadTime = File.GetLastWriteTime(configPath);
 
-            // Store dev mode state for use throughout the application
-            _devMode = options.DevMode;
-
             // Initialize services
-            var validator = new ScriptValidator(devMode: options.DevMode);
+            var validator = new ScriptValidator(devMode: devMode);
             _executor = new ScriptExecutor(validator);
             _parser = new WidgetProtocolParser();
             _renderer = new WidgetRenderer();
@@ -1754,347 +1672,8 @@ Select a disabled widget and check 'Enabled' to show it on the dashboard.";
             return 4;
     }
 
-    private static CommandLineOptions ParseArguments(string[] args)
-    {
-        var options = new CommandLineOptions();
+    // Utility methods moved to DefaultCommand
 
-        for (int i = 0; i < args.Length; i++)
-        {
-            switch (args[i])
-            {
-                case "marketplace":
-                    // Capture all remaining args for marketplace command
-                    options.MarketplaceArgs = args.Skip(i + 1).ToArray();
-                    return options;
-
-                case "test-widget":
-                    // Capture all remaining args for test-widget command
-                    options.TestWidgetArgs = args.Skip(i + 1).ToArray();
-                    return options;
-
-                case "new-widget":
-                    // Capture all remaining args for new-widget command
-                    options.NewWidgetArgs = args.Skip(i + 1).ToArray();
-                    return options;
-
-                case "--help":
-                case "-h":
-                    options.ShowHelp = true;
-                    break;
-
-                case "--version":
-                case "-v":
-                    options.ShowVersion = true;
-                    break;
-
-                case "--widgets-path":
-                    if (i + 1 < args.Length)
-                    {
-                        options.WidgetsPath = args[++i];
-                    }
-                    break;
-
-                case "--discover":
-                    options.Discover = true;
-                    break;
-
-                case "--verify-checksums":
-                    options.VerifyChecksums = true;
-                    break;
-
-                case "--dev-mode":
-                    options.DevMode = true;
-                    break;
-
-                case "--init-config":
-                    if (i + 1 < args.Length)
-                    {
-                        options.InitConfig = args[++i];
-                    }
-                    else
-                    {
-                        Console.Error.WriteLine("Error: --init-config requires a path argument");
-                        return options;
-                    }
-                    break;
-
-                default:
-                    if (!args[i].StartsWith("--") && options.ConfigPath == null)
-                    {
-                        options.ConfigPath = args[i];
-                    }
-                    break;
-            }
-        }
-
-        return options;
-    }
-
-    private static Task<int> DiscoverWidgetsAsync()
-    {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var customWidgetsPath = Path.Combine(home, ".config", "serverhub", "widgets");
-        var configPath = ConfigManager.GetDefaultConfigPath();
-
-        if (!Directory.Exists(customWidgetsPath))
-        {
-            Console.WriteLine($"No custom widgets directory found: {customWidgetsPath}");
-            Console.WriteLine("Create it and add your widget scripts there.");
-            return Task.FromResult(0);
-        }
-
-        // Load or create config
-        var configManager = new ConfigManager();
-        ServerHubConfig? config = null;
-
-        if (File.Exists(configPath))
-        {
-            try
-            {
-                config = configManager.LoadConfig(configPath);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Warning: Could not load existing config: {ex.Message}");
-                Console.WriteLine("A new config will be created if you approve any widgets.\n");
-            }
-        }
-
-        // Discover unconfigured widgets
-        var discoveredWidgets = WidgetConfigurationHelper.DiscoverUnconfiguredWidgets(customWidgetsPath, config);
-
-        if (discoveredWidgets.Count == 0)
-        {
-            Console.WriteLine("No unconfigured widgets found.");
-            return Task.FromResult(0);
-        }
-
-        Console.WriteLine($"Found {discoveredWidgets.Count} unconfigured widget(s):\n");
-
-        bool configModified = false;
-        int addedCount = 0;
-
-        foreach (var widget in discoveredWidgets)
-        {
-            var filename = widget.RelativePath;
-            var fileInfo = new FileInfo(widget.FullPath!);
-            var checksum = widget.Config.Sha256!;
-
-            Console.WriteLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-            Console.WriteLine($"Widget: {filename}");
-            Console.WriteLine($"Path:   {widget.FullPath}");
-            Console.WriteLine($"Size:   {fileInfo.Length} bytes");
-            Console.WriteLine($"SHA256: {checksum}");
-            Console.WriteLine();
-
-            // Show preview (first 50 lines for text files)
-            if (IsTextFile(widget.FullPath!))
-            {
-                Console.WriteLine("Preview:");
-                var lines = File.ReadLines(widget.FullPath!).Take(50).ToArray();
-                for (int i = 0; i < lines.Length; i++)
-                {
-                    Console.WriteLine($"    {i + 1, 3}  {lines[i]}");
-                }
-                if (File.ReadLines(widget.FullPath!).Count() > 50)
-                    Console.WriteLine("    ... (truncated)");
-            }
-            else
-            {
-                Console.WriteLine("[Binary file - no preview]");
-            }
-
-            Console.WriteLine();
-            Console.Write($"Add '{filename}' to config? [y/N] ");
-            var response = Console.ReadLine();
-
-            if (response?.ToLower() == "y")
-            {
-                // Create config if it doesn't exist
-                if (config == null)
-                {
-                    config = new ServerHubConfig
-                    {
-                        Widgets = new Dictionary<string, WidgetConfig>(),
-                        Layout = new LayoutConfig { Order = new List<string>() }
-                    };
-                }
-
-                var id = Path.GetFileNameWithoutExtension(widget.FullPath!);
-
-                // Ensure unique ID
-                var baseId = id;
-                int suffix = 1;
-                while (config.Widgets.ContainsKey(id))
-                {
-                    id = $"{baseId}_{suffix++}";
-                }
-
-                // Add to config using helper
-                WidgetConfigurationHelper.AddWidget(config, id, widget.Config, addToLayout: true);
-
-                AnsiConsole.MarkupLine($"[green]Added '{id}' to config[/]");
-                configModified = true;
-                addedCount++;
-            }
-        }
-
-        if (!configModified || config == null)
-        {
-            Console.WriteLine("\nNo widgets added.");
-            return Task.FromResult(0);
-        }
-
-        // Save the config
-        try
-        {
-            configManager.SaveConfig(config, configPath);
-            Console.WriteLine();
-            AnsiConsole.MarkupLine($"[green]Config saved: {configPath}[/]");
-            Console.WriteLine($"Added {addedCount} widget(s) with checksums.");
-            Console.WriteLine("\nRun 'serverhub' to start with the new widgets.");
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Error saving config: {ex.Message}");
-            return Task.FromResult(1);
-        }
-
-        return Task.FromResult(0);
-    }
-
-    /// <summary>
-    /// Creates a new configuration file by discovering all available widgets
-    /// Starts with production config (keeps all bundled widgets as-is) and adds custom widgets
-    /// </summary>
-    private static Task<int> InitConfigAsync(string configPath, string? customWidgetsPath)
-    {
-        if (File.Exists(configPath))
-        {
-            Console.Error.WriteLine($"Configuration file already exists: {configPath}");
-            Console.Error.WriteLine("Delete it first or choose a different name.");
-            return Task.FromResult(1);
-        }
-
-        Console.WriteLine("Discovering widgets...\n");
-
-        // Start with production config template (keep it exactly as-is)
-        var configManager = new ConfigManager();
-        ServerHubConfig config;
-        try
-        {
-            var deserializer = new DeserializerBuilder()
-                .WithNamingConvention(UnderscoredNamingConvention.Instance)
-                .WithTypeConverter(new WidgetLocationTypeConverter())
-                .IgnoreUnmatchedProperties()
-                .Build();
-            config = deserializer.Deserialize<ServerHubConfig>(DefaultConfig.YamlContent);
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Failed to parse production config template: {ex.Message}");
-            return Task.FromResult(1);
-        }
-
-        int bundledCount = config.Widgets.Count;  // All bundled widgets from template
-        int customCount = 0;
-
-        // Scan for custom widgets to add
-        var userCustomDir = WidgetPaths.GetUserCustomWidgetsDirectory();
-        var customPath = !string.IsNullOrEmpty(customWidgetsPath)
-            ? Path.GetFullPath(customWidgetsPath)
-            : null;
-
-        // Scan user custom directory
-        if (Directory.Exists(userCustomDir))
-        {
-            foreach (var file in Directory.GetFiles(userCustomDir).OrderBy(f => f))
-            {
-                if (WidgetConfigurationHelper.IsExecutable(file))
-                {
-                    var filename = Path.GetFileName(file);
-                    var id = GenerateUniqueId(Path.GetFileNameWithoutExtension(filename), config.Widgets);
-                    var widgetConfig = WidgetConfigurationHelper.CreateWidgetConfig(
-                        filename,
-                        WidgetLocation.Custom,
-                        includeChecksum: false);  // SECURITY: No checksum - requires --dev-mode or --discover
-                    WidgetConfigurationHelper.AddWidget(config, id, widgetConfig, addToLayout: true);
-                    customCount++;
-                }
-            }
-        }
-
-        // Scan --widgets-path directory
-        if (customPath != null && Directory.Exists(customPath))
-        {
-            foreach (var file in Directory.GetFiles(customPath).OrderBy(f => f))
-            {
-                if (WidgetConfigurationHelper.IsExecutable(file))
-                {
-                    var filename = Path.GetFileName(file);
-                    var id = GenerateUniqueId(Path.GetFileNameWithoutExtension(filename), config.Widgets);
-                    var widgetConfig = WidgetConfigurationHelper.CreateWidgetConfig(
-                        filename,
-                        WidgetLocation.Custom,
-                        includeChecksum: false);  // SECURITY: No checksum - requires --dev-mode or --discover
-                    WidgetConfigurationHelper.AddWidget(config, id, widgetConfig, addToLayout: true);
-                    customCount++;
-                }
-            }
-        }
-
-        // Create directory if needed
-        var configDir = Path.GetDirectoryName(Path.GetFullPath(configPath));
-        if (!string.IsNullOrEmpty(configDir) && !Directory.Exists(configDir))
-        {
-            Directory.CreateDirectory(configDir);
-        }
-
-        // Save config
-        try
-        {
-            configManager.SaveConfig(config, configPath);
-
-            Console.WriteLine($"✓ Included {bundledCount} bundled widget(s) from template");
-            if (customCount > 0)
-                Console.WriteLine($"✓ Added {customCount} custom widget(s)");
-
-            Console.WriteLine();
-            AnsiConsole.MarkupLine($"[green]Generated {configPath} with {bundledCount + customCount} widgets[/]");
-
-            // Security note for custom widgets
-            if (customCount > 0)
-            {
-                Console.WriteLine();
-                AnsiConsole.MarkupLine("[yellow]Note:[/] Custom widgets have no checksums (security).");
-                Console.WriteLine("To run securely:");
-                Console.WriteLine("  1. Run: serverhub --discover");
-                Console.WriteLine("     (reviews and adds checksums for custom widgets)");
-                Console.WriteLine("  2. Or use: --dev-mode flag to skip checksum validation");
-            }
-
-            // Show command to run
-            Console.WriteLine("\nTo start ServerHub:");
-            var devModeFlag = customCount > 0 ? " --dev-mode" : "";
-            if (!string.IsNullOrEmpty(customWidgetsPath))
-                Console.WriteLine($"  serverhub --widgets-path {customWidgetsPath} {Path.GetFileName(configPath)}{devModeFlag}");
-            else if (configPath != ConfigManager.GetDefaultConfigPath())
-                Console.WriteLine($"  serverhub {Path.GetFileName(configPath)}{devModeFlag}");
-            else
-                Console.WriteLine($"  serverhub{devModeFlag}");
-
-            return Task.FromResult(0);
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Error saving config: {ex.Message}");
-            return Task.FromResult(1);
-        }
-    }
-
-    /// <summary>
-    /// Generates a unique widget ID by adding suffix if needed
-    /// </summary>
     private static string GenerateUniqueId(string baseId, Dictionary<string, WidgetConfig> existingWidgets)
     {
         var id = baseId;
@@ -2106,241 +1685,14 @@ Select a disabled widget and check 'Enabled' to show it on the dashboard.";
         return id;
     }
 
-    private static Task<int> VerifyChecksumsAsync(string? configPath)
-    {
-        configPath ??= ConfigManager.GetDefaultConfigPath();
-
-        if (!File.Exists(configPath))
-        {
-            Console.Error.WriteLine($"Config file not found: {configPath}");
-            return Task.FromResult(1);
-        }
-
-        var configManager = new ConfigManager();
-        ServerHubConfig config;
-        try
-        {
-            config = configManager.LoadConfig(configPath);
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Config error: {ex.Message}");
-            return Task.FromResult(1);
-        }
-
-        var bundledPath = WidgetPaths.GetBundledWidgetsDirectory();
-        var bundledChecksums = Config.BundledWidgets.Checksums;
-        int passed = 0, failed = 0, missing = 0;
-
-        Console.WriteLine("Verifying widget checksums...\n");
-
-        foreach (var (id, widget) in config.Widgets)
-        {
-            var resolved = WidgetPaths.ResolveWidgetPath(widget.Path, widget.Location);
-
-            if (resolved == null || !File.Exists(resolved))
-            {
-                AnsiConsole.MarkupLine($"  {id,-20} [red]NOT FOUND[/]");
-                missing++;
-                continue;
-            }
-
-            var actual = ScriptValidator.CalculateChecksum(resolved);
-            string? expected = null;
-            string source = "";
-
-            // Check config sha256
-            if (!string.IsNullOrEmpty(widget.Sha256))
-            {
-                expected = widget.Sha256;
-                source = "config";
-            }
-            // Check bundled
-            else if (resolved.StartsWith(bundledPath, StringComparison.Ordinal))
-            {
-                var rel = Path.GetRelativePath(bundledPath, resolved);
-                bundledChecksums.TryGetValue(rel, out expected);
-                source = "bundled";
-            }
-
-            if (expected == null)
-            {
-                AnsiConsole.MarkupLine($"  {id,-20} [yellow]NO CHECKSUM[/]");
-                Console.WriteLine($"      Run --discover or manually verify before adding checksum");
-                missing++;
-            }
-            else if (string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
-            {
-                AnsiConsole.MarkupLine($"  {id,-20} [green]VALID[/] ({source})");
-                passed++;
-            }
-            else
-            {
-                AnsiConsole.MarkupLine($"  {id,-20} [red]MISMATCH[/] ({source})");
-                Console.WriteLine($"      Expected: {expected}");
-                Console.WriteLine($"      Actual:   {actual}");
-                failed++;
-            }
-        }
-
-        Console.WriteLine();
-        Console.WriteLine($"Results: {passed} valid, {failed} mismatch, {missing} missing/no-checksum");
-
-        return Task.FromResult(failed > 0 ? 1 : 0);
-    }
-
-
     private static bool IsTextFile(string path)
     {
-        try
+        var ext = Path.GetExtension(path).ToLower();
+        return ext switch
         {
-            var ext = Path.GetExtension(path).ToLowerInvariant();
-            if (ext is ".sh" or ".bash" or ".py" or ".rb" or ".pl" or ".js" or ".txt")
-                return true;
-
-            // Read first 1KB and check for null bytes
-            var buffer = new byte[1024];
-            using var fs = File.OpenRead(path);
-            var read = fs.Read(buffer, 0, buffer.Length);
-            return !buffer.Take(read).Contains((byte)0);
-        }
-        catch
-        {
-            return false;
-        }
+            ".sh" or ".bash" or ".py" or ".rb" or ".pl" or ".js" or ".ts" => true,
+            _ => false
+        };
     }
 
-    private static void ShowHelp()
-    {
-        Console.WriteLine("ServerHub - Server Monitoring Dashboard");
-        Console.WriteLine();
-        Console.WriteLine("Usage:");
-        Console.WriteLine("  serverhub [options] [config.yaml]");
-        Console.WriteLine();
-        Console.WriteLine("Options:");
-        Console.WriteLine("  -h, --help                       Show this help message");
-        Console.WriteLine("  -v, --version                    Show version information");
-        Console.WriteLine("  --widgets-path <path>            Load widgets from custom directory");
-        Console.WriteLine(
-            "                                   Searches this path first, before default paths"
-        );
-        Console.WriteLine("  --init-config <path>             Initialize a new configuration file by");
-        Console.WriteLine(
-            "                                   discovering available widgets"
-        );
-        Console.WriteLine("  --discover                       Find and add new custom widgets to config");
-        Console.WriteLine(
-            "  --verify-checksums               Verify checksums for all configured widgets"
-        );
-        Console.WriteLine(
-            "  --dev-mode                       Skip checksum validation for custom widgets"
-        );
-        Console.WriteLine(
-            "                                   WARNING: Bundled widgets are still validated"
-        );
-        Console.WriteLine();
-        Console.WriteLine("Examples:");
-        Console.WriteLine(
-            "  serverhub                                    Use default config (~/.config/serverhub/config.yaml)"
-        );
-        Console.WriteLine("  serverhub myconfig.yaml                      Use custom config file");
-        Console.WriteLine(
-            "  serverhub --init-config config.yaml          Create config.yaml by discovering all available widgets"
-        );
-        Console.WriteLine(
-            "  serverhub --init-config config.dev.yaml --widgets-path ./widgets/"
-        );
-        Console.WriteLine(
-            "                                               Create config with bundled + custom + ./widgets/ directory widgets"
-        );
-        Console.WriteLine(
-            "  serverhub --widgets-path ./dev-widgets       Load widgets from ./dev-widgets"
-        );
-        Console.WriteLine(
-            "  serverhub --dev-mode --widgets-path ./dev    Development mode with custom path"
-        );
-        Console.WriteLine(
-            "  serverhub --discover                         Discover and add new widgets to config"
-        );
-        Console.WriteLine(
-            "  serverhub --verify-checksums                 Verify all widget checksums"
-        );
-        Console.WriteLine();
-        Console.WriteLine("Marketplace:");
-        Console.WriteLine(
-            "  serverhub marketplace search <query>         Search for community widgets"
-        );
-        Console.WriteLine(
-            "  serverhub marketplace list                   List all available widgets"
-        );
-        Console.WriteLine(
-            "  serverhub marketplace info <widget-id>       Show widget details"
-        );
-        Console.WriteLine(
-            "  serverhub marketplace install <widget-id>    Install widget from marketplace"
-        );
-        Console.WriteLine();
-        Console.WriteLine("Widget Creation:");
-        Console.WriteLine(
-            "  serverhub new-widget                         Interactive widget creation wizard"
-        );
-        Console.WriteLine(
-            "  serverhub new-widget list                    List available templates"
-        );
-        Console.WriteLine(
-            "  serverhub new-widget <template> [options]    Create from specific template"
-        );
-        Console.WriteLine(
-            "    --name <name>                              Widget name (identifier)"
-        );
-        Console.WriteLine(
-            "    --output <path>                            Output file path"
-        );
-        Console.WriteLine(
-            "    --<variable> <value>                       Set template variable"
-        );
-        Console.WriteLine();
-        Console.WriteLine("Widget Testing:");
-        Console.WriteLine(
-            "  serverhub test-widget <script> [options]     Test and validate widget scripts"
-        );
-        Console.WriteLine(
-            "    --extended                                 Test with --extended flag"
-        );
-        Console.WriteLine(
-            "    --ui                                       Launch UI preview mode"
-        );
-        Console.WriteLine(
-            "    --yes, -y                                  Skip confirmation prompt"
-        );
-        Console.WriteLine();
-        Console.WriteLine("Widget Search Paths (in priority order):");
-        Console.WriteLine("  1. Custom path (if --widgets-path specified)");
-        Console.WriteLine("  2. ~/.config/serverhub/widgets/              User custom widgets");
-        Console.WriteLine("  3. ~/.local/share/serverhub/widgets/         Bundled widgets");
-        Console.WriteLine();
-        Console.WriteLine("Security:");
-        Console.WriteLine("  All custom widgets require sha256 checksums in config.yaml.");
-        Console.WriteLine("  Use --discover to add widgets with checksums automatically.");
-        Console.WriteLine("  Use --dev-mode only for development (disables custom widget checks).");
-        Console.WriteLine();
-        Console.WriteLine("Keyboard Shortcuts:");
-        Console.WriteLine("  Ctrl+Q    Quit");
-        Console.WriteLine("  F5        Refresh all widgets");
-    }
-
-    private class CommandLineOptions
-    {
-        public bool ShowHelp { get; set; }
-        public bool ShowVersion { get; set; }
-        public string? WidgetsPath { get; set; }
-        public string? ConfigPath { get; set; }
-        public bool Discover { get; set; }
-        public bool VerifyChecksums { get; set; }
-        public bool DevMode { get; set; }
-        public string? InitConfig { get; set; }
-        public string[]? MarketplaceArgs { get; set; }
-        public string[]? TestWidgetArgs { get; set; }
-        public string[]? NewWidgetArgs { get; set; }
-    }
 }

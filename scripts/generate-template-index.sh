@@ -46,10 +46,10 @@ for template_dir in "$TEMPLATES_DIR"/*; do
         cat >> "$OUTPUT_FILE" <<ENTRY
     {
       "id": "$TEMPLATE_ID",
-      "name": $NAME,
-      "description": $DESC,
-      "language": $LANG,
-      "difficulty": $DIFF,
+      "name": "$NAME",
+      "description": "$DESC",
+      "language": "$LANG",
+      "difficulty": "$DIFF",
       "tags": $TAGS
     }
 ENTRY
