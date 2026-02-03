@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "updated_at": "2026-02-01T00:15:53Z",
+  "updated_at": "2026-02-03T08:17:15Z",
   "templates": [
     {
       "id": "bash-advanced",
@@ -9,7 +9,8 @@
       "language": "bash",
       "difficulty": "intermediate",
       "tags": ["shell","graphs","tables","history"]
-    },
+    }
+,
     {
       "id": "bash-basic",
       "name": "Basic Bash Widget",
@@ -17,7 +18,8 @@
       "language": "bash",
       "difficulty": "beginner",
       "tags": ["shell","basic","monitoring"]
-    },
+    }
+,
     {
       "id": "csharp-script",
       "name": "C# Script Widget",
@@ -25,7 +27,8 @@
       "language": "csharp",
       "difficulty": "intermediate",
       "tags": ["csharp","dotnet-script","scripting"]
-    },
+    }
+,
     {
       "id": "powershell",
       "name": "PowerShell Widget",
@@ -33,7 +36,8 @@
       "language": "powershell",
       "difficulty": "beginner",
       "tags": ["powershell","windows","cross-platform"]
-    },
+    }
+,
     {
       "id": "python-advanced",
       "name": "Advanced Python Widget",
@@ -41,7 +45,8 @@
       "language": "python",
       "difficulty": "advanced",
       "tags": ["python","graphs","tables","advanced"]
-    },
+    }
+,
     {
       "id": "python-basic",
       "name": "Basic Python Widget",
@@ -50,5 +55,6 @@
       "difficulty": "beginner",
       "tags": ["python","basic","monitoring"]
     }
+
   ]
 }
