@@ -5,6 +5,7 @@ using ServerHub.Config;
 using ServerHub.Services;
 using ServerHub.Utils;
 using System.Text.Json;
+using System.Diagnostics.CodeAnalysis;
 
 namespace ServerHub.Commands.Cli.Marketplace;
 
@@ -13,6 +14,13 @@ namespace ServerHub.Commands.Cli.Marketplace;
 /// </summary>
 public class CheckUpdatesCommand : AsyncCommand<CheckUpdatesSettings>
 {
+    [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access",
+        Justification = "JSON serialization of anonymous types is safe here as the types are defined inline and will be preserved")]
+    private static string SerializeToJson<T>(T data)
+    {
+        return JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
+    }
+
     public override async Task<int> ExecuteAsync(CommandContext context, CheckUpdatesSettings settings)
     {
         var installPath = WidgetPaths.GetMarketplaceInstallPath();
@@ -43,7 +51,8 @@ public class CheckUpdatesCommand : AsyncCommand<CheckUpdatesSettings>
                 manifestUrl = w.ManifestUrl
             });
 
-            var json = JsonSerializer.Serialize(jsonData, new JsonSerializerOptions { WriteIndented = true });
+            // Suppress trimming warning - anonymous types are preserved
+            var json = SerializeToJson(jsonData);
             Console.WriteLine(json);
             return 0;
         }
