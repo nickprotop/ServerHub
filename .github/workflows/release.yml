@@ -72,15 +72,21 @@ jobs:
       - name: Generate changelog
         id: changelog
         run: |
-          # Get previous tag
-          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          # Get current tag from ref
+          CURRENT_TAG=${GITHUB_REF#refs/tags/}
+
+          # Fetch all tags
+          git fetch --tags --force
+
+          # Get previous tag (second most recent)
+          PREV_TAG=$(git tag --sort=-version:refname | grep -v "^${CURRENT_TAG}$" | head -n 1)
 
           if [ -z "$PREV_TAG" ]; then
             # First release - get all commits
             CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges)
           else
             # Get commits since last tag
-            CHANGELOG=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+            CHANGELOG=$(git log ${PREV_TAG}..${CURRENT_TAG} --pretty=format:"- %s (%h)" --no-merges)
           fi
 
           # Save changelog to output
