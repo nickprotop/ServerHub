@@ -146,9 +146,28 @@ serverhub marketplace install username/widget-name@1.0.0
 
 # View installed marketplace widgets
 serverhub marketplace list-installed
-
-# Uninstall marketplace widgets via interactive browser (F3 in dashboard)
 ```
+
+### Update Widgets
+
+```bash
+# Check for available updates
+serverhub marketplace check-updates
+
+# Update a specific widget
+serverhub marketplace update username/widget-name
+
+# Update to a specific version
+serverhub marketplace update username/widget-name --version 2.0.0
+
+# Update all widgets
+serverhub marketplace update-all
+
+# Auto-confirm updates (skip prompts)
+serverhub marketplace update --yes username/widget-name
+```
+
+> **Note:** Uninstall marketplace widgets via the interactive browser (F3 in dashboard)
 
 ## Widget Testing
 
