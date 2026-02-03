@@ -52,21 +52,37 @@ public class Program
 
         app.Configure(config =>
         {
-            // Marketplace commands - using full paths
-            config.AddCommand<Commands.Cli.MarketplaceSearchCommand>("marketplace-search")
-                .WithDescription("Search for community widgets");
+            // Marketplace commands - hierarchical structure
+            config.AddBranch<Spectre.Console.Cli.CommandSettings>("marketplace", marketplace =>
+            {
+                marketplace.SetDescription("Manage marketplace widgets");
 
-            config.AddCommand<Commands.Cli.MarketplaceListCommand>("marketplace-list")
-                .WithDescription("List all available widgets");
+                // Browse commands
+                marketplace.AddCommand<Commands.Cli.Marketplace.SearchCommand>("search")
+                    .WithDescription("Search for community widgets");
 
-            config.AddCommand<Commands.Cli.MarketplaceInfoCommand>("marketplace-info")
-                .WithDescription("Show widget details");
+                marketplace.AddCommand<Commands.Cli.Marketplace.ListCommand>("list")
+                    .WithDescription("List all available widgets");
 
-            config.AddCommand<Commands.Cli.MarketplaceInstallCommand>("marketplace-install")
-                .WithDescription("Install widget from marketplace");
+                marketplace.AddCommand<Commands.Cli.Marketplace.InfoCommand>("info")
+                    .WithDescription("Show widget details");
 
-            config.AddCommand<Commands.Cli.MarketplaceListInstalledCommand>("marketplace-list-installed")
-                .WithDescription("List installed marketplace widgets");
+                marketplace.AddCommand<Commands.Cli.Marketplace.InstallCommand>("install")
+                    .WithDescription("Install widget from marketplace");
+
+                marketplace.AddCommand<Commands.Cli.Marketplace.ListInstalledCommand>("list-installed")
+                    .WithDescription("List installed marketplace widgets");
+
+                // Update commands
+                marketplace.AddCommand<Commands.Cli.Marketplace.CheckUpdatesCommand>("check-updates")
+                    .WithDescription("Check for widget updates");
+
+                marketplace.AddCommand<Commands.Cli.Marketplace.UpdateCommand>("update")
+                    .WithDescription("Update widget to latest version");
+
+                marketplace.AddCommand<Commands.Cli.Marketplace.UpdateAllCommand>("update-all")
+                    .WithDescription("Update all widgets");
+            });
 
             // Test widget command
             config.AddCommand<Commands.Cli.TestWidgetCommandCli>("test-widget")
