@@ -133,4 +133,49 @@ public class ConfigHelper
             return false;
         }
     }
+
+    /// <summary>
+    /// Updates widget version and SHA256 in config after update
+    /// </summary>
+    /// <param name="configPath">Path to config.yaml</param>
+    /// <param name="widgetId">Config key for the widget</param>
+    /// <param name="newVersion">New version from marketplace</param>
+    /// <param name="newSha256">New SHA256 checksum</param>
+    /// <returns>True if update successful</returns>
+    public static bool UpdateWidgetVersionInConfig(
+        string configPath,
+        string widgetId,
+        string newVersion,
+        string newSha256)
+    {
+        try
+        {
+            if (!File.Exists(configPath))
+            {
+                return false;
+            }
+
+            var configManager = new ConfigManager();
+            var config = configManager.LoadConfig(configPath);
+
+            // Find widget by config key
+            if (!config.Widgets.ContainsKey(widgetId))
+            {
+                return false;
+            }
+
+            // Update version and SHA256
+            config.Widgets[widgetId].MarketplaceVersion = newVersion;
+            config.Widgets[widgetId].Sha256 = newSha256;
+
+            // Save config
+            configManager.SaveConfig(config, configPath);
+
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 }

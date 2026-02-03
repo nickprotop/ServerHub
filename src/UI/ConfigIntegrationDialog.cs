@@ -159,26 +159,48 @@ public static class ConfigIntegrationDialog
                         expandedRefresh = expanded;
                     }
 
-                    // Add to config
-                    var widgetFileName = System.IO.Path.GetFileName(result.InstalledPath) ?? "";
-                    bool added = ConfigHelper.AddWidgetToConfig(
+                    // Check if this is an update (widget already exists)
+                    bool widgetExists = ConfigHelper.WidgetExistsInConfig(
                         configPath,
                         result.WidgetId ?? "",
-                        widgetFileName,
-                        result.Sha256 ?? "",
-                        refresh,
-                        expandedRefresh,
-                        source: "marketplace",
-                        marketplaceId: manifest.Metadata.Id,
-                        marketplaceVersion: manifest.LatestVersion?.Version
+                        manifest.Metadata.Id
                     );
 
-                    modal.Close();
-                    onComplete?.Invoke(added);
-
-                    if (!added)
+                    bool success;
+                    if (widgetExists)
                     {
-                        ShowError(windowSystem, "Failed to add widget to config. Please add manually.");
+                        // Update existing widget
+                        success = ConfigHelper.UpdateWidgetVersionInConfig(
+                            configPath,
+                            result.WidgetId ?? "",
+                            manifest.LatestVersion?.Version ?? "",
+                            result.Sha256 ?? ""
+                        );
+                    }
+                    else
+                    {
+                        // Add new widget to config
+                        var widgetFileName = System.IO.Path.GetFileName(result.InstalledPath) ?? "";
+                        success = ConfigHelper.AddWidgetToConfig(
+                            configPath,
+                            result.WidgetId ?? "",
+                            widgetFileName,
+                            result.Sha256 ?? "",
+                            refresh,
+                            expandedRefresh,
+                            source: "marketplace",
+                            marketplaceId: manifest.Metadata.Id,
+                            marketplaceVersion: manifest.LatestVersion?.Version
+                        );
+                    }
+
+                    modal.Close();
+                    onComplete?.Invoke(success);
+
+                    if (!success)
+                    {
+                        var action = widgetExists ? "update" : "add";
+                        ShowError(windowSystem, $"Failed to {action} widget in config. Please update manually.");
                     }
                 })
                 .Build();
