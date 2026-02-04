@@ -128,14 +128,13 @@ public class Program
                         ShowTaskBar: false,
                         ShowBottomStatus: true
                     )
-                ))
-            {
-                // Layer 1: Top status bar warning in dev mode
-                TopStatus = _devMode
-                    ? "DEV MODE - Custom widget checksums DISABLED"
-                    : "ServerHub - Server Monitoring Dashboard",
-                BottomStatus = "F1: Help | F2: Config | F3: Marketplace | F5: Refresh | Space: Pause | Ctrl+Q: Quit",
-            };
+                ));
+
+            // Layer 1: Top status bar warning in dev mode
+            _windowSystem.StatusBarStateService.TopStatus = _devMode
+                ? "DEV MODE - Custom widget checksums DISABLED"
+                : "ServerHub - Server Monitoring Dashboard";
+            _windowSystem.StatusBarStateService.BottomStatus = "F1: Help | F2: Config | F3: Marketplace | F5: Refresh | Space: Pause | Ctrl+Q: Quit";
 
             // Setup graceful shutdown
             Console.CancelKeyPress += (sender, e) =>
@@ -286,7 +285,7 @@ public class Program
             // If no widget was focused before rebuild, keep it that way
 
             // Update status
-            _windowSystem.BottomStatus =
+            _windowSystem.StatusBarStateService.BottomStatus =
                 $"Layout rebuilt for {terminalWidth} cols | Ctrl+Q to quit | F5 to refresh | ? for help";
         }
         catch (Exception ex)
@@ -294,7 +293,7 @@ public class Program
             // If rebuild fails, just log it - don't crash the app
             if (_windowSystem != null)
             {
-                _windowSystem.BottomStatus = $"Layout rebuild error: {ex.Message}";
+                _windowSystem.StatusBarStateService.BottomStatus = $"Layout rebuild error: {ex.Message}";
             }
         }
     }
@@ -510,7 +509,7 @@ public class Program
                 ? "[yellow]PAUSED[/] - Space: Resume | F1: Help | F2: Config | F3: Marketplace | Ctrl+Q: Quit"
                 : "F1: Help | F2: Config | F3: Marketplace | F5: Refresh | Space: Pause | Ctrl+Q: Quit";
 
-            _windowSystem.BottomStatus = status;
+            _windowSystem.StatusBarStateService.BottomStatus = status;
         }
     }
 
@@ -716,7 +715,7 @@ public class Program
         if (unconfigured.Count > 0)
         {
             // Show in bottom status bar (persistent warning)
-            _windowSystem.BottomStatus =
+            _windowSystem.StatusBarStateService.BottomStatus =
                 $"{unconfigured.Count} unconfigured script(s) found. Run --discover to review.";
         }
     }
@@ -946,7 +945,7 @@ public class Program
                     // Update status
                     if (_windowSystem != null)
                     {
-                        _windowSystem.BottomStatus = "Widget installed and configuration reloaded";
+                        _windowSystem.StatusBarStateService.BottomStatus = "Widget installed and configuration reloaded";
                         Task.Delay(3000).ContinueWith(_ => UpdateStatusBar());
                     }
                 }
@@ -985,7 +984,7 @@ public class Program
             // Update status
             if (_windowSystem != null)
             {
-                _windowSystem.BottomStatus = "Configuration reloaded from disk";
+                _windowSystem.StatusBarStateService.BottomStatus = "Configuration reloaded from disk";
                 Task.Delay(3000).ContinueWith(_ => UpdateStatusBar());
             }
         }
@@ -1040,7 +1039,7 @@ public class Program
 
                     if (_windowSystem != null)
                     {
-                        _windowSystem.BottomStatus = $"Swapped '{widgetId}' {directionText}";
+                        _windowSystem.StatusBarStateService.BottomStatus = $"Swapped '{widgetId}' {directionText}";
                     }
 
                     // Restore normal status after 3 seconds
@@ -1050,7 +1049,7 @@ public class Program
                 {
                     if (_windowSystem != null)
                     {
-                        _windowSystem.BottomStatus = $"Failed to save config: {ex.Message}";
+                        _windowSystem.StatusBarStateService.BottomStatus = $"Failed to save config: {ex.Message}";
                     }
                 }
             }
@@ -1070,7 +1069,7 @@ public class Program
                     _ => "Cannot reorder"
                 };
 
-                _windowSystem.BottomStatus = message;
+                _windowSystem.StatusBarStateService.BottomStatus = message;
                 Task.Delay(2000).ContinueWith(_ => UpdateStatusBar());
             }
             return;
@@ -1109,7 +1108,7 @@ public class Program
 
                     if (_windowSystem != null)
                     {
-                        _windowSystem.BottomStatus = $"Resized '{widgetId}' {propertyName} to {newValue}";
+                        _windowSystem.StatusBarStateService.BottomStatus = $"Resized '{widgetId}' {propertyName} to {newValue}";
                     }
 
                     Task.Delay(3000).ContinueWith(_ => UpdateStatusBar());
@@ -1118,7 +1117,7 @@ public class Program
                 {
                     if (_windowSystem != null)
                     {
-                        _windowSystem.BottomStatus = $"Failed to save config: {ex.Message}";
+                        _windowSystem.StatusBarStateService.BottomStatus = $"Failed to save config: {ex.Message}";
                     }
                 }
             }
@@ -1137,7 +1136,7 @@ public class Program
                     _ => "Cannot resize"
                 };
 
-                _windowSystem.BottomStatus = message;
+                _windowSystem.StatusBarStateService.BottomStatus = message;
                 Task.Delay(2000).ContinueWith(_ => UpdateStatusBar());
             }
             return;
@@ -1553,7 +1552,7 @@ public class Program
             ? $"[yellow]PAUSED[/] | {enabledCount} widgets ({disabledCount} disabled) | Space: Resume | [dim]F1: Help  F2: Config  F3: Marketplace  Ctrl+Q: Quit[/]"
             : $"ServerHub | {enabledCount} widgets ({okWidgets} ok, {errorWidgets} error{(disabledCount > 0 ? $", {disabledCount} disabled" : "")}) | CPU {cpuUsage}% MEM {memUsage}% | {DateTime.Now:HH:mm:ss} | [dim]F1: Help  F2: Config  F3: Marketplace  Ctrl+Q: Quit[/]";
 
-        _windowSystem.BottomStatus = status;
+        _windowSystem.StatusBarStateService.BottomStatus = status;
     }
 
     private static void DisplayConfigurationError(ConfigurationException ex)
