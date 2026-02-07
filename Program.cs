@@ -45,6 +45,7 @@ public class Program
     private static bool _devMode = false;
     private static string? _configPath;
     private static DateTime _lastConfigLoadTime = DateTime.MinValue;
+    private static CommandPaletteService? _commandPaletteService;
 
     public static async Task<int> Main(string[] args)
     {
@@ -119,6 +120,8 @@ public class Program
             _renderer = new WidgetRenderer();
             _layoutEngine = new LayoutEngine();
             _refreshService = new WidgetRefreshService(_executor, _parser, _config);
+            _commandPaletteService = new CommandPaletteService();
+            RegisterCommandPaletteCallbacks();
 
             // Initialize ConsoleEx window system
             _windowSystem = new ConsoleWindowSystem(
@@ -134,7 +137,7 @@ public class Program
             _windowSystem.StatusBarStateService.TopStatus = _devMode
                 ? "DEV MODE - Custom widget checksums DISABLED"
                 : "ServerHub - Server Monitoring Dashboard";
-            _windowSystem.StatusBarStateService.BottomStatus = "F1: Help | F2: Config | F3: Marketplace | F5: Refresh | Space: Pause | Ctrl+Q: Quit";
+            _windowSystem.StatusBarStateService.BottomStatus = "F1: Help | F2: Config | F3: Marketplace | Ctrl+P: Commands | F5: Refresh | Space: Pause | Ctrl+Q: Quit";
 
             // Setup graceful shutdown
             Console.CancelKeyPress += (sender, e) =>
@@ -506,8 +509,8 @@ public class Program
         if (_windowSystem != null)
         {
             var status = _isPaused
-                ? "[yellow]PAUSED[/] - Space: Resume | F1: Help | F2: Config | F3: Marketplace | Ctrl+Q: Quit"
-                : "F1: Help | F2: Config | F3: Marketplace | F5: Refresh | Space: Pause | Ctrl+Q: Quit";
+                ? "[yellow]PAUSED[/] - Space: Resume | F1: Help | F2: Config | F3: Marketplace | Ctrl+P: Commands | Ctrl+Q: Quit"
+                : "F1: Help | F2: Config | F3: Marketplace | Ctrl+P: Commands | F5: Refresh | Space: Pause | Ctrl+Q: Quit";
 
             _windowSystem.StatusBarStateService.BottomStatus = status;
         }
@@ -580,6 +583,7 @@ public class Program
   [bold cyan1]▸ Application[/]
     [cyan1]F2[/]                      Configure widgets [grey50](add/remove/edit)[/]
     [cyan1]F3[/]                      Browse marketplace [grey50](install widgets)[/]
+    [cyan1]Ctrl+P[/]                  Command palette [grey50](quick actions)[/]
     [cyan1]F5[/]                      Refresh all widgets
     [cyan1]Space[/]                   Pause / resume auto-refresh
     [cyan1]? [/][grey50]or[/] [cyan1]F1[/]                Show this help
@@ -790,10 +794,10 @@ public class Program
             if (direction.HasValue && _focusManager != null && _config != null && _configPath != null)
             {
                 HandleWidgetReorderVisual(direction.Value);
+                e.Handled = true;
+                return;
             }
-
-            e.Handled = true;
-            return;
+            // If not an arrow key, fall through to other handlers
         }
 
         // ===== PRIORITY 2.5: Widget Resizing =====
@@ -824,10 +828,10 @@ public class Program
             if (direction.HasValue && _focusManager != null && _config != null && _configPath != null)
             {
                 HandleWidgetResize(direction.Value);
+                e.Handled = true;
+                return;
             }
-
-            e.Handled = true;
-            return;
+            // If not an arrow key, fall through to other handlers
         }
 
         // ===== PRIORITY 3: Existing Application Shortcuts =====
@@ -882,6 +886,12 @@ public class Program
         {
             // Show marketplace browser
             ShowMarketplaceBrowser();
+            e.Handled = true;
+        }
+        else if (e.KeyInfo.Key == ConsoleKey.P && e.KeyInfo.Modifiers.HasFlag(ConsoleModifiers.Control))
+        {
+            // Show command palette
+            ShowCommandPalette();
             e.Handled = true;
         }
     }
@@ -1708,6 +1718,97 @@ Select a disabled widget and check 'Enabled' to show it on the dashboard.";
             ".sh" or ".bash" or ".py" or ".rb" or ".pl" or ".js" or ".ts" => true,
             _ => false
         };
+    }
+
+    /// <summary>
+    /// Register system command callbacks for command palette
+    /// </summary>
+    private static void RegisterCommandPaletteCallbacks()
+    {
+        if (_commandPaletteService == null)
+            return;
+
+        _commandPaletteService.RegisterSystemCommand("system-refresh-all", RefreshAllWidgets);
+        _commandPaletteService.RegisterSystemCommand("system-toggle-pause", TogglePause);
+        _commandPaletteService.RegisterSystemCommand("system-configure", ShowConfigDialog);
+        _commandPaletteService.RegisterSystemCommand("system-marketplace", ShowMarketplaceBrowser);
+        _commandPaletteService.RegisterSystemCommand("system-help", ShowHelpOverlay);
+    }
+
+    /// <summary>
+    /// Show command palette dialog
+    /// </summary>
+    private static void ShowCommandPalette()
+    {
+        if (_windowSystem == null || _commandPaletteService == null)
+            return;
+
+        // Gather all commands
+        var commands = _commandPaletteService.GetAllCommands(_widgetDataCache, _focusManager);
+
+        // Show command palette
+        CommandPaletteDialog.Show(_windowSystem, selectedCommand =>
+        {
+            if (selectedCommand != null)
+            {
+                ExecutePaletteCommand(selectedCommand);
+            }
+        }, commands);
+    }
+
+    /// <summary>
+    /// Execute a command selected from the palette
+    /// </summary>
+    private static void ExecutePaletteCommand(PaletteCommand command)
+    {
+        if (_windowSystem == null)
+            return;
+
+        switch (command.Type)
+        {
+            case CommandType.System:
+                // Execute system command (refresh, pause, configure, etc.)
+                command.Execute?.Invoke();
+                break;
+
+            case CommandType.Navigation:
+                // Focus widget
+                if (command.WidgetId != null && _focusManager != null)
+                {
+                    _focusManager.FocusWidget(command.WidgetId);
+                }
+                break;
+
+            case CommandType.WidgetAction:
+                // Execute widget action
+                if (command.Action != null)
+                {
+                    // Show action execution dialog (no parent, returns to dashboard)
+                    ActionExecutionDialog.Show(
+                        command.Action,
+                        _windowSystem,
+                        parentWindow: null,  // No parent - returns to dashboard
+                        onComplete: async (result) =>
+                        {
+                            // Refresh widget if action requests it
+                            if (command.Action.RefreshAfterSuccess && result.ExitCode == 0 && command.WidgetId != null && _config != null)
+                            {
+                                var widgetConfig = _config.Widgets.GetValueOrDefault(command.WidgetId);
+                                if (widgetConfig != null)
+                                {
+                                    await RefreshWidgetAsync(command.WidgetId, widgetConfig, force: true);
+                                }
+                            }
+                        }
+                    );
+                }
+                break;
+
+            case CommandType.Recent:
+                // Re-execute recent command
+                command.Execute?.Invoke();
+                break;
+        }
     }
 
 }
