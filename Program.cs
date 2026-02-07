@@ -133,11 +133,13 @@ public class Program
                     )
                 ));
 
-            // Layer 1: Top status bar warning in dev mode
+            // Status bar setup
+            // Top: Will show widget status, system stats, time (updated by UpdateStatusBar)
+            // Bottom: Keyboard shortcuts (static)
             _windowSystem.StatusBarStateService.TopStatus = _devMode
                 ? "DEV MODE - Custom widget checksums DISABLED"
-                : "ServerHub - Server Monitoring Dashboard";
-            _windowSystem.StatusBarStateService.BottomStatus = "F1: Help | F2: Config | F3: Marketplace | Ctrl+P: Commands | F5: Refresh | Space: Pause | Ctrl+Q: Quit";
+                : "ServerHub - Initializing...";
+            _windowSystem.StatusBarStateService.BottomStatus = "[dim]F1[/] Help  [dim]F2[/] Config  [dim]F3[/] Marketplace  [dim]Ctrl+P[/] Commands  [dim]F5[/] Refresh  [dim]Space[/] Pause  [dim]Ctrl+Q[/] Quit";
 
             // Setup graceful shutdown
             Console.CancelKeyPress += (sender, e) =>
@@ -508,11 +510,9 @@ public class Program
 
         if (_windowSystem != null)
         {
-            var status = _isPaused
-                ? "[yellow]PAUSED[/] - Space: Resume | F1: Help | F2: Config | F3: Marketplace | Ctrl+P: Commands | Ctrl+Q: Quit"
-                : "F1: Help | F2: Config | F3: Marketplace | Ctrl+P: Commands | F5: Refresh | Space: Pause | Ctrl+Q: Quit";
-
-            _windowSystem.StatusBarStateService.BottomStatus = status;
+            // Bottom status doesn't need updating - it's static keyboard shortcuts
+            // Just force a status bar update to show pause state in top status
+            UpdateStatusBar();
         }
     }
 
@@ -1547,6 +1547,10 @@ public class Program
         if (_windowSystem == null || _config == null)
             return;
 
+        // Don't update status bars in dev mode (keep warning visible)
+        if (_devMode)
+            return;
+
         // Count widgets by state
         var totalConfigured = _config.Widgets.Count;
         var disabledCount = _config.Widgets.Values.Count(w => !w.Enabled);
@@ -1558,11 +1562,15 @@ public class Program
         var cpuUsage = GetSystemCPU();
         var memUsage = GetSystemMemory();
 
-        var status = _isPaused
-            ? $"[yellow]PAUSED[/] | {enabledCount} widgets ({disabledCount} disabled) | Space: Resume | [dim]F1: Help  F2: Config  F3: Marketplace  Ctrl+Q: Quit[/]"
-            : $"ServerHub | {enabledCount} widgets ({okWidgets} ok, {errorWidgets} error{(disabledCount > 0 ? $", {disabledCount} disabled" : "")}) | CPU {cpuUsage}% MEM {memUsage}% | {DateTime.Now:HH:mm:ss} | [dim]F1: Help  F2: Config  F3: Marketplace  Ctrl+Q: Quit[/]";
+        // Top status: Widget counts, system stats, time, pause indicator
+        var topStatus = _isPaused
+            ? $"[yellow]● PAUSED[/] | {enabledCount} widgets ({disabledCount} disabled) | CPU {cpuUsage}% | MEM {memUsage}% | {DateTime.Now:HH:mm:ss}"
+            : $"ServerHub | {enabledCount} widgets ({okWidgets} ok, {errorWidgets} error{(disabledCount > 0 ? $", {disabledCount} disabled" : "")}) | CPU {cpuUsage}% | MEM {memUsage}% | {DateTime.Now:HH:mm:ss}";
 
-        _windowSystem.StatusBarStateService.BottomStatus = status;
+        _windowSystem.StatusBarStateService.TopStatus = topStatus;
+
+        // Bottom status: Keep keyboard shortcuts (don't overwrite)
+        // Already set at startup, no need to update here
     }
 
     private static void DisplayConfigurationError(ConfigurationException ex)

@@ -179,3 +179,4 @@ config.yaml
 # Claude Code
 .claude/
 Claude.md
+CLAUDE.md
