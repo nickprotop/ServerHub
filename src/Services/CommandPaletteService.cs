@@ -110,11 +110,18 @@ public class CommandPaletteService
 
         foreach (var (widgetId, data) in widgetData)
         {
+            // Skip null entries
+            if (data == null)
+                continue;
+
+            // Use widgetId as fallback if Title is null/empty
+            var title = string.IsNullOrEmpty(data.Title) ? widgetId : data.Title;
+
             commands.Add(new PaletteCommand
             {
                 Id = $"nav-{widgetId}",
-                Label = $"Jump to: {data.Title}",
-                Description = $"Focus {data.Title} widget",
+                Label = $"Jump to: {title}",
+                Description = $"Focus {title} widget",
                 Type = CommandType.Navigation,
                 Icon = "[cyan1]→[/]",
                 Priority = 50,
@@ -134,11 +141,22 @@ public class CommandPaletteService
 
         foreach (var (widgetId, data) in widgetData)
         {
+            // Skip null entries
+            if (data == null)
+                continue;
+
             if (data.Actions == null || data.Actions.Count == 0)
                 continue;
 
+            // Use widgetId as fallback if Title is null/empty
+            var title = string.IsNullOrEmpty(data.Title) ? widgetId : data.Title;
+
             foreach (var action in data.Actions)
             {
+                // Skip null actions
+                if (action == null)
+                    continue;
+
                 // Build description with flag icons
                 var flagIcons = new List<string>();
 
@@ -147,14 +165,14 @@ public class CommandPaletteService
                 if (action.IsDanger)
                     flagIcons.Add("⚠");
 
-                var description = $"Execute: {action.Label}";
+                var description = $"Execute: {action.Label ?? "Unknown"}";
                 if (flagIcons.Count > 0)
                     description += $" {string.Join(" ", flagIcons)}";
 
                 commands.Add(new PaletteCommand
                 {
-                    Id = $"action-{widgetId}-{action.Label}",
-                    Label = $"{data.Title} › {action.Label}",
+                    Id = $"action-{widgetId}-{action.Label ?? "unknown"}",
+                    Label = $"{title} › {action.Label ?? "Unknown"}",
                     Description = description,
                     Type = CommandType.WidgetAction,
                     Icon = action.IsDanger ? "[yellow]⚠[/]" : "[yellow]»[/]",

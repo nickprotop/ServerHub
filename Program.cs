@@ -46,6 +46,9 @@ public class Program
     private static string? _configPath;
     private static DateTime _lastConfigLoadTime = DateTime.MinValue;
     private static CommandPaletteService? _commandPaletteService;
+    private static StatusBarManager? _statusBarManager;
+    private static int _initialLoadPendingCount = 0;
+    private static readonly object _initialLoadLock = new object();
 
     public static async Task<int> Main(string[] args)
     {
@@ -133,13 +136,8 @@ public class Program
                     )
                 ));
 
-            // Status bar setup
-            // Top: Will show widget status, system stats, time (updated by UpdateStatusBar)
-            // Bottom: Keyboard shortcuts (static)
-            _windowSystem.StatusBarStateService.TopStatus = _devMode
-                ? "DEV MODE - Custom widget checksums DISABLED"
-                : "ServerHub - Initializing...";
-            _windowSystem.StatusBarStateService.BottomStatus = "[dim]F1[/] Help  [dim]F2[/] Config  [dim]F3[/] Marketplace  [dim]Ctrl+P[/] Commands  [dim]F5[/] Refresh  [dim]Space[/] Pause  [dim]Ctrl+Q[/] Quit";
+            // Initialize StatusBarManager
+            _statusBarManager = new StatusBarManager(_windowSystem.StatusBarStateService, devMode: _devMode);
 
             // Setup graceful shutdown
             Console.CancelKeyPress += (sender, e) =>
@@ -290,16 +288,12 @@ public class Program
             // If no widget was focused before rebuild, keep it that way
 
             // Update status
-            _windowSystem.StatusBarStateService.BottomStatus =
-                $"Layout rebuilt for {terminalWidth} cols | Ctrl+Q to quit | F5 to refresh | ? for help";
+            _statusBarManager?.ShowInfo($"Layout rebuilt for {terminalWidth} cols", 2000);
         }
         catch (Exception ex)
         {
             // If rebuild fails, just log it - don't crash the app
-            if (_windowSystem != null)
-            {
-                _windowSystem.StatusBarStateService.BottomStatus = $"Layout rebuild error: {ex.Message}";
-            }
+            _statusBarManager?.ShowError($"Layout rebuild error: {ex.Message}", 5000);
         }
     }
 
@@ -718,9 +712,8 @@ public class Program
 
         if (unconfigured.Count > 0)
         {
-            // Show in bottom status bar (persistent warning)
-            _windowSystem.StatusBarStateService.BottomStatus =
-                $"{unconfigured.Count} unconfigured script(s) found. Run --discover to review.";
+            // Show persistent warning in bottom status bar
+            _statusBarManager?.ShowWarning($"{unconfigured.Count} unconfigured script(s) found. Run --discover to review.", 10000);
         }
     }
 
@@ -953,11 +946,7 @@ public class Program
                     RebuildLayout();
 
                     // Update status
-                    if (_windowSystem != null)
-                    {
-                        _windowSystem.StatusBarStateService.BottomStatus = "Widget installed and configuration reloaded";
-                        Task.Delay(3000).ContinueWith(_ => UpdateStatusBar());
-                    }
+                    _statusBarManager?.ShowSuccess("Widget installed and configuration reloaded");
                 }
             }
         );
@@ -992,11 +981,7 @@ public class Program
             RebuildLayout();
 
             // Update status
-            if (_windowSystem != null)
-            {
-                _windowSystem.StatusBarStateService.BottomStatus = "Configuration reloaded from disk";
-                Task.Delay(3000).ContinueWith(_ => UpdateStatusBar());
-            }
+            _statusBarManager?.ShowSuccess("Configuration reloaded from disk");
         }
         catch (Exception ex)
         {
@@ -1047,20 +1032,11 @@ public class Program
                         _ => "unknown"
                     };
 
-                    if (_windowSystem != null)
-                    {
-                        _windowSystem.StatusBarStateService.BottomStatus = $"Swapped '{widgetId}' {directionText}";
-                    }
-
-                    // Restore normal status after 3 seconds
-                    Task.Delay(3000).ContinueWith(_ => UpdateStatusBar());
+                    _statusBarManager?.ShowInfo($"Swapped '{widgetId}' {directionText}");
                 }
                 catch (Exception ex)
                 {
-                    if (_windowSystem != null)
-                    {
-                        _windowSystem.StatusBarStateService.BottomStatus = $"Failed to save config: {ex.Message}";
-                    }
+                    _statusBarManager?.ShowError($"Failed to save config: {ex.Message}", 5000);
                 }
             }
         );
@@ -1068,20 +1044,16 @@ public class Program
         if (!moved)
         {
             // At boundary or other issue - provide feedback
-            if (_windowSystem != null)
+            var message = direction switch
             {
-                var message = direction switch
-                {
-                    FocusManager.VisualReorderDirection.VisualLeft => "No widget to the left",
-                    FocusManager.VisualReorderDirection.VisualRight => "No widget to the right",
-                    FocusManager.VisualReorderDirection.VisualUp => "No widget above",
-                    FocusManager.VisualReorderDirection.VisualDown => "No widget below",
-                    _ => "Cannot reorder"
-                };
+                FocusManager.VisualReorderDirection.VisualLeft => "No widget to the left",
+                FocusManager.VisualReorderDirection.VisualRight => "No widget to the right",
+                FocusManager.VisualReorderDirection.VisualUp => "No widget above",
+                FocusManager.VisualReorderDirection.VisualDown => "No widget below",
+                _ => "Cannot reorder"
+            };
 
-                _windowSystem.StatusBarStateService.BottomStatus = message;
-                Task.Delay(2000).ContinueWith(_ => UpdateStatusBar());
-            }
+            _statusBarManager?.ShowWarning(message, 2000);
             return;
         }
 
@@ -1116,39 +1088,27 @@ public class Program
                         ? "width"
                         : "height";
 
-                    if (_windowSystem != null)
-                    {
-                        _windowSystem.StatusBarStateService.BottomStatus = $"Resized '{widgetId}' {propertyName} to {newValue}";
-                    }
-
-                    Task.Delay(3000).ContinueWith(_ => UpdateStatusBar());
+                    _statusBarManager?.ShowInfo($"Resized '{widgetId}' {propertyName} to {newValue}");
                 }
                 catch (Exception ex)
                 {
-                    if (_windowSystem != null)
-                    {
-                        _windowSystem.StatusBarStateService.BottomStatus = $"Failed to save config: {ex.Message}";
-                    }
+                    _statusBarManager?.ShowError($"Failed to save config: {ex.Message}", 5000);
                 }
             }
         );
 
         if (!resized)
         {
-            if (_windowSystem != null)
+            var message = direction switch
             {
-                var message = direction switch
-                {
-                    FocusManager.ResizeDirection.WidthDecrease => "Minimum width reached",
-                    FocusManager.ResizeDirection.WidthIncrease => "Maximum width reached",
-                    FocusManager.ResizeDirection.HeightDecrease => "Minimum height reached",
-                    FocusManager.ResizeDirection.HeightIncrease => "Maximum height reached",
-                    _ => "Cannot resize"
-                };
+                FocusManager.ResizeDirection.WidthDecrease => "Minimum width reached",
+                FocusManager.ResizeDirection.WidthIncrease => "Maximum width reached",
+                FocusManager.ResizeDirection.HeightDecrease => "Minimum height reached",
+                FocusManager.ResizeDirection.HeightIncrease => "Maximum height reached",
+                _ => "Cannot resize"
+            };
 
-                _windowSystem.StatusBarStateService.BottomStatus = message;
-                Task.Delay(2000).ContinueWith(_ => UpdateStatusBar());
-            }
+            _statusBarManager?.ShowWarning(message, 2000);
             return;
         }
 
@@ -1160,14 +1120,21 @@ public class Program
         if (_config == null)
             return;
 
+        // Count enabled widgets for initial load tracking
+        var enabledWidgets = _config.Widgets.Where(w => w.Value.Enabled).ToList();
+        lock (_initialLoadLock)
+        {
+            _initialLoadPendingCount = enabledWidgets.Count;
+        }
+
         foreach (var (widgetId, widgetConfig) in _config.Widgets)
         {
             // Skip disabled widgets - no timers, no initial fetch
             if (!widgetConfig.Enabled)
                 continue;
 
-            // Initial fetch
-            _ = RefreshWidgetAsync(widgetId, widgetConfig);
+            // Initial fetch (marked as initial load)
+            _ = RefreshWidgetAsync(widgetId, widgetConfig, force: false, isInitialLoad: true);
 
             // Setup periodic refresh
             var timer = new Timer(
@@ -1205,40 +1172,144 @@ public class Program
         }
     }
 
-    private static async Task RefreshWidgetAsync(string widgetId, WidgetConfig widgetConfig, bool force = false)
+    private static async Task RefreshWidgetAsync(string widgetId, WidgetConfig widgetConfig, bool force = false, bool isInitialLoad = false)
     {
-        if (_executor == null || _parser == null || _mainWindow == null)
-            return;
-
-        // Skip if widget no longer exists in current configuration (race condition during reload)
-        if (_config?.Widgets.ContainsKey(widgetId) == false)
-            return;
-
-        // Skip refresh when paused (unless forced)
-        if (!force && _isPaused)
-            return;
-
-        // Skip all widget refreshes when sudo password dialog is open
-        // This prevents ANSI mouse sequence leaks during password entry
-        if (ServerHub.UI.SudoPasswordDialog.IsOpen)
-            return;
-
-        // Skip if modal is open for this widget - modal handles its own refresh
-        // UNLESS this is a forced refresh (e.g., after action completion)
-        if (!force && _openModalWidgetId == widgetId)
-            return;
-
-        // Mark as refreshing (check again before accessing dictionary)
-        if (_config?.Widgets.ContainsKey(widgetId) == false)
-            return;
-        _isRefreshing[widgetId] = true;
-
         try
         {
-            // Resolve widget path
-            var scriptPath = WidgetPaths.ResolveWidgetPath(widgetConfig.Path, widgetConfig.Location);
-            if (scriptPath == null)
+            if (_executor == null || _parser == null || _mainWindow == null)
+                return;
+
+            // Skip if widget no longer exists in current configuration (race condition during reload)
+            if (_config?.Widgets.ContainsKey(widgetId) == false)
+                return;
+
+            // Skip refresh when paused (unless forced)
+            if (!force && _isPaused)
+                return;
+
+            // Skip all widget refreshes when sudo password dialog is open
+            // This prevents ANSI mouse sequence leaks during password entry
+            if (ServerHub.UI.SudoPasswordDialog.IsOpen)
+                return;
+
+            // Skip if modal is open for this widget - modal handles its own refresh
+            // UNLESS this is a forced refresh (e.g., after action completion)
+            if (!force && _openModalWidgetId == widgetId)
+                return;
+
+            // Mark as refreshing (check again before accessing dictionary)
+            if (_config?.Widgets.ContainsKey(widgetId) == false)
+                return;
+            _isRefreshing[widgetId] = true;
+
+            try
             {
+                // Resolve widget path
+                var scriptPath = WidgetPaths.ResolveWidgetPath(widgetConfig.Path, widgetConfig.Location);
+                if (scriptPath == null)
+                {
+                    _consecutiveErrors.TryGetValue(widgetId, out var errorCount);
+                    _consecutiveErrors[widgetId] = errorCount + 1;
+
+                    var lastUpdate = _lastSuccessfulUpdate.TryGetValue(widgetId, out var lastTime)
+                        ? $"Last update: {FormatRelativeTime(lastTime)}"
+                        : "Never updated successfully";
+
+                    var errorData = new WidgetData
+                    {
+                        Title = widgetId,
+                        Error = $"Widget script not found: {widgetConfig.Path}",
+                        Timestamp = DateTime.Now,
+                        Rows = new List<WidgetRow>
+                        {
+                            new()
+                            {
+                                Content = $"[red]Error:[/] Widget script not found",
+                                Status = new() { State = StatusState.Error },
+                            },
+                            new() { Content = $"[grey70]Path: {widgetConfig.Path}[/]" },
+                            new() { Content = "" },
+                            new() { Content = $"[grey70]{lastUpdate}[/]" },
+                            new() { Content = $"[grey70]Next retry: {widgetConfig.Refresh}s[/]" },
+                            new() { Content = $"[grey70]Consecutive errors: {errorCount + 1}[/]" },
+                        },
+                    };
+
+                    _widgetDataCache[widgetId] = errorData;
+
+                    // Clear refreshing state BEFORE updating UI
+                    _isRefreshing[widgetId] = false;
+
+                    UpdateWidgetUI(widgetId, errorData);
+                    return;
+                }
+
+                // Execute script
+                var result = await _executor.ExecuteAsync(scriptPath, null, widgetConfig.Sha256);
+
+                WidgetData widgetData;
+                if (result.IsSuccess)
+                {
+                    // Parse output
+                    widgetData = _parser.Parse(result.Output ?? "");
+                    widgetData.Timestamp = DateTime.Now;
+
+                    // Track successful update
+                    _lastSuccessfulUpdate[widgetId] = DateTime.Now;
+                    _consecutiveErrors[widgetId] = 0;
+                }
+                else
+                {
+                    // Track error
+                    _consecutiveErrors.TryGetValue(widgetId, out var errorCount);
+                    _consecutiveErrors[widgetId] = errorCount + 1;
+
+                    var lastUpdate = _lastSuccessfulUpdate.TryGetValue(widgetId, out var lastTime)
+                        ? $"Last update: {FormatRelativeTime(lastTime)}"
+                        : "Never updated successfully";
+
+                    // Create enhanced error widget
+                    widgetData = new WidgetData
+                    {
+                        Title = widgetId,
+                        Error = result.ErrorMessage ?? "Unknown error",
+                        Timestamp = DateTime.Now,
+                        Rows = new List<WidgetRow>
+                        {
+                            new()
+                            {
+                                Content = $"[red]Widget Error[/]",
+                                Status = new() { State = StatusState.Error },
+                            },
+                            new() { Content = "" },
+                            new() { Content = $"[grey70]{result.ErrorMessage ?? "Unknown error"}[/]" },
+                            new() { Content = "" },
+                            new() { Content = $"[grey70]{lastUpdate}[/]" },
+                            new() { Content = $"[grey70]Next retry: {widgetConfig.Refresh}s[/]" },
+                            new() { Content = $"[grey70]Consecutive errors: {errorCount + 1}[/]" },
+                        },
+                    };
+                }
+
+                _widgetDataCache[widgetId] = widgetData;
+
+                // Clear refreshing state BEFORE updating UI
+                _isRefreshing[widgetId] = false;
+
+                UpdateWidgetUI(widgetId, widgetData);
+            }
+            catch (Exception ex)
+            {
+                // Skip error handling if widget no longer exists (race condition during reload)
+                if (_config?.Widgets.ContainsKey(widgetId) == false)
+                {
+                    // Clear refreshing state if it exists and exit silently
+                    if (_isRefreshing.ContainsKey(widgetId))
+                        _isRefreshing[widgetId] = false;
+                    return;
+                }
+
+                // Track exception error
                 _consecutiveErrors.TryGetValue(widgetId, out var errorCount);
                 _consecutiveErrors[widgetId] = errorCount + 1;
 
@@ -1249,16 +1320,17 @@ public class Program
                 var errorData = new WidgetData
                 {
                     Title = widgetId,
-                    Error = $"Widget script not found: {widgetConfig.Path}",
+                    Error = $"Exception: {ex.Message}",
                     Timestamp = DateTime.Now,
                     Rows = new List<WidgetRow>
                     {
                         new()
                         {
-                            Content = $"[red]Error:[/] Widget script not found",
+                            Content = $"[red]Exception[/]",
                             Status = new() { State = StatusState.Error },
                         },
-                        new() { Content = $"[grey70]Path: {widgetConfig.Path}[/]" },
+                        new() { Content = "" },
+                        new() { Content = $"[grey70]{ex.Message}[/]" },
                         new() { Content = "" },
                         new() { Content = $"[grey70]{lastUpdate}[/]" },
                         new() { Content = $"[grey70]Next retry: {widgetConfig.Refresh}s[/]" },
@@ -1272,109 +1344,33 @@ public class Program
                 _isRefreshing[widgetId] = false;
 
                 UpdateWidgetUI(widgetId, errorData);
-                return;
             }
-
-            // Execute script
-            var result = await _executor.ExecuteAsync(scriptPath, null, widgetConfig.Sha256);
-
-            WidgetData widgetData;
-            if (result.IsSuccess)
-            {
-                // Parse output
-                widgetData = _parser.Parse(result.Output ?? "");
-                widgetData.Timestamp = DateTime.Now;
-
-                // Track successful update
-                _lastSuccessfulUpdate[widgetId] = DateTime.Now;
-                _consecutiveErrors[widgetId] = 0;
-            }
-            else
-            {
-                // Track error
-                _consecutiveErrors.TryGetValue(widgetId, out var errorCount);
-                _consecutiveErrors[widgetId] = errorCount + 1;
-
-                var lastUpdate = _lastSuccessfulUpdate.TryGetValue(widgetId, out var lastTime)
-                    ? $"Last update: {FormatRelativeTime(lastTime)}"
-                    : "Never updated successfully";
-
-                // Create enhanced error widget
-                widgetData = new WidgetData
-                {
-                    Title = widgetId,
-                    Error = result.ErrorMessage ?? "Unknown error",
-                    Timestamp = DateTime.Now,
-                    Rows = new List<WidgetRow>
-                    {
-                        new()
-                        {
-                            Content = $"[red]Widget Error[/]",
-                            Status = new() { State = StatusState.Error },
-                        },
-                        new() { Content = "" },
-                        new() { Content = $"[grey70]{result.ErrorMessage ?? "Unknown error"}[/]" },
-                        new() { Content = "" },
-                        new() { Content = $"[grey70]{lastUpdate}[/]" },
-                        new() { Content = $"[grey70]Next retry: {widgetConfig.Refresh}s[/]" },
-                        new() { Content = $"[grey70]Consecutive errors: {errorCount + 1}[/]" },
-                    },
-                };
-            }
-
-            _widgetDataCache[widgetId] = widgetData;
-
-            // Clear refreshing state BEFORE updating UI
-            _isRefreshing[widgetId] = false;
-
-            UpdateWidgetUI(widgetId, widgetData);
         }
-        catch (Exception ex)
+        finally
         {
-            // Skip error handling if widget no longer exists (race condition during reload)
-            if (_config?.Widgets.ContainsKey(widgetId) == false)
+            // Track initial load completion
+            if (isInitialLoad)
             {
-                // Clear refreshing state if it exists and exit silently
-                if (_isRefreshing.ContainsKey(widgetId))
-                    _isRefreshing[widgetId] = false;
-                return;
+                CompleteInitialLoad();
             }
+        }
+    }
 
-            // Track exception error
-            _consecutiveErrors.TryGetValue(widgetId, out var errorCount);
-            _consecutiveErrors[widgetId] = errorCount + 1;
+    /// <summary>
+    /// Called when each widget completes its initial load
+    /// </summary>
+    private static void CompleteInitialLoad()
+    {
+        lock (_initialLoadLock)
+        {
+            _initialLoadPendingCount--;
 
-            var lastUpdate = _lastSuccessfulUpdate.TryGetValue(widgetId, out var lastTime)
-                ? $"Last update: {FormatRelativeTime(lastTime)}"
-                : "Never updated successfully";
-
-            var errorData = new WidgetData
+            // All widgets loaded - show success message
+            if (_initialLoadPendingCount == 0 && _config != null)
             {
-                Title = widgetId,
-                Error = $"Exception: {ex.Message}",
-                Timestamp = DateTime.Now,
-                Rows = new List<WidgetRow>
-                {
-                    new()
-                    {
-                        Content = $"[red]Exception[/]",
-                        Status = new() { State = StatusState.Error },
-                    },
-                    new() { Content = "" },
-                    new() { Content = $"[grey70]{ex.Message}[/]" },
-                    new() { Content = "" },
-                    new() { Content = $"[grey70]{lastUpdate}[/]" },
-                    new() { Content = $"[grey70]Next retry: {widgetConfig.Refresh}s[/]" },
-                    new() { Content = $"[grey70]Consecutive errors: {errorCount + 1}[/]" },
-                },
-            };
-
-            _widgetDataCache[widgetId] = errorData;
-
-            // Clear refreshing state BEFORE updating UI
-            _isRefreshing[widgetId] = false;
-
-            UpdateWidgetUI(widgetId, errorData);
+                var enabledCount = _config.Widgets.Values.Count(w => w.Enabled);
+                _statusBarManager?.ShowSuccess($"{enabledCount} widget{(enabledCount != 1 ? "s" : "")} loaded", 3000);
+            }
         }
     }
 
@@ -1544,11 +1540,7 @@ public class Program
 
     private static void UpdateStatusBar()
     {
-        if (_windowSystem == null || _config == null)
-            return;
-
-        // Don't update status bars in dev mode (keep warning visible)
-        if (_devMode)
+        if (_statusBarManager == null || _config == null)
             return;
 
         // Count widgets by state
@@ -1562,15 +1554,16 @@ public class Program
         var cpuUsage = GetSystemCPU();
         var memUsage = GetSystemMemory();
 
-        // Top status: Widget counts, system stats, time, pause indicator
-        var topStatus = _isPaused
-            ? $"[yellow]● PAUSED[/] | {enabledCount} widgets ({disabledCount} disabled) | CPU {cpuUsage}% | MEM {memUsage}% | {DateTime.Now:HH:mm:ss}"
-            : $"ServerHub | {enabledCount} widgets ({okWidgets} ok, {errorWidgets} error{(disabledCount > 0 ? $", {disabledCount} disabled" : "")}) | CPU {cpuUsage}% | MEM {memUsage}% | {DateTime.Now:HH:mm:ss}";
-
-        _windowSystem.StatusBarStateService.TopStatus = topStatus;
-
-        // Bottom status: Keep keyboard shortcuts (don't overwrite)
-        // Already set at startup, no need to update here
+        // Update dashboard status (respects dev mode internally)
+        _statusBarManager.UpdateDashboardStatus(
+            enabledCount,
+            disabledCount,
+            okWidgets,
+            errorWidgets,
+            cpuUsage,
+            memUsage,
+            _isPaused
+        );
     }
 
     private static void DisplayConfigurationError(ConfigurationException ex)

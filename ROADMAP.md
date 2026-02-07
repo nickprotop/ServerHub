@@ -11,11 +11,11 @@ This document outlines planned features and enhancements for ServerHub. The road
 Track progress for high-priority features actively in development or planned for the next release.
 
 ### Quick Wins
-- [ ] **Command Palette (Ctrl+P)** - Quick action finder with fuzzy search
-  - Status: Not Started
+- [x] **Command Palette (Ctrl+P)** - Quick action finder with fuzzy search
+  - Status: ✅ Completed
   - Impact: High UX improvement
   - Effort: Medium
-  - Files: New `src/UI/CommandPaletteDialog.cs`, update `DefaultCommand.cs`
+  - Files: `src/UI/CommandPaletteDialog.cs`, `src/Services/CommandPaletteService.cs`, `src/Models/PaletteCommand.cs`
 
 - [ ] **Dashboard Presets/Profiles** - Save and switch between multiple configs
   - Status: Not Started
@@ -190,11 +190,11 @@ Add smart automation and conditional logic to reduce manual intervention.
 Improve user experience with better navigation and discoverability.
 
 ### Command Palette
-- [ ] Ctrl+P quick action finder
-- [ ] Fuzzy search for all actions
+- [x] Ctrl+P quick action finder
+- [x] Fuzzy search for all actions (searches label, description, and command text)
 - [ ] Recent actions history
-- [ ] Keyboard shortcut hints
-- [ ] Widget jump by name
+- [x] Keyboard shortcut hints
+- [x] Widget jump by name
 - [ ] Action favorites/bookmarks
 
 ### Search & Filter

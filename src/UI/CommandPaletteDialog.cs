@@ -187,12 +187,13 @@ public static class CommandPaletteDialog
     {
         list.ClearItems();
 
-        // Filter commands (substring search in label and description)
+        // Filter commands (substring search in label, description, and command text)
         var filtered = string.IsNullOrWhiteSpace(searchQuery)
             ? allCommands
             : allCommands.Where(cmd =>
                 cmd.Label.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
-                cmd.Description.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)
+                cmd.Description.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                (cmd.Action != null && cmd.Action.Command.Contains(searchQuery, StringComparison.OrdinalIgnoreCase))
             ).ToList();
 
         // Sort: exact prefix matches first, then by priority
