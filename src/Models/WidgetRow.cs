@@ -55,6 +55,12 @@ public class WidgetRow
     /// Format: [graph:VALUES] or [graph:VALUES:COLOR] or [graph:VALUES:COLOR:LABEL]
     /// </summary>
     public WidgetGraph? Graph { get; set; }
+
+    /// <summary>
+    /// Parsed line graph (if present)
+    /// Format: [line:VALUES:COLOR:LABEL:MIN-MAX:WIDTH:HEIGHT:STYLE]
+    /// </summary>
+    public WidgetLineGraph? LineGraph { get; set; }
 }
 
 /// <summary>
@@ -153,4 +159,55 @@ public class WidgetGraph
     public double? MinValue { get; set; }
     public double? MaxValue { get; set; }
     public int Width { get; set; } = 30;
+}
+
+/// <summary>
+/// Line graph with smooth connected lines for time-series visualization
+/// </summary>
+public class WidgetLineGraph
+{
+    /// <summary>
+    /// Data values to plot
+    /// </summary>
+    public List<double> Values { get; set; } = new();
+
+    /// <summary>
+    /// Optional color name (e.g., "cyan", "red")
+    /// </summary>
+    public string? Color { get; set; }
+
+    /// <summary>
+    /// Optional gradient specification (e.g., "blue→red", "warm", "cool")
+    /// </summary>
+    public string? Gradient { get; set; }
+
+    /// <summary>
+    /// Optional label/title for the graph
+    /// </summary>
+    public string? Label { get; set; }
+
+    /// <summary>
+    /// Optional minimum value for fixed scale (null = auto-scale)
+    /// </summary>
+    public double? MinValue { get; set; }
+
+    /// <summary>
+    /// Optional maximum value for fixed scale (null = auto-scale)
+    /// </summary>
+    public double? MaxValue { get; set; }
+
+    /// <summary>
+    /// Graph width in characters (default: 60)
+    /// </summary>
+    public int Width { get; set; } = 60;
+
+    /// <summary>
+    /// Graph height in lines (default: 8)
+    /// </summary>
+    public int Height { get; set; } = 8;
+
+    /// <summary>
+    /// Rendering style: "braille" (default, high-res) or "ascii" (simple)
+    /// </summary>
+    public string Style { get; set; } = "braille";
 }

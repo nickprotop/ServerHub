@@ -451,6 +451,7 @@ Widgets output structured text to stdout:
 echo "title: My Widget"
 echo "row: [status:ok] Everything is fine"
 echo "row: [progress:75:inline]"
+echo "row: [line:10,20,15,30,25:cyan:CPU History:0-100:50:6]"  # Line graph
 echo "row: [grey70]Last updated: $(date)[/]"
 ```
 

@@ -256,10 +256,15 @@ Advanced templates support data visualization:
 
 ```bash
 # Sparkline (compact trend)
-echo "row: sparkline:10 20 30 40 50 40 30 20"
+echo "row: [sparkline:10,20,30,40,50,40,30,20:green]"
 
-# Graph (extended mode)
-echo "row: graph:10 20 30 40 50 40 30 20"
+# Multi-line graph (4 rows tall)
+echo "row: [graph:10,20,30,40,50,40,30,20:cyan:CPU Load:0-100:30]"
+
+# Line graph (smooth connected line)
+echo "row: [line:10,20,15,30,25,35,40,30,20,10:cyan:Temperature:0-50:60:8]"
+echo "row: [line:5,15,25,35,45:warm:CPU History:0-100:50:6:braille]"  # Braille style
+echo "row: [line:5,15,25,35,45:blue:Memory:0-100:50:6:ascii]"          # ASCII style
 ```
 
 ### Tables

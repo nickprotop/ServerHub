@@ -255,4 +255,229 @@ row: [red]Failed:[/] [192.168.1.1:22]
     }
 
     #endregion
+
+    #region Line Graph Parsing
+
+    [Fact]
+    public void ProtocolParser_ParsesBasicLineGraph()
+    {
+        var scriptOutput = "row: [line:1,2,3,4,5]";
+
+        var parser = new WidgetProtocolParser();
+        var widgetData = parser.Parse(scriptOutput);
+
+        var lineGraph = widgetData.Rows[0].LineGraph;
+        Assert.NotNull(lineGraph);
+        Assert.Equal(5, lineGraph.Values.Count);
+        Assert.Equal(new List<double> { 1, 2, 3, 4, 5 }, lineGraph.Values);
+        Assert.Equal(60, lineGraph.Width);
+        Assert.Equal(8, lineGraph.Height);
+        Assert.Equal("braille", lineGraph.Style);
+    }
+
+    [Fact]
+    public void ProtocolParser_ParsesLineGraphWithColor()
+    {
+        var scriptOutput = "row: [line:10,20,15,25,30:cyan]";
+
+        var parser = new WidgetProtocolParser();
+        var widgetData = parser.Parse(scriptOutput);
+
+        var lineGraph = widgetData.Rows[0].LineGraph;
+        Assert.NotNull(lineGraph);
+        Assert.Equal("cyan", lineGraph.Color);
+        Assert.Null(lineGraph.Gradient);
+    }
+
+    [Fact]
+    public void ProtocolParser_ParsesLineGraphWithGradient()
+    {
+        var scriptOutput = "row: [line:5,10,15,10,5:cool]";
+
+        var parser = new WidgetProtocolParser();
+        var widgetData = parser.Parse(scriptOutput);
+
+        var lineGraph = widgetData.Rows[0].LineGraph;
+        Assert.NotNull(lineGraph);
+        Assert.Null(lineGraph.Color);
+        Assert.Equal("cool", lineGraph.Gradient);
+    }
+
+    [Fact]
+    public void ProtocolParser_ParsesLineGraphWithLabel()
+    {
+        var scriptOutput = "row: [line:1,2,3,2,1:red:CPU Usage]";
+
+        var parser = new WidgetProtocolParser();
+        var widgetData = parser.Parse(scriptOutput);
+
+        var lineGraph = widgetData.Rows[0].LineGraph;
+        Assert.NotNull(lineGraph);
+        Assert.Equal("red", lineGraph.Color);
+        Assert.Equal("CPU Usage", lineGraph.Label);
+    }
+
+    [Fact]
+    public void ProtocolParser_ParsesLineGraphWithMinMax()
+    {
+        var scriptOutput = "row: [line:50,60,55,65,70:green:Memory:0-100]";
+
+        var parser = new WidgetProtocolParser();
+        var widgetData = parser.Parse(scriptOutput);
+
+        var lineGraph = widgetData.Rows[0].LineGraph;
+        Assert.NotNull(lineGraph);
+        Assert.Equal(0, lineGraph.MinValue);
+        Assert.Equal(100, lineGraph.MaxValue);
+    }
+
+    [Fact]
+    public void ProtocolParser_ParsesLineGraphWithCustomWidth()
+    {
+        var scriptOutput = "row: [line:1,2,3,4,5:blue:Network:0-10:80]";
+
+        var parser = new WidgetProtocolParser();
+        var widgetData = parser.Parse(scriptOutput);
+
+        var lineGraph = widgetData.Rows[0].LineGraph;
+        Assert.NotNull(lineGraph);
+        Assert.Equal(80, lineGraph.Width);
+        Assert.Equal(8, lineGraph.Height); // Default height
+    }
+
+    [Fact]
+    public void ProtocolParser_ParsesLineGraphWithCustomHeight()
+    {
+        var scriptOutput = "row: [line:1,2,3,4,5:yellow:Disk:0-10:60:12]";
+
+        var parser = new WidgetProtocolParser();
+        var widgetData = parser.Parse(scriptOutput);
+
+        var lineGraph = widgetData.Rows[0].LineGraph;
+        Assert.NotNull(lineGraph);
+        Assert.Equal(60, lineGraph.Width);
+        Assert.Equal(12, lineGraph.Height);
+    }
+
+    [Fact]
+    public void ProtocolParser_ParsesLineGraphWithAsciiStyle()
+    {
+        var scriptOutput = "row: [line:1,2,3,4,5:red:Temperature:0-10:60:8:ascii]";
+
+        var parser = new WidgetProtocolParser();
+        var widgetData = parser.Parse(scriptOutput);
+
+        var lineGraph = widgetData.Rows[0].LineGraph;
+        Assert.NotNull(lineGraph);
+        Assert.Equal("ascii", lineGraph.Style);
+    }
+
+    [Fact]
+    public void ProtocolParser_ParsesLineGraphWithAllParameters()
+    {
+        var scriptOutput = "row: [line:10,20,30,40,50:warm:Complete:0-100:100:15:braille]";
+
+        var parser = new WidgetProtocolParser();
+        var widgetData = parser.Parse(scriptOutput);
+
+        var lineGraph = widgetData.Rows[0].LineGraph;
+        Assert.NotNull(lineGraph);
+        Assert.Equal(new List<double> { 10, 20, 30, 40, 50 }, lineGraph.Values);
+        Assert.Equal("warm", lineGraph.Gradient);
+        Assert.Null(lineGraph.Color);
+        Assert.Equal("Complete", lineGraph.Label);
+        Assert.Equal(0, lineGraph.MinValue);
+        Assert.Equal(100, lineGraph.MaxValue);
+        Assert.Equal(100, lineGraph.Width);
+        Assert.Equal(15, lineGraph.Height);
+        Assert.Equal("braille", lineGraph.Style);
+    }
+
+    [Fact]
+    public void ProtocolParser_SkipsLineGraphWithEmptyValues()
+    {
+        var scriptOutput = "row: [line:]";
+
+        var parser = new WidgetProtocolParser();
+        var widgetData = parser.Parse(scriptOutput);
+
+        var lineGraph = widgetData.Rows[0].LineGraph;
+        Assert.Null(lineGraph);
+    }
+
+    [Fact]
+    public void ProtocolParser_RemovesLineGraphTagFromContent()
+    {
+        var scriptOutput = "row: Before [line:1,2,3] After";
+
+        var parser = new WidgetProtocolParser();
+        var widgetData = parser.Parse(scriptOutput);
+
+        var row = widgetData.Rows[0];
+        Assert.NotNull(row.LineGraph);
+        Assert.DoesNotContain("[line:", row.Content);
+        Assert.Contains("Before", row.Content);
+        Assert.Contains("After", row.Content);
+    }
+
+    [Fact]
+    public void ProtocolParser_ClampsLineGraphWidthToReasonableRange()
+    {
+        var scriptOutput1 = "row: [line:1,2,3::::10]"; // Too small
+        var scriptOutput2 = "row: [line:1,2,3::::500]"; // Too large
+
+        var parser = new WidgetProtocolParser();
+
+        var data1 = parser.Parse(scriptOutput1);
+        Assert.Equal(20, data1.Rows[0].LineGraph?.Width); // Clamped to min
+
+        var data2 = parser.Parse(scriptOutput2);
+        Assert.Equal(200, data2.Rows[0].LineGraph?.Width); // Clamped to max
+    }
+
+    [Fact]
+    public void ProtocolParser_ClampsLineGraphHeightToReasonableRange()
+    {
+        var scriptOutput1 = "row: [line:1,2,3:::::2]"; // Too small
+        var scriptOutput2 = "row: [line:1,2,3:::::100]"; // Too large
+
+        var parser = new WidgetProtocolParser();
+
+        var data1 = parser.Parse(scriptOutput1);
+        Assert.Equal(4, data1.Rows[0].LineGraph?.Height); // Clamped to min
+
+        var data2 = parser.Parse(scriptOutput2);
+        Assert.Equal(40, data2.Rows[0].LineGraph?.Height); // Clamped to max
+    }
+
+    [Fact]
+    public void ProtocolParser_HandlesInvalidNumbersInLineGraph()
+    {
+        var scriptOutput = "row: [line:1,abc,3,def,5]";
+
+        var parser = new WidgetProtocolParser();
+        var widgetData = parser.Parse(scriptOutput);
+
+        var lineGraph = widgetData.Rows[0].LineGraph;
+        Assert.NotNull(lineGraph);
+        Assert.Equal(5, lineGraph.Values.Count);
+        // Invalid numbers are parsed as 0 by ParseDataPoints
+        Assert.Equal(new List<double> { 1, 0, 3, 0, 5 }, lineGraph.Values);
+    }
+
+    [Fact]
+    public void ProtocolParser_RecognizesGradientArrowSyntax()
+    {
+        var scriptOutput = "row: [line:1,2,3:blue→red]";
+
+        var parser = new WidgetProtocolParser();
+        var widgetData = parser.Parse(scriptOutput);
+
+        var lineGraph = widgetData.Rows[0].LineGraph;
+        Assert.NotNull(lineGraph);
+        Assert.Equal("blue→red", lineGraph.Gradient);
+        Assert.Null(lineGraph.Color);
+    }
+
+    #endregion
 }

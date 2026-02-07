@@ -241,6 +241,13 @@ public class WidgetRenderer
             content = $"{content}\n{graph}";
         }
 
+        // Add line graph on new lines
+        if (row.LineGraph != null)
+        {
+            var lineGraph = CreateLineGraph(row.LineGraph);
+            content = $"{content}\n{lineGraph}";
+        }
+
         return content;
     }
 
@@ -404,6 +411,23 @@ public class WidgetRenderer
     private string CreateGraph(WidgetGraph graph)
     {
         return InlineElementRenderer.RenderGraph(graph.Values, 4, graph.Color, graph.Label, true, graph.MinValue, graph.MaxValue, graph.Width);
+    }
+
+    /// <summary>
+    /// Creates a line graph with smooth connected lines
+    /// </summary>
+    private string CreateLineGraph(WidgetLineGraph lineGraph)
+    {
+        return InlineElementRenderer.RenderLineGraph(
+            lineGraph.Values,
+            lineGraph.Width,
+            lineGraph.Height,
+            lineGraph.Style,
+            lineGraph.Color,
+            lineGraph.Gradient,
+            lineGraph.Label,
+            lineGraph.MinValue,
+            lineGraph.MaxValue);
     }
 
     /// <summary>

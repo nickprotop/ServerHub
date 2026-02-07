@@ -519,4 +519,407 @@ public static class InlineElementRenderer
             return Color.Cyan1;
         }
     }
+
+    // ============================================================
+    // Line Graph Rendering
+    // ============================================================
+
+    /// <summary>
+    /// Renders a line graph with smooth connected lines
+    /// </summary>
+    /// <param name="values">Data points to plot</param>
+    /// <param name="width">Graph width in characters (default: 60)</param>
+    /// <param name="height">Graph height in lines (default: 8)</param>
+    /// <param name="style">Rendering style: "braille" (high-res) or "ascii" (simple)</param>
+    /// <param name="color">Solid color name or null to use gradient</param>
+    /// <param name="gradient">Gradient specification (e.g., "blue→red", "warm", "cool")</param>
+    /// <param name="label">Optional label/title</param>
+    /// <param name="minValue">Optional fixed minimum value (null = auto-scale)</param>
+    /// <param name="maxValue">Optional fixed maximum value (null = auto-scale)</param>
+    /// <returns>Markup string with multi-line line graph</returns>
+    public static string RenderLineGraph(IReadOnlyList<double> values, int width = 60, int height = 8,
+        string style = "braille", string? color = null, string? gradient = null, string? label = null,
+        double? minValue = null, double? maxValue = null)
+    {
+        if (values.Count == 0)
+            return "";
+
+        // Route to appropriate renderer
+        return style.ToLowerInvariant() switch
+        {
+            "ascii" => RenderLineGraphASCII(values, width, height, color, gradient, label, minValue, maxValue),
+            _ => RenderLineGraphBraille(values, width, height, color, gradient, label, minValue, maxValue)
+        };
+    }
+
+    /// <summary>
+    /// Renders a line graph using Braille characters for high-resolution display (2×4 pixels per character)
+    /// </summary>
+    private static string RenderLineGraphBraille(IReadOnlyList<double> values, int width, int height,
+        string? color, string? gradient, string? label, double? minValue, double? maxValue)
+    {
+        if (values.Count == 0)
+            return "";
+
+        // Calculate scale
+        var min = minValue ?? values.Min();
+        var max = maxValue ?? values.Max();
+        var range = max - min;
+
+        // Braille canvas: 2×4 pixels per character
+        var pixelWidth = width * 2;
+        var pixelHeight = height * 4;
+
+        // Initialize pixel grid (false = empty, true = filled)
+        var pixels = new bool[pixelHeight, pixelWidth];
+
+        // Handle flat data
+        if (range == 0)
+        {
+            var midY = pixelHeight / 2;
+            for (int x = 0; x < Math.Min(values.Count, pixelWidth); x++)
+            {
+                pixels[midY, x] = true;
+            }
+        }
+        else
+        {
+            // Plot line using Bresenham's algorithm
+            for (int i = 0; i < values.Count - 1; i++)
+            {
+                // Map data points to pixel coordinates
+                var x1 = (int)(i * (pixelWidth - 1.0) / Math.Max(values.Count - 1, 1));
+                var y1 = pixelHeight - 1 - (int)((values[i] - min) / range * (pixelHeight - 1));
+                var x2 = (int)((i + 1) * (pixelWidth - 1.0) / Math.Max(values.Count - 1, 1));
+                var y2 = pixelHeight - 1 - (int)((values[i + 1] - min) / range * (pixelHeight - 1));
+
+                // Clamp coordinates
+                x1 = Math.Clamp(x1, 0, pixelWidth - 1);
+                y1 = Math.Clamp(y1, 0, pixelHeight - 1);
+                x2 = Math.Clamp(x2, 0, pixelWidth - 1);
+                y2 = Math.Clamp(y2, 0, pixelHeight - 1);
+
+                // Draw line segment
+                DrawLinePixels(pixels, x1, y1, x2, y2);
+            }
+        }
+
+        // Resolve color/gradient
+        var colorSpec = ResolveColorOrGradient(color, gradient);
+        var gradientStops = ParseGradient(colorSpec);
+        var isGradientMode = gradientStops != null;
+
+        // Convert pixel grid to Braille characters
+        var lines = new List<string>();
+        if (!string.IsNullOrEmpty(label))
+        {
+            lines.Add($"[grey70]{label}[/]");
+        }
+
+        for (int row = 0; row < height; row++)
+        {
+            var line = new StringBuilder();
+            for (int col = 0; col < width; col++)
+            {
+                var brailleChar = GetBrailleChar(pixels, row, col);
+
+                if (brailleChar == '⠀') // Empty Braille (U+2800)
+                {
+                    line.Append($"[grey19 on grey19]⠀[/]");
+                }
+                else
+                {
+                    // Calculate position for gradient (0.0 to 1.0)
+                    var position = width > 1 ? (double)col / (width - 1) : 0.5;
+
+                    if (isGradientMode)
+                    {
+                        var charColor = InterpolateGradientColor(gradientStops!, position);
+                        line.Append($"[{charColor} on grey19]{brailleChar}[/]");
+                    }
+                    else
+                    {
+                        var effectiveColor = colorSpec ?? "cyan1";
+                        line.Append($"[{effectiveColor} on grey19]{brailleChar}[/]");
+                    }
+                }
+            }
+            lines.Add(line.ToString());
+        }
+
+        // Add Y-axis labels and baseline
+        lines.Add(GetYAxisLabel(min, max));
+        lines.Add($"[grey50]{new string('┈', width)}[/]");
+
+        return string.Join("\n", lines);
+    }
+
+    /// <summary>
+    /// Renders a line graph using ASCII box drawing characters for simple display
+    /// </summary>
+    private static string RenderLineGraphASCII(IReadOnlyList<double> values, int width, int height,
+        string? color, string? gradient, string? label, double? minValue, double? maxValue)
+    {
+        if (values.Count == 0)
+            return "";
+
+        // Calculate scale
+        var min = minValue ?? values.Min();
+        var max = maxValue ?? values.Max();
+        var range = max - min;
+
+        // Initialize character grid
+        var grid = new char[height, width];
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                grid[y, x] = ' ';
+            }
+        }
+
+        // Handle flat data
+        if (range == 0)
+        {
+            var midY = height / 2;
+            for (int x = 0; x < Math.Min(values.Count, width); x++)
+            {
+                grid[midY, x] = '─';
+            }
+        }
+        else
+        {
+            // Plot line using ASCII characters
+            for (int i = 0; i < values.Count - 1; i++)
+            {
+                var x1 = (int)(i * (width - 1.0) / Math.Max(values.Count - 1, 1));
+                var y1 = height - 1 - (int)((values[i] - min) / range * (height - 1));
+                var x2 = (int)((i + 1) * (width - 1.0) / Math.Max(values.Count - 1, 1));
+                var y2 = height - 1 - (int)((values[i + 1] - min) / range * (height - 1));
+
+                // Clamp coordinates
+                x1 = Math.Clamp(x1, 0, width - 1);
+                y1 = Math.Clamp(y1, 0, height - 1);
+                x2 = Math.Clamp(x2, 0, width - 1);
+                y2 = Math.Clamp(y2, 0, height - 1);
+
+                // Draw line segment with ASCII characters
+                DrawLineASCII(grid, x1, y1, x2, y2);
+            }
+        }
+
+        // Resolve color/gradient
+        var colorSpec = ResolveColorOrGradient(color, gradient);
+        var gradientStops = ParseGradient(colorSpec);
+        var isGradientMode = gradientStops != null;
+
+        // Convert grid to markup
+        var lines = new List<string>();
+        if (!string.IsNullOrEmpty(label))
+        {
+            lines.Add($"[grey70]{label}[/]");
+        }
+
+        for (int y = 0; y < height; y++)
+        {
+            var line = new StringBuilder();
+            for (int x = 0; x < width; x++)
+            {
+                var ch = grid[y, x];
+
+                if (ch == ' ')
+                {
+                    line.Append($"[grey19 on grey19] [/]");
+                }
+                else
+                {
+                    var position = width > 1 ? (double)x / (width - 1) : 0.5;
+
+                    if (isGradientMode)
+                    {
+                        var charColor = InterpolateGradientColor(gradientStops!, position);
+                        line.Append($"[{charColor} on grey19]{ch}[/]");
+                    }
+                    else
+                    {
+                        var effectiveColor = colorSpec ?? "cyan1";
+                        line.Append($"[{effectiveColor} on grey19]{ch}[/]");
+                    }
+                }
+            }
+            lines.Add(line.ToString());
+        }
+
+        // Add Y-axis labels and baseline
+        lines.Add(GetYAxisLabel(min, max));
+        lines.Add($"[grey50]{new string('┈', width)}[/]");
+
+        return string.Join("\n", lines);
+    }
+
+    /// <summary>
+    /// Draws a line in a pixel grid using Bresenham's line algorithm
+    /// </summary>
+    private static void DrawLinePixels(bool[,] pixels, int x0, int y0, int x1, int y1)
+    {
+        int height = pixels.GetLength(0);
+        int width = pixels.GetLength(1);
+
+        int dx = Math.Abs(x1 - x0);
+        int dy = Math.Abs(y1 - y0);
+        int sx = x0 < x1 ? 1 : -1;
+        int sy = y0 < y1 ? 1 : -1;
+        int err = dx - dy;
+
+        while (true)
+        {
+            // Set pixel if within bounds
+            if (x0 >= 0 && x0 < width && y0 >= 0 && y0 < height)
+            {
+                pixels[y0, x0] = true;
+            }
+
+            if (x0 == x1 && y0 == y1)
+                break;
+
+            int e2 = 2 * err;
+            if (e2 > -dy)
+            {
+                err -= dy;
+                x0 += sx;
+            }
+            if (e2 < dx)
+            {
+                err += dx;
+                y0 += sy;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Draws a line in a character grid using ASCII box drawing characters
+    /// </summary>
+    private static void DrawLineASCII(char[,] grid, int x0, int y0, int x1, int y1)
+    {
+        int height = grid.GetLength(0);
+        int width = grid.GetLength(1);
+
+        int dx = Math.Abs(x1 - x0);
+        int dy = Math.Abs(y1 - y0);
+        int sx = x0 < x1 ? 1 : -1;
+        int sy = y0 < y1 ? 1 : -1;
+        int err = dx - dy;
+
+        while (true)
+        {
+            if (x0 >= 0 && x0 < width && y0 >= 0 && y0 < height)
+            {
+                // Determine character based on line direction
+                if (dx == 0)
+                {
+                    grid[y0, x0] = '│'; // Vertical
+                }
+                else if (dy == 0)
+                {
+                    grid[y0, x0] = '─'; // Horizontal
+                }
+                else if ((sx > 0 && sy > 0) || (sx < 0 && sy < 0))
+                {
+                    grid[y0, x0] = '╲'; // Diagonal down-right or up-left
+                }
+                else
+                {
+                    grid[y0, x0] = '╱'; // Diagonal up-right or down-left
+                }
+            }
+
+            if (x0 == x1 && y0 == y1)
+                break;
+
+            int e2 = 2 * err;
+            if (e2 > -dy)
+            {
+                err -= dy;
+                x0 += sx;
+            }
+            if (e2 < dx)
+            {
+                err += dx;
+                y0 += sy;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Converts a 2×4 pixel block to a Braille character
+    /// Braille pattern dots are numbered:
+    ///   1 4
+    ///   2 5
+    ///   3 6
+    ///   7 8
+    /// Unicode Braille starts at U+2800
+    /// </summary>
+    private static char GetBrailleChar(bool[,] pixels, int row, int col)
+    {
+        int pixelHeight = pixels.GetLength(0);
+        int pixelWidth = pixels.GetLength(1);
+
+        // Braille base character (all dots off)
+        int brailleValue = 0x2800;
+
+        // Map 2×4 pixel block to Braille dots
+        int baseY = row * 4;
+        int baseX = col * 2;
+
+        // Braille dot bit positions
+        int[] dotBits = { 0, 1, 2, 6, 3, 4, 5, 7 }; // Mapping to Unicode Braille pattern
+
+        for (int py = 0; py < 4; py++)
+        {
+            for (int px = 0; px < 2; px++)
+            {
+                int y = baseY + py;
+                int x = baseX + px;
+
+                if (y < pixelHeight && x < pixelWidth && pixels[y, x])
+                {
+                    int dotIndex = py * 2 + px;
+                    brailleValue |= (1 << dotBits[dotIndex]);
+                }
+            }
+        }
+
+        return (char)brailleValue;
+    }
+
+    /// <summary>
+    /// Gets a pixel value from the grid (for bounds checking)
+    /// </summary>
+    private static bool GetPixel(bool[,] pixels, int y, int x)
+    {
+        int height = pixels.GetLength(0);
+        int width = pixels.GetLength(1);
+
+        if (y >= 0 && y < height && x >= 0 && x < width)
+        {
+            return pixels[y, x];
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Generates Y-axis label showing min and max values
+    /// </summary>
+    private static string GetYAxisLabel(double min, double max)
+    {
+        return $"[grey50]Min: {min:F1} Max: {max:F1}[/]";
+    }
+
+    /// <summary>
+    /// Resolves color or gradient specification, prioritizing gradient over color
+    /// </summary>
+    private static string? ResolveColorOrGradient(string? color, string? gradient)
+    {
+        return gradient ?? color;
+    }
 }

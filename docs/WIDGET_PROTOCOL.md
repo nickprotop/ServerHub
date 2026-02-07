@@ -296,6 +296,48 @@ row: [graph:45,50,62,58,65,70:cool:CPU %:0-100]            # Fixed 0-100% scale
 row: [graph:10,15,20,25:green:Load:0-100:40]               # Custom width (40 chars)
 ```
 
+### Line Graph
+
+Displays a smooth line chart with connected points for time-series visualization. Supports both Braille characters (default, smooth) and ASCII style rendering.
+
+```
+[line:VALUES:COLOR:LABEL:MIN-MAX:WIDTH:HEIGHT]
+[line:VALUES:COLOR:LABEL:MIN-MAX:WIDTH:HEIGHT:STYLE]
+[line:VALUES:GRADIENT:LABEL:MIN-MAX:WIDTH:HEIGHT]
+[line:VALUES:GRADIENT:LABEL:MIN-MAX:WIDTH:HEIGHT:STYLE]
+```
+
+- **VALUES**: Comma-separated numbers (e.g., `10,20,15,30,25`)
+- **COLOR**: Optional Spectre.Console color (default: `cyan1`)
+- **GRADIENT**: Optional gradient name or custom gradient (see Gradients section)
+- **LABEL**: Optional label text displayed above the graph
+- **MIN-MAX**: Optional fixed scale range (e.g., `0-100` for percentage graphs)
+- **WIDTH**: Character width of the graph (default: 60)
+- **HEIGHT**: Character height of the graph (default: 8)
+- **STYLE**: Optional rendering style - `braille` (default, smooth) or `ascii` (block characters)
+
+**Rendering Styles:**
+- **braille** (default): Uses Braille Unicode characters for smooth, high-resolution line rendering
+- **ascii**: Uses block characters (█, ▀, ▄) for a more traditional ASCII art look
+
+**Predefined Gradients:**
+- `cool` - Blue to cyan (temperature/load themes)
+- `warm` - Yellow to orange to red (heat/pressure themes)
+- `spectrum` - Blue to green to yellow to red (full range)
+- `grayscale` - Grey11 to grey100 (monochrome)
+
+**Custom Gradients:**
+- `blue→red`, `green→yellow→red`, etc.
+
+Example:
+```
+row: [line:10,20,15,30,25,35,40,30,20,10:cyan:Sample Data:0-50:60:8]           # Braille style (default)
+row: [line:10,20,15,30,25,35,40,30,20,10:cyan:Sample Data:0-50:60:8:ascii]    # ASCII style
+row: [line:5,15,10,25,20,35,30,45,40,50:warm:CPU Usage:0-100:50:6]            # Warm gradient, compact
+row: [line:10,15,20,25,30,25,20,15,10:blue:Memory:0-40:40:4]                  # Small graph
+row: [line:25,25,25,25,25:grey70:Constant:0-50:30:4]                          # Flat line
+```
+
 ## Spectre.Console Markup
 
 Row content supports [Spectre.Console markup](https://spectreconsole.net/markup) for styling:

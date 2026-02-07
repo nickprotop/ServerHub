@@ -56,6 +56,14 @@ public class WidgetProtocolParser
         @"\[graph:([\d\.,\s]+)(?::([^\]:]+))?(?::([^\]:]+))?(?::([^\]:]+))?(?::(\d+))?\]",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+    // Line graph with optional color, label, min-max range, width, height, and style
+    // [line:VALUES:COLOR:LABEL:MIN-MAX:WIDTH:HEIGHT:STYLE]
+    // Allow empty fields between colons: [line:1,2,3::::10] should work
+    // Allow invalid numbers in values (ParseDataPoints converts them to 0): [line:1,abc,3] should work
+    private static readonly Regex LineGraphRegex = new(
+        @"\[line:([^\]:]+)(?::([^\]:]*)(?::([^\]:]*)(?::([^\]:]*)(?::(\d*)(?::(\d*)(?::(braille|ascii))?)?)?)?)?)?\]",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     /// <summary>
     /// Gets the validation errors from the last parse operation
     /// </summary>
@@ -381,6 +389,92 @@ public class WidgetProtocolParser
                 Width = graphMatch.Groups[5].Success ? int.Parse(graphMatch.Groups[5].Value) : 30
             };
             row.Content = GraphRegex.Replace(row.Content, "");
+        }
+
+        // Parse line graph
+        var lineGraphMatch = LineGraphRegex.Match(row.Content);
+        if (lineGraphMatch.Success)
+        {
+            // Parse values (required)
+            var values = ParseDataPoints(lineGraphMatch.Groups[1].Value);
+
+            // Skip if no valid values
+            if (values.Count == 0)
+            {
+                row.Content = LineGraphRegex.Replace(row.Content, "");
+                return row;
+            }
+
+            // Parse color/gradient (group 2)
+            string? color = null;
+            string? gradient = null;
+            if (lineGraphMatch.Groups[2].Success && !string.IsNullOrWhiteSpace(lineGraphMatch.Groups[2].Value))
+            {
+                var colorOrGradient = lineGraphMatch.Groups[2].Value;
+                // Check if it's a gradient (contains arrow or is a preset name like "cool", "warm")
+                if (colorOrGradient.Contains("→") ||
+                    colorOrGradient.Contains("->") ||
+                    colorOrGradient.Equals("cool", StringComparison.OrdinalIgnoreCase) ||
+                    colorOrGradient.Equals("warm", StringComparison.OrdinalIgnoreCase) ||
+                    colorOrGradient.Equals("rainbow", StringComparison.OrdinalIgnoreCase))
+                {
+                    gradient = colorOrGradient;
+                }
+                else
+                {
+                    color = colorOrGradient;
+                }
+            }
+
+            // Parse label (group 3)
+            var label = lineGraphMatch.Groups[3].Success && !string.IsNullOrWhiteSpace(lineGraphMatch.Groups[3].Value)
+                ? lineGraphMatch.Groups[3].Value
+                : null;
+
+            // Parse optional min-max range (group 4, format: "0-100" or "0,100")
+            double? minValue = null;
+            double? maxValue = null;
+            if (lineGraphMatch.Groups[4].Success && !string.IsNullOrWhiteSpace(lineGraphMatch.Groups[4].Value))
+            {
+                var rangeStr = lineGraphMatch.Groups[4].Value;
+                var parts = rangeStr.Split(new[] { '-', ',' }, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 2)
+                {
+                    if (double.TryParse(parts[0].Trim(), out var min))
+                        minValue = min;
+                    if (double.TryParse(parts[1].Trim(), out var max))
+                        maxValue = max;
+                }
+            }
+
+            // Parse width (group 5)
+            var width = lineGraphMatch.Groups[5].Success && !string.IsNullOrWhiteSpace(lineGraphMatch.Groups[5].Value) && int.TryParse(lineGraphMatch.Groups[5].Value, out var w)
+                ? Math.Max(20, Math.Min(200, w))  // Clamp to reasonable range
+                : 60;
+
+            // Parse height (group 6)
+            var height = lineGraphMatch.Groups[6].Success && !string.IsNullOrWhiteSpace(lineGraphMatch.Groups[6].Value) && int.TryParse(lineGraphMatch.Groups[6].Value, out var h)
+                ? Math.Max(4, Math.Min(40, h))  // Clamp to reasonable range
+                : 8;
+
+            // Parse style (group 7)
+            var style = lineGraphMatch.Groups[7].Success && !string.IsNullOrWhiteSpace(lineGraphMatch.Groups[7].Value)
+                ? lineGraphMatch.Groups[7].Value.ToLowerInvariant()
+                : "braille";
+
+            row.LineGraph = new WidgetLineGraph
+            {
+                Values = values,
+                Color = color,
+                Gradient = gradient,
+                Label = label,
+                MinValue = minValue,
+                MaxValue = maxValue,
+                Width = width,
+                Height = height,
+                Style = style
+            };
+            row.Content = LineGraphRegex.Replace(row.Content, "");
         }
 
         // Sanitize final content (strip ANSI codes, escape invalid brackets)

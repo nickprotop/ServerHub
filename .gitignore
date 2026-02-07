@@ -180,3 +180,6 @@ config.yaml
 .claude/
 Claude.md
 CLAUDE.md
+
+# Project planning (local only)
+ROADMAP.md
