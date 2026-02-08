@@ -7,6 +7,15 @@ default_refresh: 5
 max_lines_per_widget: 20        # Global default max lines per widget
 show_truncation_indicator: true # Show "Press Enter to expand..." when truncated
 
+# Storage configuration (enabled by default)
+storage:
+  enabled: true
+  database_path: ~/.config/serverhub/serverhub.db
+  retention_days: 30
+  cleanup_interval_hours: 1
+  max_database_size_mb: 500
+  auto_vacuum: true
+
 widgets:
   # Core system widgets
   alerts:

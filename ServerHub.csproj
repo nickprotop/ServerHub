@@ -19,6 +19,8 @@
     <PackageReference Include="YamlDotNet" Version="16.2.0" />
     <!-- Command line parsing -->
     <PackageReference Include="Spectre.Console.Cli" Version="0.49.1" />
+    <!-- SQLite database -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
   </ItemGroup>
 
   <!-- Local development: use project reference if available -->
@@ -28,7 +30,7 @@
 
   <!-- Production/CI: use NuGet package -->
   <ItemGroup Condition="!Exists('../ConsoleEx/SharpConsoleUI/SharpConsoleUI.csproj')">
-    <PackageReference Include="SharpConsoleUI" Version="2.4.15" />
+    <PackageReference Include="SharpConsoleUI" Version="2.4.16" />
   </ItemGroup>
 
   <!-- Exclude generated files from auto-discovery, we'll add them explicitly -->

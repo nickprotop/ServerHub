@@ -3,6 +3,15 @@
 
 default_refresh: 5
 
+# Storage configuration (enabled by default)
+storage:
+  enabled: true
+  database_path: ~/.config/serverhub/serverhub.db
+  retention_days: 30
+  cleanup_interval_hours: 1
+  max_database_size_mb: 500
+  auto_vacuum: true
+
 widgets:
   cpu:
     path: cpu.sh

@@ -162,5 +162,11 @@ public class ConfigManager
                 }
             }
         }
+
+        // Check 4: Validate storage configuration if present
+        if (config.Storage != null)
+        {
+            config.Storage.Validate();
+        }
     }
 }

@@ -248,6 +248,27 @@ public class WidgetRenderer
             content = $"{content}\n{lineGraph}";
         }
 
+        // Add history graph on new lines
+        if (row.HistoryGraph != null)
+        {
+            var historyGraph = CreateHistoryGraph(row.HistoryGraph);
+            content = $"{content}\n{historyGraph}";
+        }
+
+        // Add history sparkline inline
+        if (row.HistorySparkline != null)
+        {
+            var historySparkline = CreateHistorySparkline(row.HistorySparkline);
+            content = $"{content} {historySparkline}";
+        }
+
+        // Add history line graph on new lines
+        if (row.HistoryLineGraph != null)
+        {
+            var historyLineGraph = CreateHistoryLineGraph(row.HistoryLineGraph);
+            content = $"{content}\n{historyLineGraph}";
+        }
+
         return content;
     }
 
@@ -428,6 +449,65 @@ public class WidgetRenderer
             lineGraph.Label,
             lineGraph.MinValue,
             lineGraph.MaxValue);
+    }
+
+    /// <summary>
+    /// Creates a history graph from stored time series data
+    /// </summary>
+    private string CreateHistoryGraph(WidgetHistoryGraph historyGraph)
+    {
+        if (historyGraph.Values.Count == 0)
+        {
+            return "[grey50]No data[/]";
+        }
+
+        return InlineElementRenderer.RenderGraph(
+            historyGraph.Values,
+            4, // height
+            historyGraph.Color,
+            historyGraph.Label,
+            true, // showBackground
+            historyGraph.MinValue,
+            historyGraph.MaxValue,
+            historyGraph.Width);
+    }
+
+    /// <summary>
+    /// Creates a history sparkline from stored time series data
+    /// </summary>
+    private string CreateHistorySparkline(WidgetHistorySparkline historySparkline)
+    {
+        if (historySparkline.Values.Count == 0)
+        {
+            return "[grey50]--[/]";
+        }
+
+        return InlineElementRenderer.RenderSparkline(
+            historySparkline.Values,
+            historySparkline.Color,
+            historySparkline.Width);
+    }
+
+    /// <summary>
+    /// Creates a history line graph from stored time series data
+    /// </summary>
+    private string CreateHistoryLineGraph(WidgetHistoryLineGraph historyLineGraph)
+    {
+        if (historyLineGraph.Values.Count == 0)
+        {
+            return "[grey50]No data[/]";
+        }
+
+        return InlineElementRenderer.RenderLineGraph(
+            historyLineGraph.Values,
+            historyLineGraph.Width,
+            historyLineGraph.Height,
+            historyLineGraph.Style,
+            historyLineGraph.Color,
+            historyLineGraph.Gradient,
+            historyLineGraph.Label,
+            historyLineGraph.MinValue,
+            historyLineGraph.MaxValue);
     }
 
     /// <summary>

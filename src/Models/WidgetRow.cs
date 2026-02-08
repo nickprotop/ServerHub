@@ -61,6 +61,30 @@ public class WidgetRow
     /// Format: [line:VALUES:COLOR:LABEL:MIN-MAX:WIDTH:HEIGHT:STYLE]
     /// </summary>
     public WidgetLineGraph? LineGraph { get; set; }
+
+    /// <summary>
+    /// Parsed datafetch inline element (if present)
+    /// Format: [datafetch:KEY:AGGREGATION:TIMERANGE]
+    /// </summary>
+    public WidgetDatafetch? Datafetch { get; set; }
+
+    /// <summary>
+    /// Parsed history graph (if present)
+    /// Format: [history_graph:KEY:TIMERANGE:COLOR:LABEL:MIN-MAX:WIDTH]
+    /// </summary>
+    public WidgetHistoryGraph? HistoryGraph { get; set; }
+
+    /// <summary>
+    /// Parsed history sparkline (if present)
+    /// Format: [history_sparkline:KEY:TIMERANGE:COLOR:WIDTH]
+    /// </summary>
+    public WidgetHistorySparkline? HistorySparkline { get; set; }
+
+    /// <summary>
+    /// Parsed history line graph (if present)
+    /// Format: [history_line:KEY:TIMERANGE:COLOR:LABEL:MIN-MAX:WIDTH:HEIGHT:STYLE]
+    /// </summary>
+    public WidgetHistoryLineGraph? HistoryLineGraph { get; set; }
 }
 
 /// <summary>
@@ -209,5 +233,74 @@ public class WidgetLineGraph
     /// <summary>
     /// Rendering style: "braille" (default, high-res) or "ascii" (simple)
     /// </summary>
+    public string Style { get; set; } = "braille";
+}
+
+/// <summary>
+/// Datafetch inline element for retrieving stored data
+/// Format: [datafetch:KEY:AGGREGATION:TIMERANGE]
+/// </summary>
+public class WidgetDatafetch
+{
+    /// <summary>
+    /// Measurement key (e.g., "cpu_usage.value")
+    /// </summary>
+    public string Key { get; set; } = "";
+
+    /// <summary>
+    /// Aggregation function: latest, avg, max, min, sum, count
+    /// </summary>
+    public string Aggregation { get; set; } = "latest";
+
+    /// <summary>
+    /// Time range (e.g., "30s", "1h", "24h", "last_10")
+    /// </summary>
+    public string? TimeRange { get; set; }
+
+    /// <summary>
+    /// The fetched value to display (populated during parsing)
+    /// </summary>
+    public string? Value { get; set; }
+}
+
+/// <summary>
+/// History graph - renders stored time series as vertical bar chart
+/// Format: [history_graph:KEY:TIMERANGE:COLOR:LABEL:MIN-MAX:WIDTH]
+/// </summary>
+public class WidgetHistoryGraph
+{
+    public List<double> Values { get; set; } = new();
+    public string? Color { get; set; }
+    public string? Label { get; set; }
+    public double? MinValue { get; set; }
+    public double? MaxValue { get; set; }
+    public int Width { get; set; } = 30;
+}
+
+/// <summary>
+/// History sparkline - renders stored time series as inline sparkline
+/// Format: [history_sparkline:KEY:TIMERANGE:COLOR:WIDTH]
+/// </summary>
+public class WidgetHistorySparkline
+{
+    public List<double> Values { get; set; } = new();
+    public string? Color { get; set; }
+    public int Width { get; set; } = 30;
+}
+
+/// <summary>
+/// History line graph - renders stored time series as line graph
+/// Format: [history_line:KEY:TIMERANGE:COLOR:LABEL:MIN-MAX:WIDTH:HEIGHT:STYLE]
+/// </summary>
+public class WidgetHistoryLineGraph
+{
+    public List<double> Values { get; set; } = new();
+    public string? Color { get; set; }
+    public string? Gradient { get; set; }
+    public string? Label { get; set; }
+    public double? MinValue { get; set; }
+    public double? MaxValue { get; set; }
+    public int Width { get; set; } = 60;
+    public int Height { get; set; } = 8;
     public string Style { get; set; } = "braille";
 }

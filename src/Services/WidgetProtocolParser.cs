@@ -3,6 +3,7 @@
 
 using System.Text.RegularExpressions;
 using ServerHub.Models;
+using ServerHub.Storage;
 using ServerHub.Utils;
 
 namespace ServerHub.Services;
@@ -23,6 +24,10 @@ namespace ServerHub.Services;
 public class WidgetProtocolParser
 {
     private readonly List<string> _validationErrors = new();
+
+    // Storage context for datafetch/history elements (set during Parse call)
+    private StorageService? _currentStorageService;
+    private string? _currentWidgetId;
 
     private static readonly Regex StatusRegex = new(@"\[status:(ok|info|warn|error)\]", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
@@ -64,6 +69,30 @@ public class WidgetProtocolParser
         @"\[line:([^\]:]+)(?::([^\]:]*)(?::([^\]:]*)(?::([^\]:]*)(?::(\d*)(?::(\d*)(?::(braille|ascii))?)?)?)?)?)?\]",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+    // Datafetch: [datafetch:KEY:AGGREGATION:TIMERANGE]
+    // Examples: [datafetch:cpu_usage.value], [datafetch:cpu_usage.value:avg:1h], [datafetch:cpu_usage.value::last_10]
+    private static readonly Regex DatafetchRegex = new(
+        @"\[datafetch:([^:\]]+)(?::([^:\]]+))?(?::([^:\]]+))?\]",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    // History graph: [history_graph:KEY:TIMERANGE:COLOR:LABEL:MIN-MAX:WIDTH]
+    // Examples: [history_graph:cpu_usage.value:1h], [history_graph:cpu_usage.value:24h:cool:CPU:0-100:40]
+    private static readonly Regex HistoryGraphRegex = new(
+        @"\[history_graph:([^:\]]+):([^:\]]+)(?::([^:\]]+))?(?::([^:\]]+))?(?::([^:\]]+))?(?::(\d+))?\]",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    // History sparkline: [history_sparkline:KEY:TIMERANGE:COLOR:WIDTH]
+    // Examples: [history_sparkline:cpu_usage.value:30s], [history_sparkline:cpu_usage.value:1h:cool:30]
+    private static readonly Regex HistorySparklineRegex = new(
+        @"\[history_sparkline:([^:\]]+):([^:\]]+)(?::([^:\]]+))?(?::(\d+))?\]",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    // History line: [history_line:KEY:TIMERANGE:COLOR:LABEL:MIN-MAX:WIDTH:HEIGHT:STYLE]
+    // Examples: [history_line:cpu_usage.value:1h:cyan:CPU:0-100:60:8:braille]
+    private static readonly Regex HistoryLineRegex = new(
+        @"\[history_line:([^:\]]+):([^:\]]+)(?::([^\]:]*))?(?::([^\]:]*))?(?::([^\]:]*))?(?::(\d*))?(?::(\d*))?(?::(braille|ascii))?\]",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     /// <summary>
     /// Gets the validation errors from the last parse operation
     /// </summary>
@@ -76,12 +105,18 @@ public class WidgetProtocolParser
     /// Parses widget script output into structured WidgetData
     /// </summary>
     /// <param name="output">Raw script output</param>
+    /// <param name="storageService">Optional storage service for datafetch/history elements</param>
+    /// <param name="widgetId">Optional widget ID for scoped storage queries</param>
     /// <returns>Parsed widget data</returns>
-    public WidgetData Parse(string output)
+    public WidgetData Parse(string output, StorageService? storageService = null, string? widgetId = null)
     {
         _validationErrors.Clear();
         var data = new WidgetData();
         var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+        // Store storage context for use in ParseRow
+        _currentStorageService = storageService;
+        _currentWidgetId = widgetId;
 
         WidgetTable? currentTable = null;
         var tableStartIndex = -1;
@@ -143,6 +178,23 @@ public class WidgetProtocolParser
                 if (action != null)
                 {
                     data.Actions.Add(action);
+                }
+            }
+            else if (trimmedLine.StartsWith("datastore:", StringComparison.OrdinalIgnoreCase))
+            {
+                // Finalize table if we hit a datastore directive
+                if (currentTable != null)
+                {
+                    data.Rows.Insert(tableStartIndex, new WidgetRow { Table = currentTable });
+                    currentTable = null;
+                    tableStartIndex = -1;
+                }
+
+                var datastoreContent = trimmedLine.Substring(10).Trim();
+                var directive = ParseDatastoreDirective(datastoreContent);
+                if (directive != null)
+                {
+                    data.DatastoreDirectives.Add(directive);
                 }
             }
             else
@@ -477,6 +529,182 @@ public class WidgetProtocolParser
             row.Content = LineGraphRegex.Replace(row.Content, "");
         }
 
+        // Parse datafetch (Phase 2: Retrieval)
+        var datafetchMatch = DatafetchRegex.Match(row.Content);
+        if (datafetchMatch.Success)
+        {
+            var key = datafetchMatch.Groups[1].Value.Trim();
+            var aggregation = datafetchMatch.Groups[2].Success && !string.IsNullOrWhiteSpace(datafetchMatch.Groups[2].Value)
+                ? datafetchMatch.Groups[2].Value.Trim().ToLowerInvariant()
+                : "latest";
+            var timeRange = datafetchMatch.Groups[3].Success && !string.IsNullOrWhiteSpace(datafetchMatch.Groups[3].Value)
+                ? datafetchMatch.Groups[3].Value.Trim()
+                : null;
+
+            // Fetch data from storage if available
+            var fetchedValue = FetchStorageValue(key, aggregation, timeRange);
+
+            row.Datafetch = new WidgetDatafetch
+            {
+                Key = key,
+                Aggregation = aggregation,
+                TimeRange = timeRange,
+                Value = fetchedValue
+            };
+            row.Content = DatafetchRegex.Replace(row.Content, fetchedValue ?? "[grey50]--[/]");
+        }
+
+        // Parse history_graph (Phase 3: History Helpers)
+        var historyGraphMatch = HistoryGraphRegex.Match(row.Content);
+        if (historyGraphMatch.Success)
+        {
+            var key = historyGraphMatch.Groups[1].Value.Trim();
+            var timeRange = historyGraphMatch.Groups[2].Value.Trim();
+            var color = historyGraphMatch.Groups[3].Success && !string.IsNullOrWhiteSpace(historyGraphMatch.Groups[3].Value)
+                ? historyGraphMatch.Groups[3].Value.Trim()
+                : null;
+            var label = historyGraphMatch.Groups[4].Success && !string.IsNullOrWhiteSpace(historyGraphMatch.Groups[4].Value)
+                ? historyGraphMatch.Groups[4].Value.Trim()
+                : null;
+
+            // Parse min-max range
+            double? minValue = null;
+            double? maxValue = null;
+            if (historyGraphMatch.Groups[5].Success && !string.IsNullOrWhiteSpace(historyGraphMatch.Groups[5].Value))
+            {
+                var rangeStr = historyGraphMatch.Groups[5].Value;
+                var parts = rangeStr.Split(new[] { '-', ',' }, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 2)
+                {
+                    if (double.TryParse(parts[0].Trim(), out var min))
+                        minValue = min;
+                    if (double.TryParse(parts[1].Trim(), out var max))
+                        maxValue = max;
+                }
+            }
+
+            var width = historyGraphMatch.Groups[6].Success && int.TryParse(historyGraphMatch.Groups[6].Value, out var w)
+                ? Math.Clamp(w, 10, 200)
+                : 30;
+
+            // Fetch time series from storage
+            var values = FetchTimeSeries(key, timeRange);
+
+            row.HistoryGraph = new WidgetHistoryGraph
+            {
+                Values = values,
+                Color = color,
+                Label = label,
+                MinValue = minValue,
+                MaxValue = maxValue,
+                Width = width
+            };
+            row.Content = HistoryGraphRegex.Replace(row.Content, "");
+        }
+
+        // Parse history_sparkline
+        var historySparklineMatch = HistorySparklineRegex.Match(row.Content);
+        if (historySparklineMatch.Success)
+        {
+            var key = historySparklineMatch.Groups[1].Value.Trim();
+            var timeRange = historySparklineMatch.Groups[2].Value.Trim();
+            var color = historySparklineMatch.Groups[3].Success && !string.IsNullOrWhiteSpace(historySparklineMatch.Groups[3].Value)
+                ? historySparklineMatch.Groups[3].Value.Trim()
+                : null;
+            var width = historySparklineMatch.Groups[4].Success && int.TryParse(historySparklineMatch.Groups[4].Value, out var w)
+                ? Math.Clamp(w, 5, 200)
+                : 30;
+
+            // Fetch time series from storage
+            var values = FetchTimeSeries(key, timeRange);
+
+            row.HistorySparkline = new WidgetHistorySparkline
+            {
+                Values = values,
+                Color = color,
+                Width = width
+            };
+            row.Content = HistorySparklineRegex.Replace(row.Content, "");
+        }
+
+        // Parse history_line
+        var historyLineMatch = HistoryLineRegex.Match(row.Content);
+        if (historyLineMatch.Success)
+        {
+            var key = historyLineMatch.Groups[1].Value.Trim();
+            var timeRange = historyLineMatch.Groups[2].Value.Trim();
+
+            // Parse color/gradient (group 3)
+            string? color = null;
+            string? gradient = null;
+            if (historyLineMatch.Groups[3].Success && !string.IsNullOrWhiteSpace(historyLineMatch.Groups[3].Value))
+            {
+                var colorOrGradient = historyLineMatch.Groups[3].Value.Trim();
+                if (colorOrGradient.Contains("→") ||
+                    colorOrGradient.Contains("->") ||
+                    colorOrGradient.Equals("cool", StringComparison.OrdinalIgnoreCase) ||
+                    colorOrGradient.Equals("warm", StringComparison.OrdinalIgnoreCase) ||
+                    colorOrGradient.Equals("spectrum", StringComparison.OrdinalIgnoreCase) ||
+                    colorOrGradient.Equals("grayscale", StringComparison.OrdinalIgnoreCase))
+                {
+                    gradient = colorOrGradient;
+                }
+                else
+                {
+                    color = colorOrGradient;
+                }
+            }
+
+            var label = historyLineMatch.Groups[4].Success && !string.IsNullOrWhiteSpace(historyLineMatch.Groups[4].Value)
+                ? historyLineMatch.Groups[4].Value.Trim()
+                : null;
+
+            // Parse min-max range
+            double? minValue = null;
+            double? maxValue = null;
+            if (historyLineMatch.Groups[5].Success && !string.IsNullOrWhiteSpace(historyLineMatch.Groups[5].Value))
+            {
+                var rangeStr = historyLineMatch.Groups[5].Value;
+                var parts = rangeStr.Split(new[] { '-', ',' }, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 2)
+                {
+                    if (double.TryParse(parts[0].Trim(), out var min))
+                        minValue = min;
+                    if (double.TryParse(parts[1].Trim(), out var max))
+                        maxValue = max;
+                }
+            }
+
+            var width = historyLineMatch.Groups[6].Success && !string.IsNullOrWhiteSpace(historyLineMatch.Groups[6].Value) && int.TryParse(historyLineMatch.Groups[6].Value, out var w)
+                ? Math.Clamp(w, 20, 200)
+                : 60;
+
+            var height = historyLineMatch.Groups[7].Success && !string.IsNullOrWhiteSpace(historyLineMatch.Groups[7].Value) && int.TryParse(historyLineMatch.Groups[7].Value, out var h)
+                ? Math.Clamp(h, 4, 40)
+                : 8;
+
+            var style = historyLineMatch.Groups[8].Success && !string.IsNullOrWhiteSpace(historyLineMatch.Groups[8].Value)
+                ? historyLineMatch.Groups[8].Value.ToLowerInvariant()
+                : "braille";
+
+            // Fetch time series from storage
+            var values = FetchTimeSeries(key, timeRange);
+
+            row.HistoryLineGraph = new WidgetHistoryLineGraph
+            {
+                Values = values,
+                Color = color,
+                Gradient = gradient,
+                Label = label,
+                MinValue = minValue,
+                MaxValue = maxValue,
+                Width = width,
+                Height = height,
+                Style = style
+            };
+            row.Content = HistoryLineRegex.Replace(row.Content, "");
+        }
+
         // Sanitize final content (strip ANSI codes, escape invalid brackets)
         // This protects against system data containing brackets like [kworker/0:1]
         try
@@ -490,6 +718,116 @@ public class WidgetProtocolParser
         }
 
         return row;
+    }
+
+    /// <summary>
+    /// Fetches a single value from storage for datafetch element
+    /// </summary>
+    private string? FetchStorageValue(string key, string aggregation, string? timeRange)
+    {
+        if (_currentStorageService == null || _currentWidgetId == null)
+        {
+            Logger.Debug($"Datafetch skipped: storage={_currentStorageService != null}, widgetId={_currentWidgetId != null}", "Storage");
+            return null;
+        }
+
+        try
+        {
+            // Parse key: "measurement.field" or "measurement"
+            var parts = key.Split('.');
+            var measurement = parts[0];
+            var fieldName = parts.Length > 1 ? parts[1] : "value";
+
+            var repository = _currentStorageService.GetRepository(_currentWidgetId);
+
+            if (aggregation == "latest")
+            {
+                var dataPoint = repository.GetLatest(measurement, fieldName);
+                if (dataPoint?.FieldValue != null)
+                {
+                    return FormatValue(dataPoint.FieldValue.Value);
+                }
+            }
+            else if (timeRange != null)
+            {
+                // Aggregation requires time range
+                var aggregatedData = repository.GetAggregated(measurement, fieldName, timeRange);
+                if (aggregatedData != null)
+                {
+                    var value = aggregation switch
+                    {
+                        "avg" => aggregatedData.Average,
+                        "max" => aggregatedData.Max,
+                        "min" => aggregatedData.Min,
+                        "sum" => aggregatedData.Sum,
+                        "count" => (double?)aggregatedData.Count,
+                        _ => null
+                    };
+
+                    if (value != null)
+                    {
+                        return FormatValue(value.Value);
+                    }
+                }
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug($"Datafetch error for key '{key}': {ex.Message}", "Storage");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Fetches time series data from storage for history elements
+    /// </summary>
+    private List<double> FetchTimeSeries(string key, string timeRange)
+    {
+        if (_currentStorageService == null || _currentWidgetId == null)
+        {
+            Logger.Debug($"History fetch skipped: storage={_currentStorageService != null}, widgetId={_currentWidgetId != null}", "Storage");
+            return new List<double>();
+        }
+
+        try
+        {
+            // Parse key: "measurement.field" or "measurement"
+            var parts = key.Split('.');
+            var measurement = parts[0];
+            var fieldName = parts.Length > 1 ? parts[1] : "value";
+
+            var repository = _currentStorageService.GetRepository(_currentWidgetId);
+            var dataPoints = repository.GetTimeSeries(measurement, fieldName, timeRange);
+
+            // Extract numeric values
+            var values = dataPoints
+                .Where(dp => dp.FieldValue.HasValue)
+                .Select(dp => dp.FieldValue!.Value)
+                .ToList();
+
+            Logger.Debug($"History fetch for '{key}' ({timeRange}): {values.Count} data points", "Storage");
+            return values;
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug($"History fetch error for key '{key}': {ex.Message}", "Storage");
+            return new List<double>();
+        }
+    }
+
+    /// <summary>
+    /// Formats a numeric value for display
+    /// </summary>
+    private string FormatValue(double value)
+    {
+        // Format with 1 decimal place for values < 100, no decimals for >= 100
+        if (Math.Abs(value) < 100)
+        {
+            return value.ToString("0.0");
+        }
+        return value.ToString("0");
     }
 
     /// <summary>
@@ -559,6 +897,166 @@ public class WidgetProtocolParser
             Flags = flags,
             Timeout = timeout
         };
+    }
+
+    /// <summary>
+    /// Parses a datastore directive following InfluxDB line protocol format
+    /// Format: measurement[,tag=val,tag=val] field=val[,field=val] [timestamp]
+    ///
+    /// Examples:
+    /// - cpu_usage value=75.5
+    /// - cpu_usage,core=0,host=srv01 value=75.5,temp=65
+    /// - disk_io,device=sda reads=1500,writes=2300
+    /// - metric,tag=x value=100 1707348000
+    /// </summary>
+    private DatastoreDirective? ParseDatastoreDirective(string content)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                _validationErrors.Add("Datastore directive is empty");
+                return null;
+            }
+
+            // Split into parts: [measurement,tags] [fields] [timestamp]
+            var parts = content.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length < 2)
+            {
+                _validationErrors.Add($"Datastore directive missing fields: {content}");
+                return null;
+            }
+
+            var directive = new DatastoreDirective();
+
+            // Parse measurement and optional tags (part 0)
+            var measurementPart = parts[0];
+            var measurementComponents = measurementPart.Split(',');
+
+            // First component is always the measurement
+            directive.Measurement = measurementComponents[0].Trim();
+            if (string.IsNullOrEmpty(directive.Measurement))
+            {
+                _validationErrors.Add($"Datastore directive has empty measurement: {content}");
+                return null;
+            }
+
+            // Parse tags (remaining components after measurement)
+            for (int i = 1; i < measurementComponents.Length; i++)
+            {
+                var tag = measurementComponents[i].Trim();
+                if (string.IsNullOrEmpty(tag))
+                    continue;
+
+                var tagParts = tag.Split('=', 2);
+                if (tagParts.Length == 2)
+                {
+                    var key = tagParts[0].Trim();
+                    var value = tagParts[1].Trim();
+                    if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(value))
+                    {
+                        directive.Tags[key] = value;
+                    }
+                }
+                else
+                {
+                    _validationErrors.Add($"Malformed tag in datastore directive: {tag}");
+                }
+            }
+
+            // Parse fields (part 1)
+            var fieldsPart = parts[1];
+            var fieldComponents = fieldsPart.Split(',');
+
+            foreach (var field in fieldComponents)
+            {
+                var fieldTrimmed = field.Trim();
+                if (string.IsNullOrEmpty(fieldTrimmed))
+                    continue;
+
+                var fieldParts = fieldTrimmed.Split('=', 2);
+                if (fieldParts.Length == 2)
+                {
+                    var key = fieldParts[0].Trim();
+                    var valueStr = fieldParts[1].Trim();
+
+                    if (string.IsNullOrEmpty(key))
+                    {
+                        _validationErrors.Add($"Malformed field in datastore directive: {field}");
+                        continue;
+                    }
+
+                    // Parse field value (int, float, bool, or string)
+                    object value = ParseFieldValue(valueStr);
+                    directive.Fields[key] = value;
+                }
+                else
+                {
+                    _validationErrors.Add($"Malformed field in datastore directive: {field}");
+                }
+            }
+
+            // Validate that we have at least one field
+            if (directive.Fields.Count == 0)
+            {
+                _validationErrors.Add($"Datastore directive has no valid fields: {content}");
+                return null;
+            }
+
+            // Parse optional timestamp (part 2)
+            if (parts.Length >= 3)
+            {
+                if (long.TryParse(parts[2], out var timestamp))
+                {
+                    directive.Timestamp = timestamp;
+                }
+                else
+                {
+                    _validationErrors.Add($"Invalid timestamp in datastore directive: {parts[2]}");
+                }
+            }
+
+            return directive;
+        }
+        catch (Exception ex)
+        {
+            _validationErrors.Add($"Failed to parse datastore directive: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Parses a field value, detecting type (int, float, bool, or string)
+    /// Supports quoted strings, integers, floats, and booleans
+    /// </summary>
+    private static object ParseFieldValue(string valueStr)
+    {
+        // Handle quoted strings
+        if (valueStr.StartsWith("\"") && valueStr.EndsWith("\"") && valueStr.Length >= 2)
+        {
+            return valueStr.Substring(1, valueStr.Length - 2);
+        }
+
+        // Handle booleans
+        if (bool.TryParse(valueStr, out var boolValue))
+        {
+            return boolValue;
+        }
+
+        // Handle integers
+        if (long.TryParse(valueStr, out var intValue))
+        {
+            return intValue;
+        }
+
+        // Handle floats
+        if (double.TryParse(valueStr, out var floatValue))
+        {
+            return floatValue;
+        }
+
+        // Default to string
+        return valueStr;
     }
 
     /// <summary>

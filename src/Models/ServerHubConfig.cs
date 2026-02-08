@@ -45,6 +45,12 @@ public class ServerHubConfig
     public bool ShowTruncationIndicator { get; set; } = true;
 
     /// <summary>
+    /// Storage configuration for widget data persistence
+    /// </summary>
+    [YamlMember(Alias = "storage")]
+    public Storage.StorageConfig? Storage { get; set; }
+
+    /// <summary>
     /// Terminal width breakpoints for responsive layout
     /// </summary>
     [YamlMember(Alias = "breakpoints")]

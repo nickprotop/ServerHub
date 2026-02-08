@@ -1,6 +1,8 @@
 // Copyright (c) Nikolaos Protopapas. All rights reserved.
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
+using ServerHub.Storage;
+
 namespace ServerHub.Models;
 
 /// <summary>
@@ -47,4 +49,9 @@ public class WidgetData
     /// Whether this widget has any actions
     /// </summary>
     public bool HasActions => Actions.Count > 0;
+
+    /// <summary>
+    /// Collection of datastore directives for time-series data storage
+    /// </summary>
+    public List<DatastoreDirective> DatastoreDirectives { get; set; } = new();
 }

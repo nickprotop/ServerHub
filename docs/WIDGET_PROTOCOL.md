@@ -338,6 +338,194 @@ row: [line:10,15,20,25,30,25,20,15,10:blue:Memory:0-40:40:4]                  # 
 row: [line:25,25,25,25,25:grey70:Constant:0-50:30:4]                          # Flat line
 ```
 
+### Storage-Based Elements
+
+ServerHub includes a built-in time-series storage system that allows widgets to persist data and query historical metrics. These elements interact with the storage backend.
+
+#### Datastore Directive
+
+Persists metric data to the SQLite database using InfluxDB-style line protocol.
+
+```
+datastore: MEASUREMENT[,tag=val,tag=val] field=val[,field=val] [timestamp]
+```
+
+- **MEASUREMENT**: Required alphanumeric identifier (e.g., `cpu_usage`, `memory_used`)
+- **tags**: Optional comma-separated key=value pairs for grouping (e.g., `core=0,host=srv01`)
+- **fields**: Required comma-separated key=value pairs (numeric, boolean, or quoted strings)
+- **timestamp**: Optional Unix timestamp in seconds (auto-generated if omitted)
+
+Examples:
+```bash
+# Simple metric
+echo "datastore: cpu_usage value=75.5"
+
+# With tags
+echo "datastore: cpu_usage,core=0,host=srv01 value=75.5,temp=65"
+
+# Multiple fields
+echo "datastore: disk_io,device=sda reads=1500,writes=2300"
+
+# Explicit timestamp
+echo "datastore: metric,tag=x value=100 1707348000"
+```
+
+**Note:** Data is automatically scoped to the widget ID. Each widget's data is isolated in the database.
+
+#### Datafetch (Inline)
+
+Retrieves and displays a single value from stored data.
+
+```
+[datafetch:KEY]
+[datafetch:KEY:AGGREGATION:TIMERANGE]
+```
+
+- **KEY**: Measurement key in format `measurement.field` (e.g., `cpu_usage.value`)
+- **AGGREGATION**: `latest` (default), `avg`, `max`, `min`, `sum`, `count`
+- **TIMERANGE**: Time range like `30s`, `5m`, `1h`, `24h`, `7d`, or `last_10`
+
+Examples:
+```bash
+# Latest value
+echo "row: CPU: [datafetch:cpu_usage.value]%"
+
+# Average over last 30 seconds
+echo "row: 30s avg: [datafetch:cpu_usage.value:avg:30s]%"
+
+# Maximum over 1 hour
+echo "row: Peak (1h): [datafetch:cpu_usage.value:max:1h]%"
+
+# Count of samples
+echo "row: Samples: [datafetch:cpu_usage.value:count:1h]"
+```
+
+If no data is available, renders as `--`.
+
+#### History Graph
+
+Renders stored time-series data as a vertical bar chart (4 lines tall).
+
+```
+[history_graph:KEY:TIMERANGE]
+[history_graph:KEY:TIMERANGE:COLOR]
+[history_graph:KEY:TIMERANGE:COLOR:LABEL]
+[history_graph:KEY:TIMERANGE:COLOR:LABEL:MIN-MAX]
+[history_graph:KEY:TIMERANGE:COLOR:LABEL:MIN-MAX:WIDTH]
+```
+
+- **KEY**: Measurement key (e.g., `cpu_usage.value`)
+- **TIMERANGE**: Time range to query (e.g., `30s`, `1m`, `1h`, `24h`)
+- **COLOR/GRADIENT**: Optional color or gradient name
+- **LABEL**: Optional label text
+- **MIN-MAX**: Optional fixed scale (e.g., `0-100`)
+- **WIDTH**: Character width (default: 30)
+
+Examples:
+```bash
+# Short-term (last 60 seconds)
+echo "row: [history_graph:cpu_usage.value:60s:cool:Load %:0-100]"
+
+# Medium-term (last hour)
+echo "row: [history_graph:cpu_usage.value:1h:cyan:CPU Load:0-100:40]"
+
+# Long-term (24 hours)
+echo "row: [history_graph:cpu_usage.value:24h:warm:Temperature:0-100]"
+```
+
+#### History Sparkline (Inline)
+
+Renders stored time-series data as an inline sparkline.
+
+```
+[history_sparkline:KEY:TIMERANGE]
+[history_sparkline:KEY:TIMERANGE:COLOR]
+[history_sparkline:KEY:TIMERANGE:COLOR:WIDTH]
+```
+
+- **KEY**: Measurement key (e.g., `cpu_usage.value`)
+- **TIMERANGE**: Time range to query
+- **COLOR/GRADIENT**: Optional color or gradient name
+- **WIDTH**: Character width (default: 30)
+
+Examples:
+```bash
+# Inline trend for last 30 seconds
+echo "row: CPU trend: [history_sparkline:cpu_usage.value:30s:cool:20]"
+
+# Memory trend over 5 minutes
+echo "row: Mem: [history_sparkline:memory.used:5m:warm:25]"
+```
+
+#### History Line Graph
+
+Renders stored time-series data as a smooth line chart.
+
+```
+[history_line:KEY:TIMERANGE:COLOR:LABEL:MIN-MAX:WIDTH:HEIGHT]
+[history_line:KEY:TIMERANGE:COLOR:LABEL:MIN-MAX:WIDTH:HEIGHT:STYLE]
+```
+
+- **KEY**: Measurement key (e.g., `cpu_usage.value`)
+- **TIMERANGE**: Time range to query (e.g., `5m`, `1h`, `24h`)
+- **COLOR/GRADIENT**: Optional color or gradient name
+- **LABEL**: Optional label text
+- **MIN-MAX**: Optional fixed scale (e.g., `0-100`)
+- **WIDTH**: Character width (default: 60)
+- **HEIGHT**: Character height (default: 8)
+- **STYLE**: `braille` (default) or `ascii`
+
+Examples:
+```bash
+# 1 minute history
+echo "row: [history_line:cpu_usage.value:1m:cyan:CPU:0-100:60:8:braille]"
+
+# 5 minute history with gradient
+echo "row: [history_line:cpu_usage.value:5m:warm:Load:0-100:50:6:braille]"
+
+# 24 hour history
+echo "row: [history_line:memory.used:24h:cool:Memory:0-100:80:10:braille]"
+```
+
+#### Time Range Format
+
+All storage elements support these time range formats:
+
+- **Seconds**: `10s`, `30s`, `60s`
+- **Minutes**: `1m`, `5m`, `15m`, `30m`
+- **Hours**: `1h`, `6h`, `12h`, `24h`
+- **Days**: `7d`, `30d`
+- **Samples**: `last_10`, `last_30`, `last_100`
+
+#### Complete Storage Example
+
+```bash
+#!/bin/bash
+echo "title: CPU Monitor"
+echo "refresh: 5"
+
+# Get current CPU load
+CPU_LOAD=$(awk '{print $1}' /proc/loadavg)
+CPU_PERCENT=$(awk "BEGIN {printf \"%.0f\", ($CPU_LOAD / $(nproc)) * 100}")
+
+# Store the metric
+echo "datastore: cpu_usage,host=$(hostname) value=$CPU_PERCENT"
+
+# Display current + historical data
+echo "row: [status:ok] Current: ${CPU_PERCENT}%"
+echo "row: Latest: [datafetch:cpu_usage.value] | 30s avg: [datafetch:cpu_usage.value:avg:30s]"
+echo "row: Trend: [history_sparkline:cpu_usage.value:1m:cool:20]"
+echo "row: "
+echo "row: [history_graph:cpu_usage.value:1m:cool:Last Minute:0-100:40]"
+
+# Extended mode: longer history
+if [[ "$1" == "--extended" ]]; then
+    echo "row: "
+    echo "row: [bold]24 Hour History[/]"
+    echo "row: [history_line:cpu_usage.value:24h:warm:CPU Load:0-100:80:12:braille]"
+fi
+```
+
 ## Spectre.Console Markup
 
 Row content supports [Spectre.Console markup](https://spectreconsole.net/markup) for styling:
