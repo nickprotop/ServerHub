@@ -222,7 +222,7 @@ public class WidgetProtocolParser
                 if (tableRowMatch.Success && currentTable != null)
                 {
                     var rowValues = tableRowMatch.Groups[1].Value.Split('|')
-                        .Select(v => ProcessCellContent(v.Trim()))
+                        .Select(v => this.ProcessCellContent(v.Trim()))
                         .ToList();
                     currentTable.Rows.Add(rowValues);
                     continue;
@@ -262,10 +262,37 @@ public class WidgetProtocolParser
     /// <summary>
     /// Processes inline directives in table cell content and replaces them with rendered markup.
     /// Also sanitizes content to strip ANSI codes and escape invalid brackets.
+    /// Supports both static elements (sparkline, miniprogress) and storage-based elements (history_sparkline).
     /// </summary>
-    private static string ProcessCellContent(string cellContent)
+    private string ProcessCellContent(string cellContent)
     {
         var content = cellContent;
+
+        // Process history_sparkline directives (requires storage)
+        content = HistorySparklineRegex.Replace(content, match =>
+        {
+            var key = match.Groups[1].Value.Trim();
+            var timeRange = match.Groups[2].Value.Trim();
+            var color = match.Groups[3].Success && !string.IsNullOrWhiteSpace(match.Groups[3].Value)
+                ? match.Groups[3].Value.Trim()
+                : "grey70";
+            var width = match.Groups[4].Success && int.TryParse(match.Groups[4].Value, out var w)
+                ? Math.Clamp(w, 5, 200)
+                : 15;
+
+            // Fetch time series from storage
+            var values = FetchTimeSeries(key, timeRange);
+
+            if (values.Count > 0)
+            {
+                return InlineElementRenderer.RenderSparkline(values, color, width);
+            }
+            else
+            {
+                // No data available - return placeholder
+                return "[grey50]--[/]";
+            }
+        });
 
         // Process sparkline directives (before sanitization to preserve tag format)
         content = SparklineRegex.Replace(content, match =>
@@ -733,8 +760,28 @@ public class WidgetProtocolParser
 
         try
         {
-            // Parse key: "measurement.field" or "measurement"
-            var parts = key.Split('.');
+            // Parse key: "measurement.field" or "measurement.field,tag1=val1,tag2=val2"
+            // First split on comma to separate query from tags
+            var queryAndTags = key.Split(',');
+            var query = queryAndTags[0]; // "measurement.field"
+
+            // Parse tags if present
+            Dictionary<string, string>? tags = null;
+            if (queryAndTags.Length > 1)
+            {
+                tags = new Dictionary<string, string>();
+                for (int i = 1; i < queryAndTags.Length; i++)
+                {
+                    var tagParts = queryAndTags[i].Split('=');
+                    if (tagParts.Length == 2)
+                    {
+                        tags[tagParts[0].Trim()] = tagParts[1].Trim();
+                    }
+                }
+            }
+
+            // Parse query into measurement and field
+            var parts = query.Split('.');
             var measurement = parts[0];
             var fieldName = parts.Length > 1 ? parts[1] : "value";
 
@@ -742,7 +789,7 @@ public class WidgetProtocolParser
 
             if (aggregation == "latest")
             {
-                var dataPoint = repository.GetLatest(measurement, fieldName);
+                var dataPoint = repository.GetLatest(measurement, fieldName, tags);
                 if (dataPoint?.FieldValue != null)
                 {
                     return FormatValue(dataPoint.FieldValue.Value);
@@ -751,7 +798,7 @@ public class WidgetProtocolParser
             else if (timeRange != null)
             {
                 // Aggregation requires time range
-                var aggregatedData = repository.GetAggregated(measurement, fieldName, timeRange);
+                var aggregatedData = repository.GetAggregated(measurement, fieldName, timeRange, tags);
                 if (aggregatedData != null)
                 {
                     var value = aggregation switch
@@ -793,13 +840,33 @@ public class WidgetProtocolParser
 
         try
         {
-            // Parse key: "measurement.field" or "measurement"
-            var parts = key.Split('.');
+            // Parse key: "measurement.field" or "measurement.field,tag1=val1,tag2=val2"
+            // First split on comma to separate query from tags
+            var queryAndTags = key.Split(',');
+            var query = queryAndTags[0]; // "measurement.field"
+
+            // Parse tags if present
+            Dictionary<string, string>? tags = null;
+            if (queryAndTags.Length > 1)
+            {
+                tags = new Dictionary<string, string>();
+                for (int i = 1; i < queryAndTags.Length; i++)
+                {
+                    var tagParts = queryAndTags[i].Split('=');
+                    if (tagParts.Length == 2)
+                    {
+                        tags[tagParts[0].Trim()] = tagParts[1].Trim();
+                    }
+                }
+            }
+
+            // Parse query into measurement and field
+            var parts = query.Split('.');
             var measurement = parts[0];
             var fieldName = parts.Length > 1 ? parts[1] : "value";
 
             var repository = _currentStorageService.GetRepository(_currentWidgetId);
-            var dataPoints = repository.GetTimeSeries(measurement, fieldName, timeRange);
+            var dataPoints = repository.GetTimeSeries(measurement, fieldName, timeRange, tags);
 
             // Extract numeric values
             var values = dataPoints

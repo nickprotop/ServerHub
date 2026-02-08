@@ -30,12 +30,15 @@ public static class InlineElementRenderer
         if (values.Count == 0)
             return "";
 
-        // Use fixed width, pad remaining space with background
-        var actualWidth = Math.Max(values.Count, width);
-        var paddingNeeded = actualWidth - values.Count;
+        // Limit values to width (take last N values if too many)
+        var valuesToRender = values.Count > width
+            ? values.Skip(values.Count - width).ToList()
+            : values;
 
-        var min = values.Min();
-        var max = values.Max();
+        var paddingNeeded = width - valuesToRender.Count;
+
+        var min = valuesToRender.Min();
+        var max = valuesToRender.Max();
         var range = max - min;
         var effectiveColor = color ?? "grey70";
 
@@ -52,7 +55,7 @@ public static class InlineElementRenderer
                 : effectiveColor;
 
             // Render data columns
-            for (int i = 0; i < values.Count; i++)
+            for (int i = 0; i < valuesToRender.Count; i++)
             {
                 result.Append($"[{flatColor} on grey19]▄[/]");
             }
@@ -68,15 +71,15 @@ public static class InlineElementRenderer
         if (isGradientMode)
         {
             // Gradient mode - horizontal gradient (left to right for time progression)
-            for (int i = 0; i < values.Count; i++)
+            for (int i = 0; i < valuesToRender.Count; i++)
             {
-                var value = values[i];
+                var value = valuesToRender[i];
                 var normalized = (value - min) / range;
                 var level = (int)(normalized * (BlockLevels.Length - 1));
                 var ch = BlockLevels[Math.Clamp(level, 0, BlockLevels.Length - 1)];
 
                 // Apply gradient color based on position (left to right)
-                var position = values.Count > 1 ? (double)i / (values.Count - 1) : 0.5;
+                var position = valuesToRender.Count > 1 ? (double)i / (valuesToRender.Count - 1) : 0.5;
                 var charColor = InterpolateGradientColor(gradientStops!, position);
 
                 result.Append($"[{charColor} on grey19]{ch}[/]");
@@ -92,9 +95,9 @@ public static class InlineElementRenderer
         else
         {
             // Solid color mode - render data columns
-            for (int i = 0; i < values.Count; i++)
+            for (int i = 0; i < valuesToRender.Count; i++)
             {
-                var value = values[i];
+                var value = valuesToRender[i];
                 var normalized = (value - min) / range;
                 var level = (int)(normalized * (BlockLevels.Length - 1));
                 var ch = BlockLevels[Math.Clamp(level, 0, BlockLevels.Length - 1)];
