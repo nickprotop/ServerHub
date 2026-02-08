@@ -10,7 +10,8 @@
     <!-- Single-file self-contained publish -->
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
-    <PublishTrimmed>true</PublishTrimmed>
+    <!-- Trimming disabled: Spectre.Console.Cli uses reflection to discover settings types -->
+    <PublishTrimmed>false</PublishTrimmed>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
 
