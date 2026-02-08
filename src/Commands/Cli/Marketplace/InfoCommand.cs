@@ -1,6 +1,4 @@
 using Spectre.Console;
-using Spectre.Console.Cli;
-using ServerHub.Commands.Settings.Marketplace;
 using ServerHub.Marketplace.Services;
 using ServerHub.Services;
 
@@ -9,19 +7,19 @@ namespace ServerHub.Commands.Cli.Marketplace;
 /// <summary>
 /// Marketplace info command - shows detailed information about a widget
 /// </summary>
-public class InfoCommand : AsyncCommand<InfoSettings>
+public class InfoCommand
 {
-    public override async Task<int> ExecuteAsync(CommandContext context, InfoSettings settings)
+    public static async Task<int> ExecuteAsync(string widgetId)
     {
         var registryClient = new RegistryClient();
         var dependencyChecker = new DependencyChecker();
 
-        AnsiConsole.MarkupLine($"Fetching information for: [cyan]{settings.WidgetId}[/]\n");
+        AnsiConsole.MarkupLine($"Fetching information for: [cyan]{widgetId}[/]\n");
 
-        var registryWidget = await registryClient.GetWidgetByIdAsync(settings.WidgetId);
+        var registryWidget = await registryClient.GetWidgetByIdAsync(widgetId);
         if (registryWidget == null)
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] Widget '{settings.WidgetId}' not found in marketplace");
+            AnsiConsole.MarkupLine($"[red]Error:[/] Widget '{widgetId}' not found in marketplace");
             return 1;
         }
 
@@ -45,7 +43,7 @@ public class InfoCommand : AsyncCommand<InfoSettings>
                       $"[dim]Verification:[/] {Helpers.GetVerificationBadge(metadata.VerificationLevel)}\n" +
                       $"[dim]Homepage:[/] {metadata.Homepage}"))
         {
-            Header = new PanelHeader($" {settings.WidgetId} "),
+            Header = new PanelHeader($" {widgetId} "),
             Border = BoxBorder.Rounded
         };
 
@@ -84,7 +82,7 @@ public class InfoCommand : AsyncCommand<InfoSettings>
 
         // Show installation command
         AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine($"[dim]To install:[/] serverhub marketplace install {settings.WidgetId}");
+        AnsiConsole.MarkupLine($"[dim]To install:[/] serverhub marketplace install {widgetId}");
 
         return 0;
     }

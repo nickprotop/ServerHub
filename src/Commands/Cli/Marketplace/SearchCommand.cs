@@ -1,6 +1,4 @@
 using Spectre.Console;
-using Spectre.Console.Cli;
-using ServerHub.Commands.Settings.Marketplace;
 using ServerHub.Marketplace.Services;
 
 namespace ServerHub.Commands.Cli.Marketplace;
@@ -8,15 +6,15 @@ namespace ServerHub.Commands.Cli.Marketplace;
 /// <summary>
 /// Marketplace search command - searches for widgets in the marketplace
 /// </summary>
-public class SearchCommand : AsyncCommand<SearchSettings>
+public class SearchCommand
 {
-    public override async Task<int> ExecuteAsync(CommandContext context, SearchSettings settings)
+    public static async Task<int> ExecuteAsync(string query)
     {
         var registryClient = new RegistryClient();
 
-        AnsiConsole.MarkupLine($"Searching marketplace for: [cyan]{settings.Query}[/]");
+        AnsiConsole.MarkupLine($"Searching marketplace for: [cyan]{query}[/]");
 
-        var results = await registryClient.SearchWidgetsAsync(settings.Query);
+        var results = await registryClient.SearchWidgetsAsync(query);
 
         if (results.Count == 0)
         {

@@ -1,6 +1,4 @@
 using Spectre.Console;
-using Spectre.Console.Cli;
-using ServerHub.Commands.Settings.Marketplace;
 using ServerHub.Config;
 using ServerHub.Marketplace.Models;
 using ServerHub.Marketplace.Services;
@@ -12,9 +10,9 @@ namespace ServerHub.Commands.Cli.Marketplace;
 /// <summary>
 /// Marketplace install command - installs a widget from the marketplace
 /// </summary>
-public class InstallCommand : AsyncCommand<InstallSettings>
+public class InstallCommand
 {
-    public override async Task<int> ExecuteAsync(CommandContext context, InstallSettings settings)
+    public static async Task<int> ExecuteAsync(string widgetIdArg)
     {
         var installPath = WidgetPaths.GetMarketplaceInstallPath();
         var configPath = ConfigManager.GetDefaultConfigPath();
@@ -23,7 +21,7 @@ public class InstallCommand : AsyncCommand<InstallSettings>
         var installer = new WidgetInstaller(registryClient, installPath);
         var dependencyChecker = new DependencyChecker();
 
-        var widgetId = settings.WidgetId;
+        var widgetId = widgetIdArg;
         string? version = null;
 
         // Parse version (e.g., "widget@1.0.0")
@@ -236,7 +234,7 @@ public class InstallCommand : AsyncCommand<InstallSettings>
         return 0;
     }
 
-    private void ShowManualConfig(string widgetId, string widgetPath, string sha256, int refresh)
+    private static void ShowManualConfig(string widgetId, string widgetPath, string sha256, int refresh)
     {
         AnsiConsole.MarkupLine("[dim]widgets:[/]");
         AnsiConsole.MarkupLine($"[dim]  {widgetId}:[/]");

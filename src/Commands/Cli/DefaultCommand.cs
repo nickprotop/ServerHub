@@ -1,5 +1,3 @@
-using Spectre.Console.Cli;
-using ServerHub.Commands.Settings;
 using ServerHub.Config;
 using ServerHub.Services;
 using ServerHub.Utils;
@@ -13,68 +11,74 @@ namespace ServerHub.Commands.Cli;
 /// <summary>
 /// Default command - runs the ServerHub dashboard
 /// </summary>
-public class DefaultCommand : AsyncCommand<DefaultCommandSettings>
+public class DefaultCommand
 {
-    public override async Task<int> ExecuteAsync(CommandContext context, DefaultCommandSettings settings)
+    public static async Task<int> ExecuteAsync(
+        string? configPath,
+        string? widgetsPath,
+        bool devMode,
+        bool discover,
+        bool verifyChecksums,
+        string? initConfig)
     {
         // Handle utility commands first
-        if (settings.Discover)
+        if (discover)
         {
             return await DiscoverWidgetsAsync();
         }
 
-        if (settings.VerifyChecksums)
+        if (verifyChecksums)
         {
-            return await VerifyChecksumsAsync(settings.ConfigPath);
+            return await VerifyChecksumsAsync(configPath);
         }
 
-        if (!string.IsNullOrEmpty(settings.InitConfig))
+        if (!string.IsNullOrEmpty(initConfig))
         {
-            return await InitConfigAsync(settings.InitConfig, settings.WidgetsPath);
+            return await InitConfigAsync(initConfig, widgetsPath);
         }
 
         // Set custom widgets path if provided
-        if (!string.IsNullOrEmpty(settings.WidgetsPath))
+        if (!string.IsNullOrEmpty(widgetsPath))
         {
-            if (!Directory.Exists(settings.WidgetsPath))
+            if (!Directory.Exists(widgetsPath))
             {
-                Console.Error.WriteLine($"Error: Widgets path does not exist: {settings.WidgetsPath}");
+                Console.Error.WriteLine($"Error: Widgets path does not exist: {widgetsPath}");
                 return 1;
             }
-            WidgetPaths.SetCustomWidgetsPath(settings.WidgetsPath);
-            Console.WriteLine($"Using custom widgets path: {settings.WidgetsPath}");
+            WidgetPaths.SetCustomWidgetsPath(widgetsPath);
+            Console.WriteLine($"Using custom widgets path: {widgetsPath}");
         }
 
         // Ensure directories exist
         WidgetPaths.EnsureDirectoriesExist();
 
         // Load configuration
-        var configPath = settings.ConfigPath ?? ConfigManager.GetDefaultConfigPath();
+        var resolvedConfigPath = configPath ?? ConfigManager.GetDefaultConfigPath();
         var configMgr = new ConfigManager();
 
         // Auto-create ONLY the default config path for first-time users
-        var isDefaultPath = configPath == ConfigManager.GetDefaultConfigPath();
+        var isDefaultPath = resolvedConfigPath == ConfigManager.GetDefaultConfigPath();
 
-        if (!File.Exists(configPath))
+        if (!File.Exists(resolvedConfigPath))
         {
             if (isDefaultPath)
             {
                 // First-time user: silent auto-create with production template
                 Console.WriteLine("First-time setup: Creating default configuration...");
-                configMgr.CreateDefaultConfig(configPath);
-                Console.WriteLine($"Created: {configPath}");
+                configMgr.CreateDefaultConfig(resolvedConfigPath);
+                Console.WriteLine($"Created: {resolvedConfigPath}");
                 Console.WriteLine("Starting ServerHub...");
                 Console.WriteLine();
             }
             else
             {
                 // Custom path: fail with helpful error
-                Console.Error.WriteLine($"Configuration file not found: {configPath}");
+                Console.Error.WriteLine($"Configuration file not found: {resolvedConfigPath}");
                 Console.Error.WriteLine();
                 Console.Error.WriteLine("To create this configuration file:");
-                Console.Error.WriteLine($"  serverhub --init-config {Path.GetFileName(configPath)}");
-                if (!string.IsNullOrEmpty(settings.WidgetsPath))
-                    Console.Error.WriteLine($"            --widgets-path {settings.WidgetsPath}");
+                Console.Error.WriteLine($"  serverhub --init-config {Path.GetFileName(resolvedConfigPath)}");
+                if (!string.IsNullOrEmpty(widgetsPath))
+                    Console.Error.WriteLine($"            --widgets-path {widgetsPath}");
                 Console.Error.WriteLine();
                 Console.Error.WriteLine("Or use the default configuration:");
                 Console.Error.WriteLine("  serverhub");
@@ -85,17 +89,17 @@ public class DefaultCommand : AsyncCommand<DefaultCommandSettings>
         // Call Program.Main to start the dashboard
         // This delegates to the existing Program class which has all the UI logic
         var args = new List<string>();
-        if (!string.IsNullOrEmpty(settings.ConfigPath))
-            args.Add(settings.ConfigPath);
-        if (settings.DevMode)
+        if (!string.IsNullOrEmpty(configPath))
+            args.Add(configPath);
+        if (devMode)
             args.Add("--dev-mode");
-        if (!string.IsNullOrEmpty(settings.WidgetsPath))
+        if (!string.IsNullOrEmpty(widgetsPath))
         {
             args.Add("--widgets-path");
-            args.Add(settings.WidgetsPath);
+            args.Add(widgetsPath);
         }
 
-        return await Program.RunDashboardAsync(args.ToArray(), configPath, settings.DevMode);
+        return await Program.RunDashboardAsync(args.ToArray(), resolvedConfigPath, devMode);
     }
 
     private static Task<int> DiscoverWidgetsAsync()

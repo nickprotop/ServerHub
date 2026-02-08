@@ -1,5 +1,4 @@
 using Spectre.Console;
-using Spectre.Console.Cli;
 using ServerHub.Marketplace.Services;
 
 namespace ServerHub.Commands.Cli.Marketplace;
@@ -7,9 +6,9 @@ namespace ServerHub.Commands.Cli.Marketplace;
 /// <summary>
 /// Marketplace list command - lists all available widgets
 /// </summary>
-public class ListCommand : AsyncCommand
+public class ListCommand
 {
-    public override async Task<int> ExecuteAsync(CommandContext context)
+    public static async Task<int> ExecuteAsync()
     {
         var registryClient = new RegistryClient();
 

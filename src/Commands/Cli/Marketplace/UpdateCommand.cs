@@ -1,6 +1,4 @@
 using Spectre.Console;
-using Spectre.Console.Cli;
-using ServerHub.Commands.Settings.Marketplace;
 using ServerHub.Config;
 using ServerHub.Marketplace.Services;
 using ServerHub.Services;
@@ -11,41 +9,41 @@ namespace ServerHub.Commands.Cli.Marketplace;
 /// <summary>
 /// Marketplace update command - updates a widget to the latest or specified version
 /// </summary>
-public class UpdateCommand : AsyncCommand<UpdateSettings>
+public class UpdateCommand
 {
-    public override async Task<int> ExecuteAsync(CommandContext context, UpdateSettings settings)
+    public static async Task<int> ExecuteAsync(string widgetId, string? version, bool skipConfirmation)
     {
         var installPath = WidgetPaths.GetMarketplaceInstallPath();
         var configPath = ConfigManager.GetDefaultConfigPath();
         var manager = new MarketplaceManager(installPath, configPath);
 
-        AnsiConsole.MarkupLine($"[cyan]Checking widget:[/] {settings.WidgetId}\n");
+        AnsiConsole.MarkupLine($"[cyan]Checking widget:[/] {widgetId}\n");
 
         // Get all widgets to find this one
         var allWidgets = await manager.GetAllWidgetsAsync();
-        var widget = allWidgets.FirstOrDefault(w => w.Id == settings.WidgetId);
+        var widget = allWidgets.FirstOrDefault(w => w.Id == widgetId);
 
         if (widget == null)
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] Widget '{settings.WidgetId}' not found in marketplace");
+            AnsiConsole.MarkupLine($"[red]Error:[/] Widget '{widgetId}' not found in marketplace");
             return 1;
         }
 
         if (widget.Status != MarketplaceManager.WidgetStatus.UpdateAvailable &&
             widget.Status != MarketplaceManager.WidgetStatus.Installed)
         {
-            AnsiConsole.MarkupLine($"[yellow]Widget '{settings.WidgetId}' is not installed[/]");
-            AnsiConsole.MarkupLine($"[dim]Use 'serverhub marketplace install {settings.WidgetId}' to install it[/]");
+            AnsiConsole.MarkupLine($"[yellow]Widget '{widgetId}' is not installed[/]");
+            AnsiConsole.MarkupLine($"[dim]Use 'serverhub marketplace install {widgetId}' to install it[/]");
             return 1;
         }
 
-        if (!widget.HasUpdate && settings.Version == null)
+        if (!widget.HasUpdate && version == null)
         {
-            AnsiConsole.MarkupLine($"[green]Widget '{settings.WidgetId}' is already up to date (v{widget.InstalledVersion})[/]");
+            AnsiConsole.MarkupLine($"[green]Widget '{widgetId}' is already up to date (v{widget.InstalledVersion})[/]");
             return 0;
         }
 
-        var targetVersion = settings.Version ?? widget.LatestVersion;
+        var targetVersion = version ?? widget.LatestVersion;
 
         // Get manifest for changelog and details
         var manifest = await manager.GetWidgetManifestAsync(widget.ManifestUrl);
@@ -87,7 +85,7 @@ public class UpdateCommand : AsyncCommand<UpdateSettings>
         }
 
         // Confirm update (unless --yes flag)
-        if (!settings.SkipConfirmation)
+        if (!skipConfirmation)
         {
             AnsiConsole.WriteLine();
             if (!AnsiConsole.Confirm("Continue with update?", defaultValue: true))
@@ -104,7 +102,7 @@ public class UpdateCommand : AsyncCommand<UpdateSettings>
             {
                 ctx.Spinner(Spinner.Known.Dots);
                 ctx.Status("Downloading...");
-                return await manager.InstallWidgetAsync(settings.WidgetId, settings.Version ?? targetVersion);
+                return await manager.InstallWidgetAsync(widgetId, version ?? targetVersion);
             });
 
         if (!result.Success)
@@ -116,7 +114,7 @@ public class UpdateCommand : AsyncCommand<UpdateSettings>
         // Update config with new version and SHA256
         bool configUpdated = ConfigHelper.UpdateWidgetVersionInConfig(
             configPath,
-            settings.WidgetId,
+            widgetId,
             targetVersion,
             result.Sha256 ?? ""
         );
@@ -129,7 +127,7 @@ public class UpdateCommand : AsyncCommand<UpdateSettings>
 
         // Success
         AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine($"[green]✓ Successfully updated {settings.WidgetId} to v{targetVersion}[/]");
+        AnsiConsole.MarkupLine($"[green]✓ Successfully updated {widgetId} to v{targetVersion}[/]");
         AnsiConsole.WriteLine($"  Location: {result.InstalledPath}");
         AnsiConsole.WriteLine($"  SHA256: {result.Sha256}");
         AnsiConsole.WriteLine();

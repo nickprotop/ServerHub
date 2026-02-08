@@ -1,6 +1,4 @@
 using Spectre.Console;
-using Spectre.Console.Cli;
-using ServerHub.Commands.Settings.Marketplace;
 using ServerHub.Config;
 using ServerHub.Services;
 using ServerHub.Utils;
@@ -12,7 +10,7 @@ namespace ServerHub.Commands.Cli.Marketplace;
 /// <summary>
 /// Marketplace check-updates command - lists widgets with available updates
 /// </summary>
-public class CheckUpdatesCommand : AsyncCommand<CheckUpdatesSettings>
+public class CheckUpdatesCommand
 {
     [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access",
         Justification = "JSON serialization of anonymous types is safe here as the types are defined inline and will be preserved")]
@@ -21,7 +19,7 @@ public class CheckUpdatesCommand : AsyncCommand<CheckUpdatesSettings>
         return JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
     }
 
-    public override async Task<int> ExecuteAsync(CommandContext context, CheckUpdatesSettings settings)
+    public static async Task<int> ExecuteAsync(bool jsonOutput)
     {
         var installPath = WidgetPaths.GetMarketplaceInstallPath();
         var configPath = ConfigManager.GetDefaultConfigPath();
@@ -40,7 +38,7 @@ public class CheckUpdatesCommand : AsyncCommand<CheckUpdatesSettings>
         }
 
         // JSON output
-        if (settings.JsonOutput)
+        if (jsonOutput)
         {
             var jsonData = updates.Select(w => new
             {

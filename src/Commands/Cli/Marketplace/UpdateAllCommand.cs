@@ -1,6 +1,4 @@
 using Spectre.Console;
-using Spectre.Console.Cli;
-using ServerHub.Commands.Settings.Marketplace;
 using ServerHub.Config;
 using ServerHub.Marketplace.Services;
 using ServerHub.Services;
@@ -11,9 +9,9 @@ namespace ServerHub.Commands.Cli.Marketplace;
 /// <summary>
 /// Marketplace update-all command - updates all widgets with available updates
 /// </summary>
-public class UpdateAllCommand : AsyncCommand<UpdateAllSettings>
+public class UpdateAllCommand
 {
-    public override async Task<int> ExecuteAsync(CommandContext context, UpdateAllSettings settings)
+    public static async Task<int> ExecuteAsync(bool skipConfirmation)
     {
         var installPath = WidgetPaths.GetMarketplaceInstallPath();
         var configPath = ConfigManager.GetDefaultConfigPath();
@@ -54,7 +52,7 @@ public class UpdateAllCommand : AsyncCommand<UpdateAllSettings>
         AnsiConsole.Write(table);
 
         // Confirm batch update (unless --yes flag)
-        if (!settings.SkipConfirmation)
+        if (!skipConfirmation)
         {
             AnsiConsole.WriteLine();
             if (!AnsiConsole.Confirm($"Update all {updatesToInstall.Count} widget(s)?", defaultValue: true))

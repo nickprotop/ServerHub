@@ -1,5 +1,4 @@
 using Spectre.Console;
-using Spectre.Console.Cli;
 using ServerHub.Utils;
 
 namespace ServerHub.Commands.Cli.Marketplace;
@@ -7,9 +6,9 @@ namespace ServerHub.Commands.Cli.Marketplace;
 /// <summary>
 /// Marketplace list-installed command - shows installed marketplace widgets
 /// </summary>
-public class ListInstalledCommand : AsyncCommand
+public class ListInstalledCommand
 {
-    public override Task<int> ExecuteAsync(CommandContext context)
+    public static Task<int> ExecuteAsync()
     {
         var installPath = WidgetPaths.GetMarketplaceInstallPath();
 

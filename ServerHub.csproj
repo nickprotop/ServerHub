@@ -10,7 +10,7 @@
     <!-- Single-file self-contained publish -->
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
-    <!-- Trimming disabled: Spectre.Console.Cli uses reflection to discover settings types -->
+    <!-- Trimming disabled for local dev - CI overrides with -p:PublishTrimmed=true for x64 -->
     <PublishTrimmed>false</PublishTrimmed>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
@@ -18,10 +18,12 @@
   <ItemGroup>
     <!-- YAML configuration -->
     <PackageReference Include="YamlDotNet" Version="16.2.0" />
-    <!-- Command line parsing -->
-    <PackageReference Include="Spectre.Console.Cli" Version="0.49.1" />
+    <!-- Command line parsing - System.CommandLine for AOT compatibility -->
+    <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
     <!-- SQLite database -->
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
+    <!-- SQLite native bundle for single-file - embeds native library -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.10" />
   </ItemGroup>
 
   <!-- Local development: use project reference if available -->

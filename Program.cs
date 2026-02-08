@@ -1,6 +1,7 @@
 // Copyright (c) Nikolaos Protopapas. All rights reserved.
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
+using System.CommandLine;
 using ServerHub.Config;
 using ServerHub.Models;
 using ServerHub.Services;
@@ -54,69 +55,224 @@ public class Program
 
     public static async Task<int> Main(string[] args)
     {
-        var app = new Spectre.Console.Cli.CommandApp();
+        // Initialize SQLite for embedded single-file deployment
+        SQLitePCL.Batteries_V2.Init();
 
-        app.Configure(config =>
+        // Create root command (default dashboard command)
+        var rootCommand = new RootCommand("ServerHub - Terminal-based server monitoring dashboard");
+
+        // Default command arguments and options
+        var configArgument = new Argument<string?>(
+            name: "config",
+            description: "Path to configuration file",
+            getDefaultValue: () => null);
+
+        var widgetsPathOption = new Option<string?>(
+            name: "--widgets-path",
+            description: "Override widget directory path");
+
+        var devModeOption = new Option<bool>(
+            name: "--dev-mode",
+            description: "Enable development mode (disables custom widget checksum validation)");
+
+        var discoverOption = new Option<bool>(
+            name: "--discover",
+            description: "Discover and list all available widgets, then exit");
+
+        var verifyChecksumsOption = new Option<bool>(
+            name: "--verify-checksums",
+            description: "Verify bundled widget checksums, then exit");
+
+        var initConfigOption = new Option<string?>(
+            name: "--init-config",
+            description: "Initialize a new configuration file at specified path");
+
+        rootCommand.AddArgument(configArgument);
+        rootCommand.AddOption(widgetsPathOption);
+        rootCommand.AddOption(devModeOption);
+        rootCommand.AddOption(discoverOption);
+        rootCommand.AddOption(verifyChecksumsOption);
+        rootCommand.AddOption(initConfigOption);
+
+        rootCommand.SetHandler(async (string? config, string? widgetsPath, bool devMode, bool discover, bool verifyChecksums, string? initConfig) =>
         {
-            // Marketplace commands - hierarchical structure
-            config.AddBranch<Spectre.Console.Cli.CommandSettings>("marketplace", marketplace =>
-            {
-                marketplace.SetDescription("Manage marketplace widgets");
+            var exitCode = await Commands.Cli.DefaultCommand.ExecuteAsync(
+                config, widgetsPath, devMode, discover, verifyChecksums, initConfig);
+            Environment.ExitCode = exitCode;
+        }, configArgument, widgetsPathOption, devModeOption, discoverOption, verifyChecksumsOption, initConfigOption);
 
-                // Browse commands
-                marketplace.AddCommand<Commands.Cli.Marketplace.SearchCommand>("search")
-                    .WithDescription("Search for community widgets");
+        // Marketplace commands
+        var marketplaceCommand = new Command("marketplace", "Manage marketplace widgets");
+        rootCommand.AddCommand(marketplaceCommand);
 
-                marketplace.AddCommand<Commands.Cli.Marketplace.ListCommand>("list")
-                    .WithDescription("List all available widgets");
+        // marketplace search
+        var marketplaceSearchCommand = new Command("search", "Search for community widgets");
+        var searchQueryArgument = new Argument<string>("query", "Search query for widgets");
+        marketplaceSearchCommand.AddArgument(searchQueryArgument);
+        marketplaceSearchCommand.SetHandler(async (string query) =>
+        {
+            var exitCode = await Commands.Cli.Marketplace.SearchCommand.ExecuteAsync(query);
+            Environment.ExitCode = exitCode;
+        }, searchQueryArgument);
+        marketplaceCommand.AddCommand(marketplaceSearchCommand);
 
-                marketplace.AddCommand<Commands.Cli.Marketplace.InfoCommand>("info")
-                    .WithDescription("Show widget details");
-
-                marketplace.AddCommand<Commands.Cli.Marketplace.InstallCommand>("install")
-                    .WithDescription("Install widget from marketplace");
-
-                marketplace.AddCommand<Commands.Cli.Marketplace.ListInstalledCommand>("list-installed")
-                    .WithDescription("List installed marketplace widgets");
-
-                // Update commands
-                marketplace.AddCommand<Commands.Cli.Marketplace.CheckUpdatesCommand>("check-updates")
-                    .WithDescription("Check for widget updates");
-
-                marketplace.AddCommand<Commands.Cli.Marketplace.UpdateCommand>("update")
-                    .WithDescription("Update widget to latest version");
-
-                marketplace.AddCommand<Commands.Cli.Marketplace.UpdateAllCommand>("update-all")
-                    .WithDescription("Update all widgets");
-            });
-
-            // Storage commands
-            config.AddBranch<Spectre.Console.Cli.CommandSettings>("storage", storage =>
-            {
-                storage.SetDescription("Manage storage and database");
-
-                storage.AddCommand<Commands.Cli.Storage.StorageStatsCommand>("stats")
-                    .WithDescription("Show database statistics");
-
-                storage.AddCommand<Commands.Cli.Storage.StorageCleanupCommand>("cleanup")
-                    .WithDescription("Run database cleanup");
-
-                storage.AddCommand<Commands.Cli.Storage.StorageExportCommand>("export")
-                    .WithDescription("Export widget data to CSV or JSON");
-            });
-
-            // Test widget command
-            config.AddCommand<Commands.Cli.TestWidgetCommandCli>("test-widget")
-                .WithDescription("Test and validate widget scripts");
-
-            // New widget command
-            config.AddCommand<Commands.Cli.NewWidgetCommandCli>("new-widget")
-                .WithDescription("Interactive widget creation wizard");
+        // marketplace list
+        var marketplaceListCommand = new Command("list", "List all available widgets");
+        marketplaceListCommand.SetHandler(async () =>
+        {
+            var exitCode = await Commands.Cli.Marketplace.ListCommand.ExecuteAsync();
+            Environment.ExitCode = exitCode;
         });
+        marketplaceCommand.AddCommand(marketplaceListCommand);
 
-        app.SetDefaultCommand<Commands.Cli.DefaultCommand>();
+        // marketplace info
+        var marketplaceInfoCommand = new Command("info", "Show widget details");
+        var infoWidgetIdArgument = new Argument<string>("widget-id", "Widget ID to show information for");
+        marketplaceInfoCommand.AddArgument(infoWidgetIdArgument);
+        marketplaceInfoCommand.SetHandler(async (string widgetId) =>
+        {
+            var exitCode = await Commands.Cli.Marketplace.InfoCommand.ExecuteAsync(widgetId);
+            Environment.ExitCode = exitCode;
+        }, infoWidgetIdArgument);
+        marketplaceCommand.AddCommand(marketplaceInfoCommand);
 
-        return await app.RunAsync(args);
+        // marketplace install
+        var marketplaceInstallCommand = new Command("install", "Install widget from marketplace");
+        var installWidgetIdArgument = new Argument<string>("widget-id", "Widget ID to install");
+        marketplaceInstallCommand.AddArgument(installWidgetIdArgument);
+        marketplaceInstallCommand.SetHandler(async (string widgetId) =>
+        {
+            var exitCode = await Commands.Cli.Marketplace.InstallCommand.ExecuteAsync(widgetId);
+            Environment.ExitCode = exitCode;
+        }, installWidgetIdArgument);
+        marketplaceCommand.AddCommand(marketplaceInstallCommand);
+
+        // marketplace list-installed
+        var marketplaceListInstalledCommand = new Command("list-installed", "List installed marketplace widgets");
+        marketplaceListInstalledCommand.SetHandler(async () =>
+        {
+            var exitCode = await Commands.Cli.Marketplace.ListInstalledCommand.ExecuteAsync();
+            Environment.ExitCode = exitCode;
+        });
+        marketplaceCommand.AddCommand(marketplaceListInstalledCommand);
+
+        // marketplace check-updates
+        var marketplaceCheckUpdatesCommand = new Command("check-updates", "Check for widget updates");
+        var checkUpdatesJsonOption = new Option<bool>("--json", "Output results as JSON");
+        marketplaceCheckUpdatesCommand.AddOption(checkUpdatesJsonOption);
+        marketplaceCheckUpdatesCommand.SetHandler(async (bool jsonOutput) =>
+        {
+            var exitCode = await Commands.Cli.Marketplace.CheckUpdatesCommand.ExecuteAsync(jsonOutput);
+            Environment.ExitCode = exitCode;
+        }, checkUpdatesJsonOption);
+        marketplaceCommand.AddCommand(marketplaceCheckUpdatesCommand);
+
+        // marketplace update
+        var marketplaceUpdateCommand = new Command("update", "Update widget to latest version");
+        var updateWidgetIdArgument = new Argument<string>("widget-id", "Widget ID to update");
+        var updateVersionOption = new Option<string?>("--version", "Specific version to install (defaults to latest)");
+        var updateYesOption = new Option<bool>("--yes", "Skip confirmation prompts");
+        marketplaceUpdateCommand.AddArgument(updateWidgetIdArgument);
+        marketplaceUpdateCommand.AddOption(updateVersionOption);
+        marketplaceUpdateCommand.AddOption(updateYesOption);
+        marketplaceUpdateCommand.SetHandler(async (string widgetId, string? version, bool skipConfirmation) =>
+        {
+            var exitCode = await Commands.Cli.Marketplace.UpdateCommand.ExecuteAsync(widgetId, version, skipConfirmation);
+            Environment.ExitCode = exitCode;
+        }, updateWidgetIdArgument, updateVersionOption, updateYesOption);
+        marketplaceCommand.AddCommand(marketplaceUpdateCommand);
+
+        // marketplace update-all
+        var marketplaceUpdateAllCommand = new Command("update-all", "Update all widgets");
+        var updateAllYesOption = new Option<bool>("--yes", "Skip confirmation prompts");
+        marketplaceUpdateAllCommand.AddOption(updateAllYesOption);
+        marketplaceUpdateAllCommand.SetHandler(async (bool skipConfirmation) =>
+        {
+            var exitCode = await Commands.Cli.Marketplace.UpdateAllCommand.ExecuteAsync(skipConfirmation);
+            Environment.ExitCode = exitCode;
+        }, updateAllYesOption);
+        marketplaceCommand.AddCommand(marketplaceUpdateAllCommand);
+
+        // Storage commands
+        var storageCommand = new Command("storage", "Manage storage and database");
+        rootCommand.AddCommand(storageCommand);
+
+        // storage stats
+        var storageStatsCommand = new Command("stats", "Show database statistics");
+        var statsConfigOption = new Option<string?>("--config", "Path to configuration file");
+        storageStatsCommand.AddOption(statsConfigOption);
+        storageStatsCommand.SetHandler((string? config) =>
+        {
+            var exitCode = Commands.Cli.Storage.StorageStatsCommand.Execute(config);
+            Environment.ExitCode = exitCode;
+        }, statsConfigOption);
+        storageCommand.AddCommand(storageStatsCommand);
+
+        // storage cleanup
+        var storageCleanupCommand = new Command("cleanup", "Run database cleanup");
+        var cleanupConfigOption = new Option<string?>("--config", "Path to configuration file");
+        var cleanupForceOption = new Option<bool>("--force", "Skip confirmation prompt");
+        storageCleanupCommand.AddOption(cleanupConfigOption);
+        storageCleanupCommand.AddOption(cleanupForceOption);
+        storageCleanupCommand.SetHandler((string? config, bool force) =>
+        {
+            var exitCode = Commands.Cli.Storage.StorageCleanupCommand.Execute(config, force);
+            Environment.ExitCode = exitCode;
+        }, cleanupConfigOption, cleanupForceOption);
+        storageCommand.AddCommand(storageCleanupCommand);
+
+        // storage export
+        var storageExportCommand = new Command("export", "Export widget data to CSV or JSON");
+        var exportWidgetOption = new Option<string?>("--widget", "Widget ID to export data for");
+        var exportOutputOption = new Option<string?>("--output", "Output file path");
+        var exportFormatOption = new Option<string>("--format", () => "csv", "Output format (csv or json)");
+        var exportConfigOption = new Option<string?>("--config", "Path to configuration file");
+        storageExportCommand.AddOption(exportWidgetOption);
+        storageExportCommand.AddOption(exportOutputOption);
+        storageExportCommand.AddOption(exportFormatOption);
+        storageExportCommand.AddOption(exportConfigOption);
+        storageExportCommand.SetHandler((string? widgetId, string? output, string format, string? config) =>
+        {
+            var exitCode = Commands.Cli.Storage.StorageExportCommand.Execute(widgetId, output, format, config);
+            Environment.ExitCode = exitCode;
+        }, exportWidgetOption, exportOutputOption, exportFormatOption, exportConfigOption);
+        storageCommand.AddCommand(storageExportCommand);
+
+        // test-widget command
+        var testWidgetCommand = new Command("test-widget", "Test and validate widget scripts");
+        var testScriptArgument = new Argument<string>("script", "Path to widget script");
+        var testExtendedOption = new Option<bool>("--extended", "Show extended output");
+        var testUiModeOption = new Option<bool>("--ui", "Show UI preview");
+        var testSkipConfirmOption = new Option<bool>("--skip-confirmation", "Skip confirmation prompts");
+        testWidgetCommand.AddArgument(testScriptArgument);
+        testWidgetCommand.AddOption(testExtendedOption);
+        testWidgetCommand.AddOption(testUiModeOption);
+        testWidgetCommand.AddOption(testSkipConfirmOption);
+        testWidgetCommand.SetHandler(async (string script, bool extended, bool ui, bool skipConfirm) =>
+        {
+            var exitCode = await Commands.Cli.TestWidgetCommandCli.ExecuteAsync(script, extended, ui, skipConfirm);
+            Environment.ExitCode = exitCode;
+        }, testScriptArgument, testExtendedOption, testUiModeOption, testSkipConfirmOption);
+        rootCommand.AddCommand(testWidgetCommand);
+
+        // new-widget command
+        var newWidgetCommand = new Command("new-widget", "Interactive widget creation wizard");
+        var newTemplateArgument = new Argument<string?>("template", () => null, "Widget template to use");
+        var newNameOption = new Option<string?>("--name", "Widget name");
+        var newOutputOption = new Option<string?>("--output", "Output file path");
+        var newListOption = new Option<bool>("--list", "List available templates and exit");
+        newWidgetCommand.AddArgument(newTemplateArgument);
+        newWidgetCommand.AddOption(newNameOption);
+        newWidgetCommand.AddOption(newOutputOption);
+        newWidgetCommand.AddOption(newListOption);
+        newWidgetCommand.SetHandler(async (string? templateName, string? name, string? outputFile, bool listTemplates) =>
+        {
+            var exitCode = await Commands.Cli.NewWidgetCommandCli.ExecuteAsync(templateName, name, outputFile, listTemplates);
+            Environment.ExitCode = exitCode;
+        }, newTemplateArgument, newNameOption, newOutputOption, newListOption);
+        rootCommand.AddCommand(newWidgetCommand);
+
+        return await rootCommand.InvokeAsync(args);
     }
 
     /// <summary>

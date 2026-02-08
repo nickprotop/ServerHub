@@ -2,8 +2,6 @@
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
 using Spectre.Console;
-using Spectre.Console.Cli;
-using ServerHub.Commands.Settings.Storage;
 using ServerHub.Services;
 
 namespace ServerHub.Commands.Cli.Storage;
@@ -11,16 +9,16 @@ namespace ServerHub.Commands.Cli.Storage;
 /// <summary>
 /// Command to display storage statistics.
 /// </summary>
-public class StorageStatsCommand : Command<StorageStatsSettings>
+public class StorageStatsCommand
 {
-    public override int Execute(CommandContext context, StorageStatsSettings settings)
+    public static int Execute(string? configPath)
     {
         try
         {
             // Load configuration
             var configManager = new ConfigManager();
-            var configPath = settings.ConfigPath ?? ConfigManager.GetDefaultConfigPath();
-            var config = configManager.LoadConfig(configPath);
+            var resolvedConfigPath = configPath ?? ConfigManager.GetDefaultConfigPath();
+            var config = configManager.LoadConfig(resolvedConfigPath);
 
             if (config.Storage?.Enabled != true)
             {

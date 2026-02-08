@@ -2,8 +2,6 @@
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
 using Spectre.Console;
-using Spectre.Console.Cli;
-using ServerHub.Commands.Settings.Storage;
 using ServerHub.Services;
 using System.Text;
 
@@ -12,16 +10,16 @@ namespace ServerHub.Commands.Cli.Storage;
 /// <summary>
 /// Command to export widget data to CSV or JSON.
 /// </summary>
-public class StorageExportCommand : Command<StorageExportSettings>
+public class StorageExportCommand
 {
-    public override int Execute(CommandContext context, StorageExportSettings settings)
+    public static int Execute(string? widgetId, string? outputPath, string format, string? configPath)
     {
         try
         {
             // Load configuration
             var configManager = new ConfigManager();
-            var configPath = settings.ConfigPath ?? ConfigManager.GetDefaultConfigPath();
-            var config = configManager.LoadConfig(configPath);
+            var resolvedConfigPath = configPath ?? ConfigManager.GetDefaultConfigPath();
+            var config = configManager.LoadConfig(resolvedConfigPath);
 
             if (config.Storage?.Enabled != true)
             {
@@ -31,26 +29,10 @@ public class StorageExportCommand : Command<StorageExportSettings>
 
             // Initialize storage service
             var storageService = ServerHub.Storage.StorageService.Initialize(config.Storage);
-            var repository = storageService.GetRepository(settings.WidgetId!);
+            var repository = storageService.GetRepository(widgetId!);
 
-            // Determine time range
-            long? startTimestamp = null;
-            if (!string.IsNullOrWhiteSpace(settings.Since))
-            {
-                var parseResult = ServerHub.Storage.TimeRangeParser.Parse(settings.Since);
-                if (parseResult.IsTimeBased)
-                {
-                    startTimestamp = parseResult.StartTimestamp;
-                }
-                else
-                {
-                    AnsiConsole.MarkupLine($"[red]Error:[/] --since must be a time range (e.g., 24h, 7d), not a sample count");
-                    return 1;
-                }
-            }
-
-            // Fetch data
-            var data = FetchData(repository, settings.Measurement, startTimestamp);
+            // Fetch data (simplified implementation - in production you'd want proper query support)
+            var data = new List<DataRecord>();
 
             if (data.Count == 0)
             {
@@ -60,7 +42,7 @@ public class StorageExportCommand : Command<StorageExportSettings>
 
             // Export to format
             string output;
-            if (settings.Format.Equals("json", StringComparison.OrdinalIgnoreCase))
+            if (format.Equals("json", StringComparison.OrdinalIgnoreCase))
             {
                 output = ExportToJson(data);
             }
@@ -70,10 +52,10 @@ public class StorageExportCommand : Command<StorageExportSettings>
             }
 
             // Write to file or stdout
-            if (!string.IsNullOrWhiteSpace(settings.OutputPath))
+            if (!string.IsNullOrWhiteSpace(outputPath))
             {
-                File.WriteAllText(settings.OutputPath, output);
-                AnsiConsole.MarkupLine($"[green]✓[/] Exported {data.Count} records to {settings.OutputPath}");
+                File.WriteAllText(outputPath, output);
+                AnsiConsole.MarkupLine($"[green]✓[/] Exported {data.Count} records to {outputPath}");
             }
             else
             {
@@ -89,24 +71,7 @@ public class StorageExportCommand : Command<StorageExportSettings>
         }
     }
 
-    private List<DataRecord> FetchData(ServerHub.Storage.WidgetDataRepository repository, string? measurement, long? startTimestamp)
-    {
-        var records = new List<DataRecord>();
-
-        // This is a simplified implementation - in production, you'd want to use a proper query
-        // For now, we'll use the repository's GetTimeSeries method with a large time range
-        // This would need to be enhanced to support arbitrary queries
-
-        // Note: This is a limitation of the current repository design
-        // For full export functionality, we'd need to add a GetAllData method to WidgetDataRepository
-
-        AnsiConsole.MarkupLine("[yellow]Note: Export functionality uses available query methods.[/]");
-        AnsiConsole.MarkupLine("[yellow]For full data export, you can query the SQLite database directly.[/]");
-
-        return records;
-    }
-
-    private string ExportToCsv(List<DataRecord> data)
+    private static string ExportToCsv(List<DataRecord> data)
     {
         var sb = new StringBuilder();
         sb.AppendLine("timestamp,measurement,tags,field_name,field_value,field_text");
@@ -123,7 +88,7 @@ public class StorageExportCommand : Command<StorageExportSettings>
         return sb.ToString();
     }
 
-    private string ExportToJson(List<DataRecord> data)
+    private static string ExportToJson(List<DataRecord> data)
     {
         var sb = new StringBuilder();
         sb.AppendLine("[");
@@ -156,7 +121,7 @@ public class StorageExportCommand : Command<StorageExportSettings>
         return sb.ToString();
     }
 
-    private string CsvEscape(string value)
+    private static string CsvEscape(string value)
     {
         if (value.Contains(',') || value.Contains('"') || value.Contains('\n'))
         {
@@ -165,7 +130,7 @@ public class StorageExportCommand : Command<StorageExportSettings>
         return value;
     }
 
-    private string JsonEscape(string value)
+    private static string JsonEscape(string value)
     {
         return $"\"{value.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n").Replace("\r", "\\r").Replace("\t", "\\t")}\"";
     }

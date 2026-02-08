@@ -1,22 +1,23 @@
-using Spectre.Console.Cli;
-using ServerHub.Commands.Settings;
-
 namespace ServerHub.Commands.Cli;
 
 /// <summary>
 /// Test widget command - validates protocol output and optionally shows UI preview
 /// </summary>
-public class TestWidgetCommandCli : AsyncCommand<TestWidgetSettings>
+public class TestWidgetCommandCli
 {
-    public override async Task<int> ExecuteAsync(CommandContext context, TestWidgetSettings settings)
+    public static async Task<int> ExecuteAsync(
+        string scriptPath,
+        bool extended,
+        bool uiMode,
+        bool skipConfirmation)
     {
         // Delegate to existing TestWidgetCommand logic
         var testCommand = new TestWidgetCommand();
         return await testCommand.ExecuteAsync(
-            settings.ScriptPath,
-            settings.Extended,
-            settings.UiMode,
-            settings.SkipConfirmation
+            scriptPath,
+            extended,
+            uiMode,
+            skipConfirmation
         );
     }
 }

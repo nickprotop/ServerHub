@@ -30,6 +30,7 @@ jobs:
             -r linux-x64 \
             --self-contained true \
             -p:PublishSingleFile=true \
+            -p:PublishTrimmed=true \
             -o ./publish/linux-x64
 
       - name: Build self-contained binary for linux-arm64
