@@ -26,7 +26,9 @@ public class Program
     private static Window? _mainWindow;
     private static ServerHubConfig? _config;
     private static readonly Dictionary<string, WidgetData> _widgetDataCache = new();
-    private static readonly Dictionary<string, Timer> _widgetTimers = new();
+    private static readonly Dictionary<string, Task> _widgetTasks = new();
+    private static readonly Dictionary<string, PeriodicTimer> _widgetTimers = new();
+    private static CancellationTokenSource _cancellationTokenSource = new();
     private static WidgetRenderer? _renderer;
     private static LayoutEngine? _layoutEngine;
     private static ScriptExecutor? _executor;
@@ -88,6 +90,21 @@ public class Program
                     .WithDescription("Update all widgets");
             });
 
+            // Storage commands
+            config.AddBranch<Spectre.Console.Cli.CommandSettings>("storage", storage =>
+            {
+                storage.SetDescription("Manage storage and database");
+
+                storage.AddCommand<Commands.Cli.Storage.StorageStatsCommand>("stats")
+                    .WithDescription("Show database statistics");
+
+                storage.AddCommand<Commands.Cli.Storage.StorageCleanupCommand>("cleanup")
+                    .WithDescription("Run database cleanup");
+
+                storage.AddCommand<Commands.Cli.Storage.StorageExportCommand>("export")
+                    .WithDescription("Export widget data to CSV or JSON");
+            });
+
             // Test widget command
             config.AddCommand<Commands.Cli.TestWidgetCommandCli>("test-widget")
                 .WithDescription("Test and validate widget scripts");
@@ -107,6 +124,8 @@ public class Program
     /// </summary>
     public static async Task<int> RunDashboardAsync(string[] args, string configPath, bool devMode)
     {
+        Storage.StorageService? storageService = null;
+
         try
         {
             _configPath = configPath;
@@ -116,13 +135,29 @@ public class Program
             _config = configMgr.LoadConfig(configPath);
             _lastConfigLoadTime = File.GetLastWriteTime(configPath);
 
+            // Initialize storage service if enabled
+            if (_config.Storage?.Enabled == true)
+            {
+                try
+                {
+                    storageService = Storage.StorageService.Initialize(_config.Storage);
+                }
+                catch (Exception ex)
+                {
+                    // Log storage initialization error but don't crash the app
+                    // Note: Using Console.Error here because Logger isn't initialized yet
+                    Console.Error.WriteLine($"Warning: Failed to initialize storage service: {ex.Message}");
+                    Console.Error.WriteLine("Dashboard will continue without data persistence.");
+                }
+            }
+
             // Initialize services
             var validator = new ScriptValidator(devMode: devMode);
             _executor = new ScriptExecutor(validator);
             _parser = new WidgetProtocolParser();
             _renderer = new WidgetRenderer();
             _layoutEngine = new LayoutEngine();
-            _refreshService = new WidgetRefreshService(_executor, _parser, _config);
+            _refreshService = new WidgetRefreshService(_executor, _parser, _config, storageService);
             _commandPaletteService = new CommandPaletteService();
             RegisterCommandPaletteCallbacks();
 
@@ -135,6 +170,12 @@ public class Program
                         ShowBottomStatus: true
                     )
                 ));
+
+            // Initialize logger with SharpConsoleUI's LogService
+            // Enable debug logging with: export SHARPCONSOLEUI_DEBUG_LOG=/tmp/serverhub-debug.log
+            Utils.Logger.Initialize(_windowSystem.LogService);
+            Utils.Logger.Info("ServerHub logger initialized", "Startup");
+            Utils.Logger.Debug($"Storage enabled: {_config.Storage?.Enabled}, widgets count: {_config.Widgets.Count}", "Startup");
 
             // Initialize StatusBarManager
             _statusBarManager = new StatusBarManager(_windowSystem.StatusBarStateService, devMode: _devMode);
@@ -183,6 +224,21 @@ public class Program
         {
             DisplayGenericError(ex);
             return 1;
+        }
+        finally
+        {
+            // Ensure storage service is properly disposed
+            if (storageService != null)
+            {
+                try
+                {
+                    Storage.StorageService.Shutdown();
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Warning: Error shutting down storage service: {ex.Message}");
+                }
+            }
         }
     }
 
@@ -932,10 +988,21 @@ public class Program
                     _config = configMgr.LoadConfig(_configPath);
                     _lastConfigLoadTime = File.GetLastWriteTime(_configPath);
 
+                    // Get storage service instance if available
+                    Storage.StorageService? storageService = null;
+                    try
+                    {
+                        storageService = Storage.StorageService.Instance;
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Storage service not initialized - that's OK
+                    }
+
                     // Reinitialize refresh service with new config
                     if (_executor != null && _parser != null)
                     {
-                        _refreshService = new WidgetRefreshService(_executor, _parser, _config);
+                        _refreshService = new WidgetRefreshService(_executor, _parser, _config, storageService);
                     }
 
                     // Restart widget timers with new configuration
@@ -967,10 +1034,21 @@ public class Program
             _config = configMgr.LoadConfig(_configPath);
             _lastConfigLoadTime = File.GetLastWriteTime(_configPath);
 
+            // Get storage service instance if available
+            Storage.StorageService? storageService = null;
+            try
+            {
+                storageService = Storage.StorageService.Instance;
+            }
+            catch (InvalidOperationException)
+            {
+                // Storage service not initialized - that's OK
+            }
+
             // Reinitialize refresh service with new config
             if (_executor != null && _parser != null)
             {
-                _refreshService = new WidgetRefreshService(_executor, _parser, _config);
+                _refreshService = new WidgetRefreshService(_executor, _parser, _config, storageService);
             }
 
             // Restart widget timers with new configuration
@@ -1136,25 +1214,75 @@ public class Program
             // Initial fetch (marked as initial load)
             _ = RefreshWidgetAsync(widgetId, widgetConfig, force: false, isInitialLoad: true);
 
-            // Setup periodic refresh
-            var timer = new Timer(
-                async _ => await RefreshWidgetAsync(widgetId, widgetConfig),
-                null,
-                TimeSpan.FromSeconds(widgetConfig.Refresh),
-                TimeSpan.FromSeconds(widgetConfig.Refresh)
-            );
+            // Create PeriodicTimer for this widget
+            var periodicTimer = new PeriodicTimer(TimeSpan.FromSeconds(widgetConfig.Refresh));
+            _widgetTimers[widgetId] = periodicTimer;
 
-            _widgetTimers[widgetId] = timer;
+            // Start background task with PeriodicTimer
+            var widgetTask = Task.Run(async () =>
+            {
+                try
+                {
+                    var token = _cancellationTokenSource.Token;
+                    while (await periodicTimer.WaitForNextTickAsync(token))
+                    {
+                        try
+                        {
+                            await RefreshWidgetAsync(widgetId, widgetConfig);
+                        }
+                        catch (Exception ex)
+                        {
+                            Utils.Logger.Error($"Widget refresh error: {widgetId} - {ex.Message}", ex, "WidgetRefresh");
+                            // Continue loop despite error - widget will retry on next tick
+                        }
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    Utils.Logger.Debug($"Widget refresh cancelled: {widgetId}", "WidgetRefresh");
+                }
+                finally
+                {
+                    periodicTimer.Dispose();
+                }
+            }, _cancellationTokenSource.Token);
+
+            _widgetTasks[widgetId] = widgetTask;
         }
     }
 
     private static void StopWidgetRefreshTimers()
     {
-        foreach (var timer in _widgetTimers.Values)
+        // Cancel all widget refresh tasks
+        _cancellationTokenSource.Cancel();
+
+        // Wait for tasks to complete (with timeout)
+        var tasksArray = _widgetTasks.Values.ToArray();
+        if (tasksArray.Length > 0)
         {
-            timer.Dispose();
+            try
+            {
+                // Use synchronous wait since this is called from non-async context
+                Task.WaitAll(tasksArray, TimeSpan.FromSeconds(5));
+            }
+            catch (AggregateException ex) when (ex.InnerExceptions.All(e => e is OperationCanceledException))
+            {
+                // Expected when cancelling - all tasks were cancelled cleanly
+                Utils.Logger.Debug("All widget tasks cancelled successfully", "Shutdown");
+            }
+            catch (Exception ex)
+            {
+                Utils.Logger.Warning($"Widget tasks did not complete cleanly: {ex.Message}", "Shutdown");
+            }
         }
+
+        // Clear dictionaries
+        _widgetTasks.Clear();
         _widgetTimers.Clear();
+
+        // Dispose and recreate cancellation token source for next use (e.g., config reload)
+        _cancellationTokenSource.Dispose();
+        _cancellationTokenSource = new CancellationTokenSource();
     }
 
     private static void RefreshAllWidgets()
@@ -1174,10 +1302,14 @@ public class Program
 
     private static async Task RefreshWidgetAsync(string widgetId, WidgetConfig widgetConfig, bool force = false, bool isInitialLoad = false)
     {
+        Utils.Logger.Debug($"RefreshWidgetAsync called for widget: {widgetId}", "WidgetExecution");
         try
         {
             if (_executor == null || _parser == null || _mainWindow == null)
+            {
+                Utils.Logger.Warning($"RefreshWidgetAsync: Missing dependencies for {widgetId}", "WidgetExecution");
                 return;
+            }
 
             // Skip if widget no longer exists in current configuration (race condition during reload)
             if (_config?.Widgets.ContainsKey(widgetId) == false)
@@ -1244,50 +1376,43 @@ public class Program
                     return;
                 }
 
-                // Execute script
-                var result = await _executor.ExecuteAsync(scriptPath, null, widgetConfig.Sha256);
-
+                // Execute script using WidgetRefreshService (handles storage persistence)
                 WidgetData widgetData;
-                if (result.IsSuccess)
+                if (_refreshService != null)
                 {
-                    // Parse output
-                    widgetData = _parser.Parse(result.Output ?? "");
-                    widgetData.Timestamp = DateTime.Now;
+                    widgetData = await _refreshService.RefreshAsync(widgetId);
 
-                    // Track successful update
-                    _lastSuccessfulUpdate[widgetId] = DateTime.Now;
-                    _consecutiveErrors[widgetId] = 0;
+                    if (!widgetData.HasError)
+                    {
+                        // Track successful update
+                        _lastSuccessfulUpdate[widgetId] = DateTime.Now;
+                        _consecutiveErrors[widgetId] = 0;
+                    }
+                    else
+                    {
+                        // Track error and enhance error display
+                        _consecutiveErrors.TryGetValue(widgetId, out var errorCount);
+                        _consecutiveErrors[widgetId] = errorCount + 1;
+
+                        var lastUpdate = _lastSuccessfulUpdate.TryGetValue(widgetId, out var lastTime)
+                            ? $"Last update: {FormatRelativeTime(lastTime)}"
+                            : "Never updated successfully";
+
+                        // Enhance error widget with tracking information
+                        widgetData.Rows.Add(new WidgetRow { Content = "" });
+                        widgetData.Rows.Add(new WidgetRow { Content = $"[grey70]{lastUpdate}[/]" });
+                        widgetData.Rows.Add(new WidgetRow { Content = $"[grey70]Next retry: {widgetConfig.Refresh}s[/]" });
+                        widgetData.Rows.Add(new WidgetRow { Content = $"[grey70]Consecutive errors: {errorCount + 1}[/]" });
+                    }
                 }
                 else
                 {
-                    // Track error
-                    _consecutiveErrors.TryGetValue(widgetId, out var errorCount);
-                    _consecutiveErrors[widgetId] = errorCount + 1;
-
-                    var lastUpdate = _lastSuccessfulUpdate.TryGetValue(widgetId, out var lastTime)
-                        ? $"Last update: {FormatRelativeTime(lastTime)}"
-                        : "Never updated successfully";
-
-                    // Create enhanced error widget
+                    // Fallback if WidgetRefreshService is not available
                     widgetData = new WidgetData
                     {
                         Title = widgetId,
-                        Error = result.ErrorMessage ?? "Unknown error",
+                        Error = "Widget refresh service not available",
                         Timestamp = DateTime.Now,
-                        Rows = new List<WidgetRow>
-                        {
-                            new()
-                            {
-                                Content = $"[red]Widget Error[/]",
-                                Status = new() { State = StatusState.Error },
-                            },
-                            new() { Content = "" },
-                            new() { Content = $"[grey70]{result.ErrorMessage ?? "Unknown error"}[/]" },
-                            new() { Content = "" },
-                            new() { Content = $"[grey70]{lastUpdate}[/]" },
-                            new() { Content = $"[grey70]Next retry: {widgetConfig.Refresh}s[/]" },
-                            new() { Content = $"[grey70]Consecutive errors: {errorCount + 1}[/]" },
-                        },
                     };
                 }
 

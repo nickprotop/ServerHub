@@ -3,6 +3,7 @@
 
 using ServerHub.Models;
 using ServerHub.Utils;
+using ServerHub.Storage;
 
 namespace ServerHub.Services;
 
@@ -15,12 +16,14 @@ public class WidgetRefreshService
     private readonly ScriptExecutor _executor;
     private readonly WidgetProtocolParser _parser;
     private readonly ServerHubConfig _config;
+    private readonly StorageService? _storageService;
 
-    public WidgetRefreshService(ScriptExecutor executor, WidgetProtocolParser parser, ServerHubConfig config)
+    public WidgetRefreshService(ScriptExecutor executor, WidgetProtocolParser parser, ServerHubConfig config, StorageService? storageService = null)
     {
         _executor = executor;
         _parser = parser;
         _config = config;
+        _storageService = storageService;
     }
 
     /// <summary>
@@ -56,8 +59,72 @@ public class WidgetRefreshService
 
             if (result.IsSuccess)
             {
-                var data = _parser.Parse(result.Output ?? "");
+                // Parse with storage context for datafetch/history elements
+                var data = _parser.Parse(result.Output ?? "", _storageService, widgetId);
                 data.Timestamp = DateTime.Now;
+
+                // Log any validation errors from parsing (including datastore directive errors)
+                var validationErrors = _parser.GetValidationErrors();
+                if (validationErrors.Count > 0)
+                {
+                    foreach (var error in validationErrors)
+                    {
+                        Logger.Warning($"Widget '{widgetId}' validation warning: {error}", "WidgetRefresh");
+                    }
+                }
+
+                // Persist datastore directives if storage is enabled
+                if (_storageService != null && _config.Storage?.Enabled == true && data.DatastoreDirectives.Count > 0)
+                {
+                    Logger.Debug($"Widget '{widgetId}' has {data.DatastoreDirectives.Count} datastore directives to persist", "Storage");
+                    try
+                    {
+                        var repository = _storageService.GetRepository(widgetId);
+                        foreach (var directive in data.DatastoreDirectives)
+                        {
+                            Logger.Debug($"Processing directive: measurement='{directive.Measurement}', tags={directive.Tags.Count}, fields={directive.Fields.Count}", "Storage");
+
+                            // Use current timestamp if directive doesn't specify one
+                            var timestamp = directive.Timestamp ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+                            foreach (var field in directive.Fields)
+                            {
+                                // Convert field value to appropriate type for storage
+                                double? fieldValue = null;
+                                string? fieldText = null;
+
+                                if (field.Value is double d)
+                                    fieldValue = d;
+                                else if (field.Value is int i)
+                                    fieldValue = i;
+                                else if (field.Value is long l)
+                                    fieldValue = l;
+                                else if (field.Value is float f)
+                                    fieldValue = f;
+                                else if (field.Value is bool b)
+                                    fieldValue = b ? 1.0 : 0.0;
+                                else
+                                    fieldText = field.Value?.ToString();
+
+                                repository.Insert(
+                                    directive.Measurement,
+                                    directive.Tags,
+                                    timestamp,
+                                    field.Key,
+                                    fieldValue,
+                                    fieldText
+                                );
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log error but don't crash widget refresh
+                        // Storage errors should not prevent the widget from displaying
+                        Logger.Error($"Storage error for widget '{widgetId}': {ex.Message}", ex, "Storage");
+                    }
+                }
+
                 return data;
             }
 
