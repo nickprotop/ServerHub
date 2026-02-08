@@ -15,7 +15,7 @@ public class StorageConfig
     /// Whether storage is enabled globally
     /// Default: true (storage enabled by default)
     /// </summary>
-    [YamlMember(Alias = "enabled", DefaultValuesHandling = DefaultValuesHandling.OmitDefaults)]
+    [YamlMember(Alias = "enabled")]
     public bool Enabled { get; set; } = true;
 
     /// <summary>

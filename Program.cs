@@ -292,7 +292,10 @@ public class Program
             _lastConfigLoadTime = File.GetLastWriteTime(configPath);
 
             // Initialize storage service if enabled
-            if (_config.Storage?.Enabled == true)
+            // If storage section is missing from config, use defaults (enabled: true)
+            _config.Storage ??= new Storage.StorageConfig();
+
+            if (_config.Storage.Enabled)
             {
                 try
                 {
