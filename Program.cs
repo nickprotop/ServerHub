@@ -272,6 +272,19 @@ public class Program
         }, newTemplateArgument, newNameOption, newOutputOption, newListOption);
         rootCommand.AddCommand(newWidgetCommand);
 
+        // completion command - generate shell completion scripts
+        var completionCommand = new Command("completion", "Generate shell completion scripts");
+        var completionShellArgument = new Argument<string>(
+            name: "shell",
+            description: "Shell type: bash, zsh, or fish");
+        completionCommand.AddArgument(completionShellArgument);
+        completionCommand.SetHandler((string shell) =>
+        {
+            var exitCode = Commands.Cli.CompletionCommand.Execute(shell);
+            Environment.ExitCode = exitCode;
+        }, completionShellArgument);
+        rootCommand.AddCommand(completionCommand);
+
         return await rootCommand.InvokeAsync(args);
     }
 

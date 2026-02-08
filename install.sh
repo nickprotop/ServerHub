@@ -91,7 +91,35 @@ else
     echo "✓ Config already exists at $CONFIG_DIR/config.yaml"
 fi
 
-# 8. Add to PATH if needed
+# 8. Install shell completion (bash)
+if [ -f "$HOME/.bashrc" ]; then
+    echo "Installing bash completion..."
+    # Generate and append completion to bashrc if not already there
+    if ! grep -q "serverhub completion bash" "$HOME/.bashrc" 2>/dev/null; then
+        echo "" >> "$HOME/.bashrc"
+        echo "# ServerHub completion" >> "$HOME/.bashrc"
+        echo 'if command -v serverhub &> /dev/null; then' >> "$HOME/.bashrc"
+        echo '    source <(serverhub completion bash 2>/dev/null || true)' >> "$HOME/.bashrc"
+        echo 'fi' >> "$HOME/.bashrc"
+        echo "✓ Installed bash completion (reload shell to activate)"
+    else
+        echo "✓ Bash completion already configured"
+    fi
+elif [ -f "$HOME/.zshrc" ]; then
+    echo "Installing zsh completion..."
+    if ! grep -q "serverhub completion zsh" "$HOME/.zshrc" 2>/dev/null; then
+        echo "" >> "$HOME/.zshrc"
+        echo "# ServerHub completion" >> "$HOME/.zshrc"
+        echo 'if command -v serverhub &> /dev/null; then' >> "$HOME/.zshrc"
+        echo '    source <(serverhub completion zsh 2>/dev/null || true)' >> "$HOME/.zshrc"
+        echo 'fi' >> "$HOME/.zshrc"
+        echo "✓ Installed zsh completion (reload shell to activate)"
+    else
+        echo "✓ Zsh completion already configured"
+    fi
+fi
+
+# 9. Add to PATH if needed
 PATH_ADDED=false
 if ! echo "$PATH" | grep -q "$INSTALL_DIR/bin"; then
     echo ""
