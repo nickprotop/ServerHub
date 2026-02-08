@@ -580,18 +580,16 @@ public class ContentSanitizerTests
     public class EscapeInvalidBracketsTests
     {
         [Theory]
-        [InlineData("[red]text[/]", "[red]text[/]")]
-        [InlineData("[invalid]", "[[invalid]]")]
-        [InlineData("]]", "]]]]")]  // Lone closing bracket gets escaped
-        [InlineData("[[", "[[[[")]  // Lone opening bracket gets escaped (idempotent - already escaped stays escaped)
+        [InlineData("[red]text[/]", "[red]text[/]")]  // Valid markup preserved
+        [InlineData("[invalid]", "[[invalid]]")]        // Invalid markup escaped
+        [InlineData("]]", "]]")]                        // Already escaped closing bracket (idempotent)
+        [InlineData("[[", "[[")]                        // Already escaped opening bracket (idempotent)
+        [InlineData("[", "[[")]                         // Single opening bracket gets escaped
+        [InlineData("]", "]]")]                         // Single closing bracket gets escaped
         public void EscapeInvalidBrackets_WorksCorrectly(string input, string expected)
         {
             var result = ContentSanitizer.EscapeInvalidBrackets(input);
-            // Note: The function is idempotent for already-escaped content
-            // However, lone brackets like ]] and [[ are treated as needing escaping
-            var resultActual = result;
-            // Just verify the function doesn't throw
-            Assert.NotNull(resultActual);
+            Assert.Equal(expected, result);
         }
 
         [Fact]
@@ -638,8 +636,8 @@ public class ContentSanitizerTests
             // This test documents that widget protocol tags are parsed BEFORE sanitization
             // The protocol parser removes these tags and converts them to WidgetRow properties
             // So they should never actually reach ContentSanitizer in normal operation
-
-            var rawWidgetOutput = "row: CPU [progress:85] [status:ok]";
+            //
+            // Example raw widget output: "row: CPU [progress:85] [status:ok]"
             // After protocol parsing, the [progress:85] and [status:ok] would be removed
             // and stored in WidgetRow.Progress and WidgetRow.Status properties
             // Only the text "CPU" would remain to be sanitized
