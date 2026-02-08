@@ -15,6 +15,7 @@ namespace ServerHub.Tests.Integration;
 /// Integration tests for the storage pipeline:
 /// Widget Script Output → WidgetProtocolParser → WidgetRefreshService → StorageService → SQLite
 /// </summary>
+[Collection("Storage Tests")]
 public class StorageIntegrationTests : IDisposable
 {
     private readonly string _testDbPath;

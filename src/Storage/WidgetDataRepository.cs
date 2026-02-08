@@ -143,10 +143,12 @@ public class WidgetDataRepository
         string timeRange,
         Dictionary<string, string>? tags = null)
     {
-        var parseResult = TimeRangeParser.Parse(timeRange);
-        var tagsJson = TagNormalizer.ToJson(tags);
+        try
+        {
+            var parseResult = TimeRangeParser.Parse(timeRange);
+            var tagsJson = TagNormalizer.ToJson(tags);
 
-        using var cmd = _connection.CreateCommand();
+            using var cmd = _connection.CreateCommand();
 
         if (parseResult.IsTimeBased)
         {
@@ -230,11 +232,17 @@ public class WidgetDataRepository
             });
         }
 
-        // For sample-based queries, reverse to get chronological order
-        if (!parseResult.IsTimeBased)
-            results.Reverse();
+            // For sample-based queries, reverse to get chronological order
+            if (!parseResult.IsTimeBased)
+                results.Reverse();
 
-        return results;
+            return results;
+        }
+        catch (ArgumentException)
+        {
+            // Invalid time range format - return empty list gracefully
+            return new List<DataPoint>();
+        }
     }
 
     /// <summary>
@@ -251,56 +259,114 @@ public class WidgetDataRepository
         string timeRange,
         Dictionary<string, string>? tags = null)
     {
-        var parseResult = TimeRangeParser.Parse(timeRange);
-        if (!parseResult.IsTimeBased)
-            throw new ArgumentException("Aggregation requires time-based range (e.g., '1h'), not sample count", nameof(timeRange));
-
+        try
+        {
+            var parseResult = TimeRangeParser.Parse(timeRange);
         var tagsJson = TagNormalizer.ToJson(tags);
 
         using var cmd = _connection.CreateCommand();
 
-        if (tagsJson != null)
+        // Build SQL query based on whether it's time-based or sample-based
+        if (parseResult.IsTimeBased)
         {
-            cmd.CommandText = @"
-                SELECT
-                    COUNT(*) as count,
-                    AVG(field_value) as avg,
-                    MIN(field_value) as min,
-                    MAX(field_value) as max,
-                    SUM(field_value) as sum
-                FROM widget_data
-                WHERE widget_id = @widget_id
-                  AND measurement = @measurement
-                  AND field_name = @field_name
-                  AND tags = @tags
-                  AND timestamp >= @start_timestamp
-                  AND field_value IS NOT NULL;
-            ";
-            cmd.Parameters.AddWithValue("@tags", tagsJson);
+            // Time-based: Use timestamp filtering
+            if (tagsJson != null)
+            {
+                cmd.CommandText = @"
+                    SELECT
+                        COUNT(*) as count,
+                        AVG(field_value) as avg,
+                        MIN(field_value) as min,
+                        MAX(field_value) as max,
+                        SUM(field_value) as sum
+                    FROM widget_data
+                    WHERE widget_id = @widget_id
+                      AND measurement = @measurement
+                      AND field_name = @field_name
+                      AND tags = @tags
+                      AND timestamp >= @start_timestamp
+                      AND field_value IS NOT NULL;
+                ";
+                cmd.Parameters.AddWithValue("@tags", tagsJson);
+            }
+            else
+            {
+                cmd.CommandText = @"
+                    SELECT
+                        COUNT(*) as count,
+                        AVG(field_value) as avg,
+                        MIN(field_value) as min,
+                        MAX(field_value) as max,
+                        SUM(field_value) as sum
+                    FROM widget_data
+                    WHERE widget_id = @widget_id
+                      AND measurement = @measurement
+                      AND field_name = @field_name
+                      AND tags IS NULL
+                      AND timestamp >= @start_timestamp
+                      AND field_value IS NOT NULL;
+                ";
+            }
+
+            cmd.Parameters.AddWithValue("@widget_id", _widgetId);
+            cmd.Parameters.AddWithValue("@measurement", measurement);
+            cmd.Parameters.AddWithValue("@field_name", fieldName);
+            cmd.Parameters.AddWithValue("@start_timestamp", parseResult.StartTimestamp!.Value);
         }
         else
         {
-            cmd.CommandText = @"
-                SELECT
-                    COUNT(*) as count,
-                    AVG(field_value) as avg,
-                    MIN(field_value) as min,
-                    MAX(field_value) as max,
-                    SUM(field_value) as sum
-                FROM widget_data
-                WHERE widget_id = @widget_id
-                  AND measurement = @measurement
-                  AND field_name = @field_name
-                  AND tags IS NULL
-                  AND timestamp >= @start_timestamp
-                  AND field_value IS NOT NULL;
-            ";
-        }
+            // Sample-based: Use LIMIT to get last N samples
+            if (tagsJson != null)
+            {
+                cmd.CommandText = @"
+                    SELECT
+                        COUNT(*) as count,
+                        AVG(field_value) as avg,
+                        MIN(field_value) as min,
+                        MAX(field_value) as max,
+                        SUM(field_value) as sum
+                    FROM (
+                        SELECT field_value
+                        FROM widget_data
+                        WHERE widget_id = @widget_id
+                          AND measurement = @measurement
+                          AND field_name = @field_name
+                          AND tags = @tags
+                          AND field_value IS NOT NULL
+                        ORDER BY timestamp DESC
+                        LIMIT @limit
+                    );
+                ";
+                cmd.Parameters.AddWithValue("@tags", tagsJson);
+            }
+            else
+            {
+                cmd.CommandText = @"
+                    SELECT
+                        COUNT(*) as count,
+                        AVG(field_value) as avg,
+                        MIN(field_value) as min,
+                        MAX(field_value) as max,
+                        SUM(field_value) as sum
+                    FROM (
+                        SELECT field_value
+                        FROM widget_data
+                        WHERE widget_id = @widget_id
+                          AND measurement = @measurement
+                          AND field_name = @field_name
+                          AND tags IS NULL
+                          AND field_value IS NOT NULL
+                        ORDER BY timestamp DESC
+                        LIMIT @limit
+                    );
+                ";
+            }
 
-        cmd.Parameters.AddWithValue("@widget_id", _widgetId);
-        cmd.Parameters.AddWithValue("@measurement", measurement);
-        cmd.Parameters.AddWithValue("@field_name", fieldName);
-        cmd.Parameters.AddWithValue("@start_timestamp", parseResult.StartTimestamp!.Value);
+            cmd.Parameters.AddWithValue("@widget_id", _widgetId);
+            cmd.Parameters.AddWithValue("@measurement", measurement);
+            cmd.Parameters.AddWithValue("@field_name", fieldName);
+            cmd.Parameters.AddWithValue("@limit", parseResult.SampleCount!.Value);
+        }
 
         using var reader = cmd.ExecuteReader();
         if (reader.Read())
@@ -309,17 +375,23 @@ public class WidgetDataRepository
             if (count == 0)
                 return null;
 
-            return new AggregatedData
-            {
-                Count = count,
-                Average = reader.IsDBNull(1) ? null : reader.GetDouble(1),
-                Min = reader.IsDBNull(2) ? null : reader.GetDouble(2),
-                Max = reader.IsDBNull(3) ? null : reader.GetDouble(3),
-                Sum = reader.IsDBNull(4) ? null : reader.GetDouble(4)
-            };
-        }
+                return new AggregatedData
+                {
+                    Count = count,
+                    Average = reader.IsDBNull(1) ? null : reader.GetDouble(1),
+                    Min = reader.IsDBNull(2) ? null : reader.GetDouble(2),
+                    Max = reader.IsDBNull(3) ? null : reader.GetDouble(3),
+                    Sum = reader.IsDBNull(4) ? null : reader.GetDouble(4)
+                };
+            }
 
-        return null;
+            return null;
+        }
+        catch (ArgumentException)
+        {
+            // Invalid time range format - return null gracefully
+            return null;
+        }
     }
 
     /// <summary>
