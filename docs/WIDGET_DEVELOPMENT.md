@@ -267,6 +267,92 @@ echo "row: [line:5,15,25,35,45:warm:CPU History:0-100:50:6:braille]"  # Braille 
 echo "row: [line:5,15,25,35,45:blue:Memory:0-100:50:6:ascii]"          # ASCII style
 ```
 
+### Historical Data and Storage System
+
+**Recommended approach for tracking historical data:**
+
+ServerHub includes a powerful SQLite-based storage system for persistent time-series data. This is the **recommended way** to track historical metrics in your widgets.
+
+**Benefits over manual cache files:**
+- ✅ Persistent storage (survives cache clears and reboots)
+- ✅ Automatic cleanup (configurable retention policy, default 30 days)
+- ✅ Flexible time ranges (sample-based or time-based queries)
+- ✅ Rich aggregations (avg, max, min, sum, count)
+- ✅ Multiple visualization options
+- ✅ No manual file management needed
+- ✅ Centralized database for all widgets
+
+**How to use it:**
+
+1. **Store data** using `datastore:` directives (InfluxDB line protocol):
+
+```bash
+# Simple measurement
+echo "datastore: cpu_load value=$load_percent"
+
+# Multiple fields
+echo "datastore: system_stats load=$load,temp=$temp,uptime=$uptime"
+
+# With tags for grouping
+echo "datastore: disk_usage,mount=$mount value=$pct"
+echo "datastore: network_traffic,interface=$iface rx_kb=$rx,tx_kb=$tx"
+echo "datastore: docker_stats,container=$name cpu_pct=$cpu,mem_pct=$mem"
+```
+
+2. **Visualize historical data** using storage-based inline elements:
+
+```bash
+# Dashboard mode: Show last N samples
+echo "row: [history_graph:cpu_load.value:last_30:cool:Load %:0-100:40]"
+echo "row: [history_sparkline:network_traffic.rx_kb:last_10:green:15]"
+
+# Extended mode: Show time-based ranges
+echo "row: [history_graph:cpu_load.value:1h:warm:CPU (1h):0-100:60]"
+echo "row: [history_line:memory_usage.value:24h:spectrum:Memory (24h):0-100:80:12:braille]"
+
+# With tag filtering
+echo "row: [history_graph:disk_usage.value,mount=/:last_30:warm:Root Usage:0-100:40]"
+echo "row: [history_graph:docker_stats.cpu_pct,container=web:last_30:spectrum:Web CPU:0-100:40]"
+```
+
+**Time ranges:**
+- Sample-based: `last_10`, `last_30`, `last_100`, etc.
+- Time-based: `10s`, `30s`, `1m`, `5m`, `15m`, `1h`, `6h`, `12h`, `24h`, `7d`, `30d`
+
+**Storage Configuration:**
+
+Storage is enabled by default in `~/.config/serverhub/config.yaml`:
+
+```yaml
+storage:
+  enabled: true
+  database_path: ~/.config/serverhub/serverhub.db
+  retention_days: 30
+  cleanup_interval_hours: 1
+  max_database_size_mb: 500
+  auto_vacuum: true
+```
+
+**Migration from cache files:**
+
+If you have existing widgets using cache files (e.g., `~/.cache/serverhub/widget-data.txt`), migrate to the storage system:
+
+```bash
+# OLD: Manual cache file approach (not recommended)
+CACHE_DIR="$HOME/.cache/serverhub"
+echo "$value" >> "$CACHE_DIR/widget-data.txt"
+tail -n 30 "$CACHE_DIR/widget-data.txt" > "$CACHE_DIR/widget-data.tmp"
+mv "$CACHE_DIR/widget-data.tmp" "$CACHE_DIR/widget-data.txt"
+history=$(paste -sd',' "$CACHE_DIR/widget-data.txt")
+echo "row: [graph:${history}:cyan:History:0-100]"
+
+# NEW: Storage system (recommended)
+echo "datastore: widget_metric value=$value"
+echo "row: [history_graph:widget_metric.value:last_30:cyan:History:0-100:40]"
+```
+
+**See also:** All bundled widgets (cpu, memory, disk, network, docker) use the storage system as reference examples.
+
 ### Tables
 
 Create structured data displays:

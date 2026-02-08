@@ -44,19 +44,6 @@ variables:
     default: "Advanced monitoring for {{WIDGET_TITLE}}"
     example: "Advanced system monitoring with graphs"
 
-  CACHE_FILE:
-    description: Path to history cache file
-    required: false
-    default: "$HOME/.cache/serverhub/{{WIDGET_NAME}}-history.txt"
-    example: "/tmp/widget-history.txt"
-
-  MAX_SAMPLES:
-    description: Maximum number of history samples to keep
-    required: false
-    default: "30"
-    pattern: "^[0-9]+$"
-    example: "50"
-
 post_creation:
   - "Make the widget executable: chmod +x {{OUTPUT_FILE}}"
   - "Test the widget: serverhub test-widget {{OUTPUT_FILE}}"

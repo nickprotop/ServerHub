@@ -3,12 +3,6 @@
 # {{DESCRIPTION}}
 # Author: {{AUTHOR}}
 
-CACHE_FILE="{{CACHE_FILE}}"
-MAX_SAMPLES={{MAX_SAMPLES}}
-
-# Ensure cache directory exists
-mkdir -p "$(dirname "$CACHE_FILE")"
-
 # Check if running in extended mode
 EXTENDED_MODE=false
 if [[ "$1" == "--extended" ]]; then
@@ -22,13 +16,8 @@ echo "refresh: {{REFRESH_INTERVAL}}"
 # Example: Get current value (0-100)
 CURRENT_VALUE=$((RANDOM % 100))
 
-# Update history
-echo "$CURRENT_VALUE" >> "$CACHE_FILE"
-tail -n "$MAX_SAMPLES" "$CACHE_FILE" > "$CACHE_FILE.tmp"
-mv "$CACHE_FILE.tmp" "$CACHE_FILE"
-
-# Read history
-mapfile -t HISTORY < "$CACHE_FILE"
+# Store metric in database for historical tracking
+echo "datastore: {{WIDGET_NAME}}_metric value=$CURRENT_VALUE"
 
 # Dashboard mode (compact)
 if [[ "$EXTENDED_MODE" == "false" ]]; then
@@ -41,12 +30,11 @@ if [[ "$EXTENDED_MODE" == "false" ]]; then
         echo "row: [status:ok] Current: ${CURRENT_VALUE}%"
     fi
 
-    # Show sparkline (compact trend)
-    echo "row: [sparkline:${HISTORY[*]}]"
+    # Show sparkline with last 10 samples from storage
+    echo "row: [history_sparkline:{{WIDGET_NAME}}_metric.value:last_10:spectrum:15]"
 
-    # Show average
-    AVG=$(awk '{s+=$1} END {print int(s/NR)}' <<< "${HISTORY[*]}")
-    echo "row: Average: ${AVG}%"
+    # Show aggregated average from last 30 samples
+    echo "row: [datafetch:{{WIDGET_NAME}}_metric.value:last_30:avg] [grey70]Avg (30 samples)[/]"
 else
     # Extended mode (detailed view)
     echo "row: [bold]Current Status[/]"
@@ -59,21 +47,24 @@ else
     fi
 
     echo "row:"
-    echo "row: [bold]History Graph[/]"
-    echo "row: [graph:${HISTORY[*]}]"
+    echo "row: [bold]History Graph (last 30 samples)[/]"
+    # Show last 30 samples as vertical bar graph
+    echo "row: [history_graph:{{WIDGET_NAME}}_metric.value:last_30:spectrum:Value %:0-100:40]"
 
     echo "row:"
-    echo "row: [bold]Statistics[/]"
+    echo "row: [bold]History Graph (last hour)[/]"
+    # Show 1 hour of data as smooth line graph
+    echo "row: [history_line:{{WIDGET_NAME}}_metric.value:1h:warm:Value (1h):0-100:60:8:braille]"
+
+    echo "row:"
+    echo "row: [bold]Statistics (last 30 samples)[/]"
     echo "[table:Metric|Value]"
-    AVG=$(awk '{s+=$1} END {print int(s/NR)}' <<< "${HISTORY[*]}")
-    MIN=$(printf '%s\n' "${HISTORY[@]}" | sort -n | head -n1)
-    MAX=$(printf '%s\n' "${HISTORY[@]}" | sort -n | tail -n1)
-    echo "[tablerow:Average|${AVG}%]"
-    echo "[tablerow:Minimum|${MIN}%]"
-    echo "[tablerow:Maximum|${MAX}%]"
-    echo "[tablerow:Samples|${#HISTORY[@]}]"
+    # Use storage aggregations instead of manual calculations
+    echo "[tablerow:Average|[datafetch:{{WIDGET_NAME}}_metric.value:last_30:avg]%]"
+    echo "[tablerow:Minimum|[datafetch:{{WIDGET_NAME}}_metric.value:last_30:min]%]"
+    echo "[tablerow:Maximum|[datafetch:{{WIDGET_NAME}}_metric.value:last_30:max]%]"
+    echo "[tablerow:Count|[datafetch:{{WIDGET_NAME}}_metric.value:last_30:count]]"
 fi
 
 # Actions
 echo "action: Refresh:bash {{OUTPUT_FILE}}"
-echo "action: Clear History:rm -f $CACHE_FILE && echo 'History cleared'"
