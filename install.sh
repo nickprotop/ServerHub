@@ -84,14 +84,25 @@ echo "✓ Installed $widget_count bundled widgets to $WIDGETS_DIR"
 # Clean up
 rm -f "/tmp/widgets.tar.gz"
 
-# 7. Config will be auto-generated on first run
+# 7. Download and install uninstaller
+echo "Downloading uninstaller..."
+UNINSTALL_URL="https://github.com/$REPO/releases/download/$RELEASE_TAG/uninstall.sh"
+if curl -L -f -o "/tmp/serverhub-uninstall" "$UNINSTALL_URL" 2>/dev/null; then
+    chmod +x "/tmp/serverhub-uninstall"
+    mv "/tmp/serverhub-uninstall" "$INSTALL_DIR/bin/serverhub-uninstall"
+    echo "✓ Installed uninstaller to $INSTALL_DIR/bin/serverhub-uninstall"
+else
+    echo "Warning: Could not download uninstaller (non-critical)"
+fi
+
+# 8. Config will be auto-generated on first run
 if [ ! -f "$CONFIG_DIR/config.yaml" ]; then
     echo "✓ Config will be auto-generated on first run at $CONFIG_DIR/config.yaml"
 else
     echo "✓ Config already exists at $CONFIG_DIR/config.yaml"
 fi
 
-# 8. Install shell completion (bash)
+# 9. Install shell completion (bash)
 if [ -f "$HOME/.bashrc" ]; then
     echo "Installing bash completion..."
     # Generate and append completion to bashrc if not already there
@@ -119,7 +130,7 @@ elif [ -f "$HOME/.zshrc" ]; then
     fi
 fi
 
-# 9. Add to PATH if needed
+# 10. Add to PATH if needed
 PATH_ADDED=false
 if ! echo "$PATH" | grep -q "$INSTALL_DIR/bin"; then
     echo ""
@@ -164,5 +175,8 @@ fi
 echo "Other commands:"
 echo "  serverhub --discover   - Find and add custom widgets"
 echo "  serverhub --help       - Show all options"
+echo ""
+echo "To uninstall ServerHub:"
+echo "  serverhub-uninstall    - Remove ServerHub from your system"
 echo ""
 echo "Documentation: https://github.com/$REPO"

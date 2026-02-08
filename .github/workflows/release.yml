@@ -55,10 +55,12 @@ jobs:
           tar -czf ../publish/widgets.tar.gz "${files[@]}"
           cd ..
 
-      - name: Copy install script
+      - name: Copy install and uninstall scripts
         run: |
           cp install.sh ./publish/install.sh
+          cp uninstall.sh ./publish/uninstall.sh
           chmod +x ./publish/install.sh
+          chmod +x ./publish/uninstall.sh
 
       - name: Generate checksums
         run: |
@@ -101,6 +103,7 @@ jobs:
             publish/serverhub-linux-arm64
             publish/widgets.tar.gz
             publish/install.sh
+            publish/uninstall.sh
             publish/SHA256SUMS
           body: |
             # ServerHub ${{ steps.version.outputs.VERSION }}
