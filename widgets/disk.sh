@@ -11,23 +11,6 @@ fi
 echo "title: Disk Usage"
 echo "refresh: 10"
 
-# Setup cache directory for historical data
-CACHE_DIR="$HOME/.cache/serverhub"
-mkdir -p "$CACHE_DIR"
-
-# Check for stale data based on last run timestamp
-last_run_file="$CACHE_DIR/disk-last-run.txt"
-current_time=$(date +%s)
-if [ -f "$last_run_file" ]; then
-    read -r last_time < "$last_run_file"
-    time_diff=$((current_time - last_time))
-    # If gap > 30 seconds (3x refresh interval), clear all disk history
-    if [ "$time_diff" -gt 30 ]; then
-        rm -f "$CACHE_DIR"/disk*-usage.txt
-    fi
-fi
-echo "$current_time" > "$last_run_file"
-
 # Dashboard mode: Quick overview of main filesystems
 if [ "$EXTENDED" = false ]; then
     echo "row: [bold]Main Filesystems:[/]"
@@ -43,12 +26,7 @@ if [ "$EXTENDED" = false ]; then
         [ "$pct" -gt 100 ] && pct=100
 
         # Store history for trending
-        mount_safe=$(echo "$mount" | tr '/' '_')
-        history_file="$CACHE_DIR/disk${mount_safe}-usage.txt"
-
-        echo "$pct" >> "$history_file"
-        tail -n 10 "$history_file" > "${history_file}.tmp" 2>/dev/null
-        mv "${history_file}.tmp" "$history_file" 2>/dev/null
+        echo "datastore: disk_usage,mount=$mount value=$pct"
 
         # Determine status color
         if [ "$pct" -lt 70 ]; then
@@ -86,12 +64,7 @@ else
         [ "$pct" -gt 100 ] && pct=100
 
         # Store history
-        mount_safe=$(echo "$mount" | tr '/' '_')
-        history_file="$CACHE_DIR/disk${mount_safe}-usage.txt"
-
-        echo "$pct" >> "$history_file"
-        tail -n 30 "$history_file" > "${history_file}.tmp" 2>/dev/null
-        mv "${history_file}.tmp" "$history_file" 2>/dev/null
+        echo "datastore: disk_usage,mount=$mount value=$pct"
 
         # Status color
         if [ "$pct" -lt 70 ]; then
@@ -121,18 +94,13 @@ else
         pct=${percent%\%}
 
         if [ "$pct" -ge 70 ]; then
-            mount_safe=$(echo "$mount" | tr '/' '_')
-            history_file="$CACHE_DIR/disk${mount_safe}-usage.txt"
+            mount_short=$(echo "$mount" | cut -c1-25)
 
-            if [ -f "$history_file" ] && [ -s "$history_file" ]; then
-                history=$(paste -sd',' "$history_file")
-                mount_short=$(echo "$mount" | cut -c1-25)
-
-                echo "row: "
-                echo "row: [cyan1]${mount_short}[/] [grey70](${percent} full)[/]"
-                # Use 0-100 fixed scale for percentage graph
-                echo "row: [graph:${history}:warm:Usage %:0-100]"
-            fi
+            echo "row: "
+            echo "row: [cyan1]${mount_short}[/] [grey70](${percent} full)[/]"
+            # Use 0-100 fixed scale for percentage graph
+            echo "row: [history_graph:disk_usage.value,mount=$mount:last_40:warm:Usage %:0-100:40]"
+            echo "row: [history_line:disk_usage.value,mount=$mount:2h:warm:Usage %:0-100:80:8:braille]"
         fi
     done
 
@@ -267,4 +235,3 @@ fi
 
 echo "action: Show all mounts:df -hT"
 echo "action: Show inode usage:df -i"
-echo "action: Clear usage history:rm -f $CACHE_DIR/disk_*-usage.txt"

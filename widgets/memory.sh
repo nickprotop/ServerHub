@@ -11,10 +11,6 @@ fi
 echo "title: Memory Usage"
 echo "refresh: 2"
 
-# Setup cache directory for historical data
-CACHE_DIR="$HOME/.cache/serverhub"
-mkdir -p "$CACHE_DIR"
-
 # Get memory usage
 mem_info=$(free -m | awk 'NR==2{printf "%.0f %.0f %.0f", $3,$2,$3*100/$2}')
 read -r used total percent <<< "$mem_info"
@@ -28,52 +24,10 @@ available=$(free -m | awk 'NR==2{print $7}')
 buffers=$(free -m | awk 'NR==2{print $6}')
 cached=$(grep "^Cached:" /proc/meminfo | awk '{print int($2/1024)}')
 
-# Determine sample count based on mode
-if [ "$EXTENDED" = true ]; then
-    MAX_SAMPLES=30
-else
-    MAX_SAMPLES=10
-fi
-
-# Store memory history (clear if stale)
-mem_history_file="$CACHE_DIR/memory-usage.txt"
-swap_history_file="$CACHE_DIR/swap-usage.txt"
-last_run_file="$CACHE_DIR/memory-last-run.txt"
-
-# Check for stale data based on last run timestamp
-current_time=$(date +%s)
-if [ -f "$last_run_file" ]; then
-    read -r last_time < "$last_run_file"
-    time_diff=$((current_time - last_time))
-    # If gap > 6 seconds (3x refresh interval), clear history
-    if [ "$time_diff" -gt 6 ]; then
-        rm -f "$mem_history_file" "$swap_history_file"
-    fi
-fi
-echo "$current_time" > "$last_run_file"
-
-echo "$percent" >> "$mem_history_file"
-tail -n "$MAX_SAMPLES" "$mem_history_file" > "${mem_history_file}.tmp" 2>/dev/null
-mv "${mem_history_file}.tmp" "$mem_history_file" 2>/dev/null
-
-# Read history for graph
-if [ -f "$mem_history_file" ] && [ -s "$mem_history_file" ]; then
-    mem_history=$(paste -sd',' "$mem_history_file")
-else
-    mem_history="$percent"
-fi
-
-# Store swap history if swap exists
+# Store data in storage system
+echo "datastore: memory_usage value=$percent"
 if [ "$swap_total" -gt 0 ]; then
-    echo "$swap_percent" >> "$swap_history_file"
-    tail -n "$MAX_SAMPLES" "$swap_history_file" > "${swap_history_file}.tmp" 2>/dev/null
-    mv "${swap_history_file}.tmp" "$swap_history_file" 2>/dev/null
-
-    if [ -f "$swap_history_file" ] && [ -s "$swap_history_file" ]; then
-        swap_history=$(paste -sd',' "$swap_history_file")
-    else
-        swap_history="$swap_percent"
-    fi
+    echo "datastore: swap_usage value=$swap_percent"
 fi
 
 # Determine status
@@ -125,16 +79,23 @@ else
     echo "row: [divider]"
     echo "row: "
     echo "row: [bold]Memory Usage History (last 60s):[/]"
-    # Use 0-100 fixed scale for percentage graph
-    echo "row: [graph:${mem_history}:warm:Memory %:0-100]"
+    # Use history_graph with last 30 samples, warm gradient, 0-100 scale, 40 char width
+    echo "row: [history_graph:memory_usage.value:last_40:warm:Memory %:0-100:40]"
 
     # Swap graph if configured with gradient
     if [ "$swap_total" -gt 0 ]; then
         echo "row: "
         echo "row: [bold]Swap Usage History:[/]"
-        # Use 0-100 fixed scale for percentage graph
-        echo "row: [graph:${swap_history}:cool:Swap %:0-100]"
+        # Use history_graph with last 30 samples, warm gradient, 0-100 scale, 40 char width
+        echo "row: [history_graph:swap_usage.value:last_40:warm:Swap %:0-100:40]"
     fi
+
+    # Enhanced memory trend visualization
+    echo "row: "
+    echo "row: [divider]"
+    echo "row: "
+    echo "row: [bold]Memory Usage Trend (Last 1 Hour):[/]"
+    echo "row: [history_line:memory_usage.value:1h:warm:Memory %:0-100:80:10:braille]"
 
     # Detailed breakdown table with gradients
     echo "row: "
@@ -263,4 +224,3 @@ fi
 echo "action: [sudo,refresh] Drop caches:sh -c 'sync && echo 3 > /proc/sys/vm/drop_caches' && echo 'Caches dropped'"
 echo "action: View memory map:cat /proc/meminfo"
 echo "action: Show OOM killer history:dmesg | grep -i 'killed process' | tail -10"
-echo "action: Clear memory history:rm -f $CACHE_DIR/memory-usage.txt $CACHE_DIR/swap-usage.txt"

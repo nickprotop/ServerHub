@@ -11,10 +11,6 @@ fi
 echo "title: CPU Usage"
 echo "refresh: 2"
 
-# Setup cache directory for historical data
-CACHE_DIR="$HOME/.cache/serverhub"
-mkdir -p "$CACHE_DIR"
-
 # Get core count
 cpu_cores=$(nproc 2>/dev/null || echo "1")
 
@@ -27,39 +23,8 @@ load_percent=$(awk "BEGIN {printf \"%.0f\", ($load1 / $cpu_cores) * 100}")
 # Cap at 100% for display
 [ "$load_percent" -gt 100 ] && load_percent=100
 
-# Determine sample count based on mode
-if [ "$EXTENDED" = true ]; then
-    MAX_SAMPLES=30
-else
-    MAX_SAMPLES=10
-fi
-
-# Store load history (clear if stale)
-load_history_file="$CACHE_DIR/cpu-load.txt"
-last_run_file="$CACHE_DIR/cpu-last-run.txt"
-
-# Check for stale data based on last run timestamp
-current_time=$(date +%s)
-if [ -f "$last_run_file" ]; then
-    read -r last_time < "$last_run_file"
-    time_diff=$((current_time - last_time))
-    # If gap > 6 seconds (3x refresh interval), clear history
-    if [ "$time_diff" -gt 6 ]; then
-        rm -f "$load_history_file"
-    fi
-fi
-echo "$current_time" > "$last_run_file"
-
-echo "$load_percent" >> "$load_history_file"
-tail -n "$MAX_SAMPLES" "$load_history_file" > "${load_history_file}.tmp" 2>/dev/null
-mv "${load_history_file}.tmp" "$load_history_file" 2>/dev/null
-
-# Read history for sparkline/graph
-if [ -f "$load_history_file" ] && [ -s "$load_history_file" ]; then
-    load_history=$(paste -sd',' "$load_history_file")
-else
-    load_history="$load_percent"
-fi
+# Store load in datastore for history
+echo "datastore: cpu_load value=$load_percent"
 
 # Determine status based on load
 if [ "$load_percent" -lt 70 ]; then
@@ -121,7 +86,12 @@ else
     echo "row: "
     echo "row: [bold]Load History (last 60s):[/]"
     # Use 0-100 fixed scale for percentage graph
-    echo "row: [graph:${load_history}:cool:Load %:0-100]"
+    echo "row: [history_graph:cpu_load.value:last_40:cool:Load %:0-100:40]"
+    echo "row: "
+    echo "row: [divider]"
+    echo "row: "
+    echo "row: [bold]CPU Load Trend (Last 30 Minutes):[/]"
+    echo "row: [history_line:cpu_load.value:30m:cool:CPU %:0-100:80:12:braille]"
 
     # Per-core detailed table (need delta calculation)
     echo "row: "
@@ -262,4 +232,3 @@ fi
 echo "action: View all processes:ps aux --sort=-%cpu | head -30"
 echo "action: Top processes (interactive):top -bn1 | head -20"
 echo "action: CPU info:lscpu 2>/dev/null || cat /proc/cpuinfo"
-echo "action: Clear load history:rm -f $CACHE_DIR/cpu-load.txt"

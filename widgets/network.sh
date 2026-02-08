@@ -11,7 +11,7 @@ fi
 echo "title: Network Traffic"
 echo "refresh: 2"
 
-# Setup cache directory for historical data
+# Setup cache directory for baseline tracking
 CACHE_DIR="$HOME/.cache/serverhub"
 mkdir -p "$CACHE_DIR"
 
@@ -23,9 +23,7 @@ if [ -z "$iface" ]; then
     exit 0
 fi
 
-# History files (per interface)
-RX_SPEED_HISTORY="$CACHE_DIR/network-${iface}-rx-speed.txt"
-TX_SPEED_HISTORY="$CACHE_DIR/network-${iface}-tx-speed.txt"
+# Last sample file for delta calculation (baseline for speed measurement)
 LAST_SAMPLE_FILE="$CACHE_DIR/network-${iface}-last.txt"
 
 # Get current bytes (instant read, no blocking)
@@ -36,7 +34,6 @@ current_time=$(date +%s)
 # Calculate speed (KB/s) since last sample
 rx_speed_kb=0
 tx_speed_kb=0
-should_store_history=true
 
 if [ -f "$LAST_SAMPLE_FILE" ]; then
     read -r last_time last_rx last_tx < "$LAST_SAMPLE_FILE"
@@ -49,67 +46,14 @@ if [ -f "$LAST_SAMPLE_FILE" ]; then
         tx_diff=$((tx_bytes - last_tx))
         rx_speed_kb=$((rx_diff / 1024 / time_diff))
         tx_speed_kb=$((tx_diff / 1024 / time_diff))
-    elif [ "$time_diff" -gt 5 ]; then
-        # Sample is stale - clear old history and update baseline
-        should_store_history=false
-        rm -f "$RX_SPEED_HISTORY" "$TX_SPEED_HISTORY"
     fi
 fi
 
 # Store current sample for next run
 echo "$current_time $rx_bytes $tx_bytes" > "$LAST_SAMPLE_FILE"
 
-# Store speed history (keep last 10 for dashboard, 30 for extended)
-store_history() {
-    local file=$1
-    local value=$2
-    local max_samples=$3
-
-    # Append new value
-    echo "$value" >> "$file"
-
-    # Keep only last N samples
-    tail -n "$max_samples" "$file" > "${file}.tmp" 2>/dev/null
-    mv "${file}.tmp" "$file" 2>/dev/null
-}
-
-# Read history as comma-separated values for sparkline/graph
-read_history() {
-    local file=$1
-    if [ -f "$file" ] && [ -s "$file" ]; then
-        paste -sd',' "$file"
-    else
-        echo "0"
-    fi
-}
-
-# Determine sample count based on mode
-if [ "$EXTENDED" = true ]; then
-    MAX_SAMPLES=30
-else
-    MAX_SAMPLES=10
-fi
-
-# Clear history if files are older than expected (stale data)
-for history_file in "$RX_SPEED_HISTORY" "$TX_SPEED_HISTORY"; do
-    if [ -f "$history_file" ]; then
-        file_age=$(($(date +%s) - $(stat -c %Y "$history_file" 2>/dev/null || echo 0)))
-        max_age=$((MAX_SAMPLES * 2 * 5))  # refresh=2s, grace=5x
-        if [ "$file_age" -gt "$max_age" ]; then
-            rm -f "$history_file"
-        fi
-    fi
-done
-
-# Only store speed in history if the sample is fresh (not stale)
-if [ "$should_store_history" = true ]; then
-    store_history "$RX_SPEED_HISTORY" "$rx_speed_kb" "$MAX_SAMPLES"
-    store_history "$TX_SPEED_HISTORY" "$tx_speed_kb" "$MAX_SAMPLES"
-fi
-
-# Read history for visualization
-rx_history=$(read_history "$RX_SPEED_HISTORY")
-tx_history=$(read_history "$TX_SPEED_HISTORY")
+# Store network traffic data in storage system
+echo "datastore: network_traffic,interface=$iface rx_kb=$rx_speed_kb,tx_kb=$tx_speed_kb"
 
 # Convert bytes to human readable
 format_bytes() {
@@ -157,12 +101,12 @@ if [ -n "$ip_addr" ]; then
     echo "row: [grey70]IP: $ip_addr[/]"
 fi
 
-# Dashboard mode: show sparklines with current speed in table
+# Dashboard mode: show current speed with sparklines in table
 if [ "$EXTENDED" = false ]; then
     echo "row: "
     echo "[table:Direction|Speed|Traffic|Total]"
-    echo "[tablerow:↓ RX|[green]${rx_speed_display}[/]|[sparkline:${rx_history}:green:15]|[grey70]${rx_display}[/]]"
-    echo "[tablerow:↑ TX|[yellow]${tx_speed_display}[/]|[sparkline:${tx_history}:yellow:15]|[grey70]${tx_display}[/]]"
+    echo "[tablerow:↓ RX|[green]${rx_speed_display}[/]|[history_sparkline:network_traffic.rx_kb,interface=$iface:last_15:green:15]|[grey70]${rx_display}[/]]"
+    echo "[tablerow:↑ TX|[yellow]${tx_speed_display}[/]|[history_sparkline:network_traffic.tx_kb,interface=$iface:last_15:yellow:15]|[grey70]${tx_display}[/]]"
 else
     # Extended mode: show current speed without sparklines (graphs below)
     echo "row: ↓ RX: [green]${rx_speed_display}[/] [grey70](total: ${rx_display})[/]"
@@ -181,8 +125,14 @@ if [ "$EXTENDED" = true ]; then
     echo "row: [divider]"
     echo "row: "
     echo "row: [bold]Traffic History (last 60s):[/]"
-    echo "row: [graph:${rx_history}:cool:Download (KB/s)]"
-    echo "row: [graph:${tx_history}:warm:Upload (KB/s)]"
+    echo "row: [history_graph:network_traffic.rx_kb,interface=$iface:last_40:cool:Download (KB/s):0-auto:40]"
+    echo "row: [history_graph:network_traffic.tx_kb,interface=$iface:last_40:warm:Upload (KB/s):0-auto:40]"
+    echo "row: "
+    echo "row: [divider]"
+    echo "row: "
+    echo "row: [bold]Network Traffic Trend (Last 30 Minutes):[/]"
+    echo "row: [history_line:network_traffic.rx_kb,interface=$iface:30m:cool:Download (KB/s):0-auto:80:10:braille]"
+    echo "row: [history_line:network_traffic.tx_kb,interface=$iface:30m:warm:Upload (KB/s):0-auto:80:10:braille]"
 
     # All network interfaces table
     echo "row: "
@@ -280,4 +230,4 @@ echo "action: Show all connections:ss -tunapl"
 echo "action: Show routing table:ip route"
 echo "action: Ping gateway:ping -c 4 \$(ip route | grep '^default' | awk '{print \$3}')"
 echo "action: [sudo] Restart networking:systemctl restart networking"
-echo "action: Clear traffic history:rm -f $RX_SPEED_HISTORY $TX_SPEED_HISTORY $LAST_SAMPLE_FILE"
+echo "action: Clear baseline:rm -f $LAST_SAMPLE_FILE"

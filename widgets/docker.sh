@@ -11,23 +11,6 @@ fi
 echo "title: Docker Containers"
 echo "refresh: 5"
 
-# Setup cache directory for historical data
-CACHE_DIR="$HOME/.cache/serverhub"
-mkdir -p "$CACHE_DIR"
-
-# Check for stale data based on last run timestamp
-last_run_file="$CACHE_DIR/docker-last-run.txt"
-current_time=$(date +%s)
-if [ -f "$last_run_file" ]; then
-    read -r last_time < "$last_run_file"
-    time_diff=$((current_time - last_time))
-    # If gap > 15 seconds (3x refresh interval), clear all docker history
-    if [ "$time_diff" -gt 15 ]; then
-        rm -f "$CACHE_DIR"/docker-*-cpu.txt "$CACHE_DIR"/docker-*-mem.txt
-    fi
-fi
-echo "$current_time" > "$last_run_file"
-
 # Check if docker is installed and accessible
 if ! command -v docker &> /dev/null; then
     echo "row: [status:error] Docker not installed"
@@ -57,32 +40,6 @@ if [ $stopped -gt 0 ]; then
     echo "row: Stopped: [yellow]$stopped[/]"
 fi
 
-# Helper functions for history management
-store_history() {
-    local file=$1
-    local value=$2
-    local max_samples=$3
-
-    echo "$value" >> "$file"
-    tail -n "$max_samples" "$file" > "${file}.tmp" 2>/dev/null
-    mv "${file}.tmp" "$file" 2>/dev/null
-}
-
-read_history() {
-    local file=$1
-    if [ -f "$file" ] && [ -s "$file" ]; then
-        paste -sd',' "$file"
-    else
-        echo "0"
-    fi
-}
-
-# Determine sample count based on mode
-if [ "$EXTENDED" = true ]; then
-    MAX_SAMPLES=30
-else
-    MAX_SAMPLES=10
-fi
 
 # List running containers with stats
 if [ $running -gt 0 ]; then
@@ -91,48 +48,69 @@ if [ $running -gt 0 ]; then
     # Dashboard: Table with inline progress indicators
     if [ "$EXTENDED" = false ]; then
         echo "row: [bold]Running Containers:[/]"
-        echo "[table:Name|Status|Image|CPU|Memory]"
 
-        # Get stats for all running containers
-        docker stats --no-stream --format "{{.Name}}|{{.CPUPerc}}|{{.MemPerc}}" 2>/dev/null | head -n 5 | while IFS='|' read -r name cpu_raw mem_raw; do
-            # Parse percentages (remove % sign)
-            cpu_pct=$(echo "$cpu_raw" | sed 's/%//' | awk '{printf "%.0f", $1}')
-            mem_pct=$(echo "$mem_raw" | sed 's/%//' | awk '{printf "%.0f", $1}')
+        # Get stats for all running containers (cache in temp file)
+        stats_tmp="/tmp/docker-stats-dashboard-$$"
+        docker stats --no-stream --format "{{.Name}}|{{.CPUPerc}}|{{.MemPerc}}" 2>/dev/null > "$stats_tmp"
 
-            # Clamp values to 0-100
-            [ "$cpu_pct" -gt 100 ] && cpu_pct=100
-            [ "$cpu_pct" -lt 0 ] && cpu_pct=0
-            [ "$mem_pct" -gt 100 ] && mem_pct=100
-            [ "$mem_pct" -lt 0 ] && mem_pct=0
+        # Count actual rows received
+        actual_count=$(wc -l < "$stats_tmp")
 
-            # Store history
-            cpu_history_file="$CACHE_DIR/docker-${name}-cpu.txt"
-            mem_history_file="$CACHE_DIR/docker-${name}-mem.txt"
-            store_history "$cpu_history_file" "$cpu_pct" "$MAX_SAMPLES"
-            store_history "$mem_history_file" "$mem_pct" "$MAX_SAMPLES"
+        if [ "$actual_count" -gt 0 ]; then
+            echo "[table:Name|Status|Image|CPU|Memory]"
 
-            # Get image name
-            image=$(docker inspect --format='{{.Config.Image}}' "$name" 2>/dev/null | awk -F':' '{print $1}' | awk -F'/' '{print $NF}' | cut -c1-15)
+            # Display first 5 containers (table rows only)
+            head -n 5 "$stats_tmp" | while IFS='|' read -r name cpu_raw mem_raw; do
+                # Parse percentages (remove % sign)
+                cpu_pct=$(echo "$cpu_raw" | sed 's/%//' | awk '{printf "%.0f", $1}')
+                mem_pct=$(echo "$mem_raw" | sed 's/%//' | awk '{printf "%.0f", $1}')
 
-            # Get container state
-            state=$(docker inspect --format='{{.State.Status}}' "$name" 2>/dev/null)
-            if [ "$state" = "running" ]; then
-                status_col="[green]up[/]"
-            else
-                status_col="[yellow]${state}[/]"
+                # Clamp values to 0-100
+                [ "$cpu_pct" -gt 100 ] && cpu_pct=100
+                [ "$cpu_pct" -lt 0 ] && cpu_pct=0
+                [ "$mem_pct" -gt 100 ] && mem_pct=100
+                [ "$mem_pct" -lt 0 ] && mem_pct=0
+
+                # Get image name
+                image=$(docker inspect --format='{{.Config.Image}}' "$name" 2>/dev/null | awk -F':' '{print $1}' | awk -F'/' '{print $NF}' | cut -c1-15)
+
+                # Get container state
+                state=$(docker inspect --format='{{.State.Status}}' "$name" 2>/dev/null)
+                if [ "$state" = "running" ]; then
+                    status_col="[green]up[/]"
+                else
+                    status_col="[yellow]${state}[/]"
+                fi
+
+                # Truncate name
+                name_short=$(echo "$name" | cut -c1-15)
+
+                # Format CPU and Memory with mini progress bars
+                echo "[tablerow:${name_short}|${status_col}|${image}|[miniprogress:${cpu_pct}:8:spectrum]|[miniprogress:${mem_pct}:8:warm]]"
+            done
+
+            # End table with "more" message if needed
+            if [ "$actual_count" -gt 5 ]; then
+                remaining=$((actual_count - 5))
+                echo "row: [grey70]... and $remaining more containers[/]"
             fi
 
-            # Truncate name
-            name_short=$(echo "$name" | cut -c1-15)
-
-            # Format CPU and Memory with mini progress bars
-            echo "[tablerow:${name_short}|${status_col}|${image}|[miniprogress:${cpu_pct}:8:spectrum]|[miniprogress:${mem_pct}:8:warm]]"
-        done
-
-        if [ $running -gt 5 ]; then
-            remaining=$((running - 5))
-            echo "row: [grey70]... and $remaining more containers[/]"
+            # Now output all datastore directives (OUTSIDE the table)
+            head -n 5 "$stats_tmp" | while IFS='|' read -r name cpu_raw mem_raw; do
+                cpu_pct=$(echo "$cpu_raw" | sed 's/%//' | awk '{printf "%.0f", $1}')
+                mem_pct=$(echo "$mem_raw" | sed 's/%//' | awk '{printf "%.0f", $1}')
+                [ "$cpu_pct" -gt 100 ] && cpu_pct=100
+                [ "$cpu_pct" -lt 0 ] && cpu_pct=0
+                [ "$mem_pct" -gt 100 ] && mem_pct=100
+                [ "$mem_pct" -lt 0 ] && mem_pct=0
+                echo "datastore: docker_stats,container=$name cpu_pct=$cpu_pct,mem_pct=$mem_pct"
+            done
+        else
+            # Fallback: docker stats failed, show simple list
+            echo "row: [grey70]Unable to get container stats[/]"
         fi
+
+        rm -f "$stats_tmp"
     else
         # Extended: Detailed view with graphs
         echo "row: [bold]Container Resource Usage:[/]"
@@ -142,24 +120,8 @@ if [ $running -gt 0 ]; then
         stats_tmp="/tmp/docker-stats-$$"
         docker stats --no-stream --format "{{.Name}}|{{.CPUPerc}}|{{.MemPerc}}|{{.MemUsage}}|{{.NetIO}}" 2>/dev/null > "$stats_tmp"
 
-        # Process each container once
+        # First pass: Output all table rows
         while IFS='|' read -r name cpu_raw mem_raw mem_usage net_io; do
-            # Parse percentages
-            cpu_pct=$(echo "$cpu_raw" | sed 's/%//' | awk '{printf "%.0f", $1}')
-            mem_pct=$(echo "$mem_raw" | sed 's/%//' | awk '{printf "%.0f", $1}')
-
-            # Clamp values
-            [ "$cpu_pct" -gt 100 ] && cpu_pct=100
-            [ "$cpu_pct" -lt 0 ] && cpu_pct=0
-            [ "$mem_pct" -gt 100 ] && mem_pct=100
-            [ "$mem_pct" -lt 0 ] && mem_pct=0
-
-            # Store history
-            cpu_history_file="$CACHE_DIR/docker-${name}-cpu.txt"
-            mem_history_file="$CACHE_DIR/docker-${name}-mem.txt"
-            store_history "$cpu_history_file" "$cpu_pct" "$MAX_SAMPLES"
-            store_history "$mem_history_file" "$mem_pct" "$MAX_SAMPLES"
-
             # Get image name (quick, from ps output)
             image=$(docker ps --filter "name=^${name}$" --format "{{.Image}}" 2>/dev/null | awk -F':' '{print $1}' | awk -F'/' '{print $NF}' | cut -c1-12)
             status_col="[green]up[/]"
@@ -173,26 +135,35 @@ if [ $running -gt 0 ]; then
             echo "[tablerow:${name_short}|${status_col}|${image}|${cpu_raw}|${mem_usage}|${net_short}]"
         done < "$stats_tmp"
 
-        # Show resource trend graphs for top 3 containers by CPU (from cached data)
+        # Second pass: Output all datastore directives (OUTSIDE table)
+        while IFS='|' read -r name cpu_raw mem_raw mem_usage net_io; do
+            # Parse percentages
+            cpu_pct=$(echo "$cpu_raw" | sed 's/%//' | awk '{printf "%.0f", $1}')
+            mem_pct=$(echo "$mem_raw" | sed 's/%//' | awk '{printf "%.0f", $1}')
+
+            # Clamp values
+            [ "$cpu_pct" -gt 100 ] && cpu_pct=100
+            [ "$cpu_pct" -lt 0 ] && cpu_pct=0
+            [ "$mem_pct" -gt 100 ] && mem_pct=100
+            [ "$mem_pct" -lt 0 ] && mem_pct=0
+
+            echo "datastore: docker_stats,container=$name cpu_pct=$cpu_pct,mem_pct=$mem_pct"
+        done < "$stats_tmp"
+
+        # Show resource trend graphs for top 3 containers by CPU (from storage system)
         echo "row: "
         echo "row: [divider]"
         echo "row: "
         echo "row: [bold]Resource Trends (last 60s):[/]"
 
         sort -t'|' -k2 -rn "$stats_tmp" | head -n 3 | while IFS='|' read -r name cpu_raw _; do
-            cpu_history_file="$CACHE_DIR/docker-${name}-cpu.txt"
-            mem_history_file="$CACHE_DIR/docker-${name}-mem.txt"
-
-            cpu_history=$(read_history "$cpu_history_file")
-            mem_history=$(read_history "$mem_history_file")
-
             name_short=$(echo "$name" | cut -c1-20)
 
             echo "row: "
             echo "row: [cyan1]${name_short}[/]"
-            # Use 0-100 fixed scale for percentage graphs
-            echo "row: [graph:${cpu_history}:spectrum:CPU %:0-100]"
-            echo "row: [graph:${mem_history}:warm:Memory %:0-100]"
+            # Use history_graph with container tag filter
+            echo "row: [history_graph:docker_stats.cpu_pct,container=$name:last_40:spectrum:CPU %:0-100:40]"
+            echo "row: [history_graph:docker_stats.mem_pct,container=$name:last_40:warm:Memory %:0-100:40]"
         done
 
         # Cleanup temp file
@@ -288,4 +259,3 @@ fi
 echo "action: List all:docker ps -a"
 echo "action: [refresh,timeout=120] Prune images:docker image prune -f"
 echo "action: [danger,refresh,timeout=180] Prune system:docker system prune -af"
-echo "action: Clear history cache:rm -f $CACHE_DIR/docker-*-cpu.txt $CACHE_DIR/docker-*-mem.txt"
