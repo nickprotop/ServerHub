@@ -17,13 +17,13 @@
 
   <ItemGroup>
     <!-- YAML configuration -->
-    <PackageReference Include="YamlDotNet" Version="16.2.0" />
+    <PackageReference Include="YamlDotNet" Version="16.3.0" />
     <!-- Command line parsing - System.CommandLine for AOT compatibility -->
-    <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
+    <PackageReference Include="System.CommandLine" Version="2.0.3" />
     <!-- SQLite database -->
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.3" />
     <!-- SQLite native bundle for single-file - embeds native library -->
-    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.10" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.2" />
   </ItemGroup>
 
   <!-- Local development: use project reference if available -->

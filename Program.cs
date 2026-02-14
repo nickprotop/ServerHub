@@ -62,230 +62,340 @@ public class Program
         var rootCommand = new RootCommand("ServerHub - Terminal-based server monitoring dashboard");
 
         // Default command arguments and options
-        var configArgument = new Argument<string?>(
-            name: "config",
-            description: "Path to configuration file",
-            getDefaultValue: () => null);
-
-        var widgetsPathOption = new Option<string?>(
-            name: "--widgets-path",
-            description: "Override widget directory path");
-
-        var devModeOption = new Option<bool>(
-            name: "--dev-mode",
-            description: "Enable development mode (disables custom widget checksum validation)");
-
-        var discoverOption = new Option<bool>(
-            name: "--discover",
-            description: "Discover and list all available widgets, then exit");
-
-        var verifyChecksumsOption = new Option<bool>(
-            name: "--verify-checksums",
-            description: "Verify bundled widget checksums, then exit");
-
-        var initConfigOption = new Option<string?>(
-            name: "--init-config",
-            description: "Initialize a new configuration file at specified path");
-
-        rootCommand.AddArgument(configArgument);
-        rootCommand.AddOption(widgetsPathOption);
-        rootCommand.AddOption(devModeOption);
-        rootCommand.AddOption(discoverOption);
-        rootCommand.AddOption(verifyChecksumsOption);
-        rootCommand.AddOption(initConfigOption);
-
-        rootCommand.SetHandler(async (string? config, string? widgetsPath, bool devMode, bool discover, bool verifyChecksums, string? initConfig) =>
+        var configArgument = new Argument<string?>("config")
         {
+            Description = "Path to configuration file",
+            DefaultValueFactory = _ => null
+        };
+
+        var widgetsPathOption = new Option<string?>("--widgets-path")
+        {
+            Description = "Override widget directory path"
+        };
+
+        var devModeOption = new Option<bool>("--dev-mode")
+        {
+            Description = "Enable development mode (disables custom widget checksum validation)"
+        };
+
+        var discoverOption = new Option<bool>("--discover")
+        {
+            Description = "Discover and list all available widgets, then exit"
+        };
+
+        var verifyChecksumsOption = new Option<bool>("--verify-checksums")
+        {
+            Description = "Verify bundled widget checksums, then exit"
+        };
+
+        var initConfigOption = new Option<string?>("--init-config")
+        {
+            Description = "Initialize a new configuration file at specified path"
+        };
+
+        rootCommand.Arguments.Add(configArgument);
+        rootCommand.Options.Add(widgetsPathOption);
+        rootCommand.Options.Add(devModeOption);
+        rootCommand.Options.Add(discoverOption);
+        rootCommand.Options.Add(verifyChecksumsOption);
+        rootCommand.Options.Add(initConfigOption);
+
+        rootCommand.SetAction(async (parseResult) =>
+        {
+            var config = parseResult.GetValue(configArgument);
+            var widgetsPath = parseResult.GetValue(widgetsPathOption);
+            var devMode = parseResult.GetValue(devModeOption);
+            var discover = parseResult.GetValue(discoverOption);
+            var verifyChecksums = parseResult.GetValue(verifyChecksumsOption);
+            var initConfig = parseResult.GetValue(initConfigOption);
+
             var exitCode = await Commands.Cli.DefaultCommand.ExecuteAsync(
                 config, widgetsPath, devMode, discover, verifyChecksums, initConfig);
             Environment.ExitCode = exitCode;
-        }, configArgument, widgetsPathOption, devModeOption, discoverOption, verifyChecksumsOption, initConfigOption);
+        });
 
         // Marketplace commands
         var marketplaceCommand = new Command("marketplace", "Manage marketplace widgets");
-        rootCommand.AddCommand(marketplaceCommand);
+        rootCommand.Subcommands.Add(marketplaceCommand);
 
         // marketplace search
         var marketplaceSearchCommand = new Command("search", "Search for community widgets");
-        var searchQueryArgument = new Argument<string>("query", "Search query for widgets");
-        marketplaceSearchCommand.AddArgument(searchQueryArgument);
-        marketplaceSearchCommand.SetHandler(async (string query) =>
+        var searchQueryArgument = new Argument<string>("query")
         {
-            var exitCode = await Commands.Cli.Marketplace.SearchCommand.ExecuteAsync(query);
+            Description = "Search query for widgets"
+        };
+        marketplaceSearchCommand.Arguments.Add(searchQueryArgument);
+        marketplaceSearchCommand.SetAction(async (parseResult) =>
+        {
+            var query = parseResult.GetValue(searchQueryArgument);
+            var exitCode = await Commands.Cli.Marketplace.SearchCommand.ExecuteAsync(query!);
             Environment.ExitCode = exitCode;
-        }, searchQueryArgument);
-        marketplaceCommand.AddCommand(marketplaceSearchCommand);
+        });
+        marketplaceCommand.Subcommands.Add(marketplaceSearchCommand);
 
         // marketplace list
         var marketplaceListCommand = new Command("list", "List all available widgets");
-        marketplaceListCommand.SetHandler(async () =>
+        marketplaceListCommand.SetAction(async (parseResult) =>
         {
             var exitCode = await Commands.Cli.Marketplace.ListCommand.ExecuteAsync();
             Environment.ExitCode = exitCode;
         });
-        marketplaceCommand.AddCommand(marketplaceListCommand);
+        marketplaceCommand.Subcommands.Add(marketplaceListCommand);
 
         // marketplace info
         var marketplaceInfoCommand = new Command("info", "Show widget details");
-        var infoWidgetIdArgument = new Argument<string>("widget-id", "Widget ID to show information for");
-        marketplaceInfoCommand.AddArgument(infoWidgetIdArgument);
-        marketplaceInfoCommand.SetHandler(async (string widgetId) =>
+        var infoWidgetIdArgument = new Argument<string>("widget-id")
         {
-            var exitCode = await Commands.Cli.Marketplace.InfoCommand.ExecuteAsync(widgetId);
+            Description = "Widget ID to show information for"
+        };
+        marketplaceInfoCommand.Arguments.Add(infoWidgetIdArgument);
+        marketplaceInfoCommand.SetAction(async (parseResult) =>
+        {
+            var widgetId = parseResult.GetValue(infoWidgetIdArgument);
+            var exitCode = await Commands.Cli.Marketplace.InfoCommand.ExecuteAsync(widgetId!);
             Environment.ExitCode = exitCode;
-        }, infoWidgetIdArgument);
-        marketplaceCommand.AddCommand(marketplaceInfoCommand);
+        });
+        marketplaceCommand.Subcommands.Add(marketplaceInfoCommand);
 
         // marketplace install
         var marketplaceInstallCommand = new Command("install", "Install widget from marketplace");
-        var installWidgetIdArgument = new Argument<string>("widget-id", "Widget ID to install");
-        marketplaceInstallCommand.AddArgument(installWidgetIdArgument);
-        marketplaceInstallCommand.SetHandler(async (string widgetId) =>
+        var installWidgetIdArgument = new Argument<string>("widget-id")
         {
-            var exitCode = await Commands.Cli.Marketplace.InstallCommand.ExecuteAsync(widgetId);
+            Description = "Widget ID to install"
+        };
+        marketplaceInstallCommand.Arguments.Add(installWidgetIdArgument);
+        marketplaceInstallCommand.SetAction(async (parseResult) =>
+        {
+            var widgetId = parseResult.GetValue(installWidgetIdArgument);
+            var exitCode = await Commands.Cli.Marketplace.InstallCommand.ExecuteAsync(widgetId!);
             Environment.ExitCode = exitCode;
-        }, installWidgetIdArgument);
-        marketplaceCommand.AddCommand(marketplaceInstallCommand);
+        });
+        marketplaceCommand.Subcommands.Add(marketplaceInstallCommand);
 
         // marketplace list-installed
         var marketplaceListInstalledCommand = new Command("list-installed", "List installed marketplace widgets");
-        marketplaceListInstalledCommand.SetHandler(async () =>
+        marketplaceListInstalledCommand.SetAction(async (parseResult) =>
         {
             var exitCode = await Commands.Cli.Marketplace.ListInstalledCommand.ExecuteAsync();
             Environment.ExitCode = exitCode;
         });
-        marketplaceCommand.AddCommand(marketplaceListInstalledCommand);
+        marketplaceCommand.Subcommands.Add(marketplaceListInstalledCommand);
 
         // marketplace check-updates
         var marketplaceCheckUpdatesCommand = new Command("check-updates", "Check for widget updates");
-        var checkUpdatesJsonOption = new Option<bool>("--json", "Output results as JSON");
-        marketplaceCheckUpdatesCommand.AddOption(checkUpdatesJsonOption);
-        marketplaceCheckUpdatesCommand.SetHandler(async (bool jsonOutput) =>
+        var checkUpdatesJsonOption = new Option<bool>("--json")
         {
+            Description = "Output results as JSON"
+        };
+        marketplaceCheckUpdatesCommand.Options.Add(checkUpdatesJsonOption);
+        marketplaceCheckUpdatesCommand.SetAction(async (parseResult) =>
+        {
+            var jsonOutput = parseResult.GetValue(checkUpdatesJsonOption);
             var exitCode = await Commands.Cli.Marketplace.CheckUpdatesCommand.ExecuteAsync(jsonOutput);
             Environment.ExitCode = exitCode;
-        }, checkUpdatesJsonOption);
-        marketplaceCommand.AddCommand(marketplaceCheckUpdatesCommand);
+        });
+        marketplaceCommand.Subcommands.Add(marketplaceCheckUpdatesCommand);
 
         // marketplace update
         var marketplaceUpdateCommand = new Command("update", "Update widget to latest version");
-        var updateWidgetIdArgument = new Argument<string>("widget-id", "Widget ID to update");
-        var updateVersionOption = new Option<string?>("--version", "Specific version to install (defaults to latest)");
-        var updateYesOption = new Option<bool>("--yes", "Skip confirmation prompts");
-        marketplaceUpdateCommand.AddArgument(updateWidgetIdArgument);
-        marketplaceUpdateCommand.AddOption(updateVersionOption);
-        marketplaceUpdateCommand.AddOption(updateYesOption);
-        marketplaceUpdateCommand.SetHandler(async (string widgetId, string? version, bool skipConfirmation) =>
+        var updateWidgetIdArgument = new Argument<string>("widget-id")
         {
-            var exitCode = await Commands.Cli.Marketplace.UpdateCommand.ExecuteAsync(widgetId, version, skipConfirmation);
+            Description = "Widget ID to update"
+        };
+        var updateVersionOption = new Option<string?>("--version")
+        {
+            Description = "Specific version to install (defaults to latest)"
+        };
+        var updateYesOption = new Option<bool>("--yes")
+        {
+            Description = "Skip confirmation prompts"
+        };
+        marketplaceUpdateCommand.Arguments.Add(updateWidgetIdArgument);
+        marketplaceUpdateCommand.Options.Add(updateVersionOption);
+        marketplaceUpdateCommand.Options.Add(updateYesOption);
+        marketplaceUpdateCommand.SetAction(async (parseResult) =>
+        {
+            var widgetId = parseResult.GetValue(updateWidgetIdArgument);
+            var version = parseResult.GetValue(updateVersionOption);
+            var skipConfirmation = parseResult.GetValue(updateYesOption);
+            var exitCode = await Commands.Cli.Marketplace.UpdateCommand.ExecuteAsync(widgetId!, version, skipConfirmation);
             Environment.ExitCode = exitCode;
-        }, updateWidgetIdArgument, updateVersionOption, updateYesOption);
-        marketplaceCommand.AddCommand(marketplaceUpdateCommand);
+        });
+        marketplaceCommand.Subcommands.Add(marketplaceUpdateCommand);
 
         // marketplace update-all
         var marketplaceUpdateAllCommand = new Command("update-all", "Update all widgets");
-        var updateAllYesOption = new Option<bool>("--yes", "Skip confirmation prompts");
-        marketplaceUpdateAllCommand.AddOption(updateAllYesOption);
-        marketplaceUpdateAllCommand.SetHandler(async (bool skipConfirmation) =>
+        var updateAllYesOption = new Option<bool>("--yes")
         {
+            Description = "Skip confirmation prompts"
+        };
+        marketplaceUpdateAllCommand.Options.Add(updateAllYesOption);
+        marketplaceUpdateAllCommand.SetAction(async (parseResult) =>
+        {
+            var skipConfirmation = parseResult.GetValue(updateAllYesOption);
             var exitCode = await Commands.Cli.Marketplace.UpdateAllCommand.ExecuteAsync(skipConfirmation);
             Environment.ExitCode = exitCode;
-        }, updateAllYesOption);
-        marketplaceCommand.AddCommand(marketplaceUpdateAllCommand);
+        });
+        marketplaceCommand.Subcommands.Add(marketplaceUpdateAllCommand);
 
         // Storage commands
         var storageCommand = new Command("storage", "Manage storage and database");
-        rootCommand.AddCommand(storageCommand);
+        rootCommand.Subcommands.Add(storageCommand);
 
         // storage stats
         var storageStatsCommand = new Command("stats", "Show database statistics");
-        var statsConfigOption = new Option<string?>("--config", "Path to configuration file");
-        storageStatsCommand.AddOption(statsConfigOption);
-        storageStatsCommand.SetHandler((string? config) =>
+        var statsConfigOption = new Option<string?>("--config")
         {
+            Description = "Path to configuration file"
+        };
+        storageStatsCommand.Options.Add(statsConfigOption);
+        storageStatsCommand.SetAction((parseResult) =>
+        {
+            var config = parseResult.GetValue(statsConfigOption);
             var exitCode = Commands.Cli.Storage.StorageStatsCommand.Execute(config);
             Environment.ExitCode = exitCode;
-        }, statsConfigOption);
-        storageCommand.AddCommand(storageStatsCommand);
+        });
+        storageCommand.Subcommands.Add(storageStatsCommand);
 
         // storage cleanup
         var storageCleanupCommand = new Command("cleanup", "Run database cleanup");
-        var cleanupConfigOption = new Option<string?>("--config", "Path to configuration file");
-        var cleanupForceOption = new Option<bool>("--force", "Skip confirmation prompt");
-        storageCleanupCommand.AddOption(cleanupConfigOption);
-        storageCleanupCommand.AddOption(cleanupForceOption);
-        storageCleanupCommand.SetHandler((string? config, bool force) =>
+        var cleanupConfigOption = new Option<string?>("--config")
         {
+            Description = "Path to configuration file"
+        };
+        var cleanupForceOption = new Option<bool>("--force")
+        {
+            Description = "Skip confirmation prompt"
+        };
+        storageCleanupCommand.Options.Add(cleanupConfigOption);
+        storageCleanupCommand.Options.Add(cleanupForceOption);
+        storageCleanupCommand.SetAction((parseResult) =>
+        {
+            var config = parseResult.GetValue(cleanupConfigOption);
+            var force = parseResult.GetValue(cleanupForceOption);
             var exitCode = Commands.Cli.Storage.StorageCleanupCommand.Execute(config, force);
             Environment.ExitCode = exitCode;
-        }, cleanupConfigOption, cleanupForceOption);
-        storageCommand.AddCommand(storageCleanupCommand);
+        });
+        storageCommand.Subcommands.Add(storageCleanupCommand);
 
         // storage export
         var storageExportCommand = new Command("export", "Export widget data to CSV or JSON");
-        var exportWidgetOption = new Option<string?>("--widget", "Widget ID to export data for");
-        var exportOutputOption = new Option<string?>("--output", "Output file path");
-        var exportFormatOption = new Option<string>("--format", () => "csv", "Output format (csv or json)");
-        var exportConfigOption = new Option<string?>("--config", "Path to configuration file");
-        storageExportCommand.AddOption(exportWidgetOption);
-        storageExportCommand.AddOption(exportOutputOption);
-        storageExportCommand.AddOption(exportFormatOption);
-        storageExportCommand.AddOption(exportConfigOption);
-        storageExportCommand.SetHandler((string? widgetId, string? output, string format, string? config) =>
+        var exportWidgetOption = new Option<string?>("--widget")
         {
-            var exitCode = Commands.Cli.Storage.StorageExportCommand.Execute(widgetId, output, format, config);
+            Description = "Widget ID to export data for"
+        };
+        var exportOutputOption = new Option<string?>("--output")
+        {
+            Description = "Output file path"
+        };
+        var exportFormatOption = new Option<string>("--format")
+        {
+            Description = "Output format (csv or json)",
+            DefaultValueFactory = _ => "csv"
+        };
+        var exportConfigOption = new Option<string?>("--config")
+        {
+            Description = "Path to configuration file"
+        };
+        storageExportCommand.Options.Add(exportWidgetOption);
+        storageExportCommand.Options.Add(exportOutputOption);
+        storageExportCommand.Options.Add(exportFormatOption);
+        storageExportCommand.Options.Add(exportConfigOption);
+        storageExportCommand.SetAction((parseResult) =>
+        {
+            var widgetId = parseResult.GetValue(exportWidgetOption);
+            var output = parseResult.GetValue(exportOutputOption);
+            var format = parseResult.GetValue(exportFormatOption);
+            var config = parseResult.GetValue(exportConfigOption);
+            var exitCode = Commands.Cli.Storage.StorageExportCommand.Execute(widgetId, output, format!, config);
             Environment.ExitCode = exitCode;
-        }, exportWidgetOption, exportOutputOption, exportFormatOption, exportConfigOption);
-        storageCommand.AddCommand(storageExportCommand);
+        });
+        storageCommand.Subcommands.Add(storageExportCommand);
 
         // test-widget command
         var testWidgetCommand = new Command("test-widget", "Test and validate widget scripts");
-        var testScriptArgument = new Argument<string>("script", "Path to widget script");
-        var testExtendedOption = new Option<bool>("--extended", "Show extended output");
-        var testUiModeOption = new Option<bool>("--ui", "Show UI preview");
-        var testSkipConfirmOption = new Option<bool>("--skip-confirmation", "Skip confirmation prompts");
-        testWidgetCommand.AddArgument(testScriptArgument);
-        testWidgetCommand.AddOption(testExtendedOption);
-        testWidgetCommand.AddOption(testUiModeOption);
-        testWidgetCommand.AddOption(testSkipConfirmOption);
-        testWidgetCommand.SetHandler(async (string script, bool extended, bool ui, bool skipConfirm) =>
+        var testScriptArgument = new Argument<string>("script")
         {
-            var exitCode = await Commands.Cli.TestWidgetCommandCli.ExecuteAsync(script, extended, ui, skipConfirm);
+            Description = "Path to widget script"
+        };
+        var testExtendedOption = new Option<bool>("--extended")
+        {
+            Description = "Show extended output"
+        };
+        var testUiModeOption = new Option<bool>("--ui")
+        {
+            Description = "Show UI preview"
+        };
+        var testSkipConfirmOption = new Option<bool>("--skip-confirmation")
+        {
+            Description = "Skip confirmation prompts"
+        };
+        testWidgetCommand.Arguments.Add(testScriptArgument);
+        testWidgetCommand.Options.Add(testExtendedOption);
+        testWidgetCommand.Options.Add(testUiModeOption);
+        testWidgetCommand.Options.Add(testSkipConfirmOption);
+        testWidgetCommand.SetAction(async (parseResult) =>
+        {
+            var script = parseResult.GetValue(testScriptArgument);
+            var extended = parseResult.GetValue(testExtendedOption);
+            var ui = parseResult.GetValue(testUiModeOption);
+            var skipConfirm = parseResult.GetValue(testSkipConfirmOption);
+            var exitCode = await Commands.Cli.TestWidgetCommandCli.ExecuteAsync(script!, extended, ui, skipConfirm);
             Environment.ExitCode = exitCode;
-        }, testScriptArgument, testExtendedOption, testUiModeOption, testSkipConfirmOption);
-        rootCommand.AddCommand(testWidgetCommand);
+        });
+        rootCommand.Subcommands.Add(testWidgetCommand);
 
         // new-widget command
         var newWidgetCommand = new Command("new-widget", "Interactive widget creation wizard");
-        var newTemplateArgument = new Argument<string?>("template", () => null, "Widget template to use");
-        var newNameOption = new Option<string?>("--name", "Widget name");
-        var newOutputOption = new Option<string?>("--output", "Output file path");
-        var newListOption = new Option<bool>("--list", "List available templates and exit");
-        newWidgetCommand.AddArgument(newTemplateArgument);
-        newWidgetCommand.AddOption(newNameOption);
-        newWidgetCommand.AddOption(newOutputOption);
-        newWidgetCommand.AddOption(newListOption);
-        newWidgetCommand.SetHandler(async (string? templateName, string? name, string? outputFile, bool listTemplates) =>
+        var newTemplateArgument = new Argument<string?>("template")
         {
+            Description = "Widget template to use",
+            DefaultValueFactory = _ => null
+        };
+        var newNameOption = new Option<string?>("--name")
+        {
+            Description = "Widget name"
+        };
+        var newOutputOption = new Option<string?>("--output")
+        {
+            Description = "Output file path"
+        };
+        var newListOption = new Option<bool>("--list")
+        {
+            Description = "List available templates and exit"
+        };
+        newWidgetCommand.Arguments.Add(newTemplateArgument);
+        newWidgetCommand.Options.Add(newNameOption);
+        newWidgetCommand.Options.Add(newOutputOption);
+        newWidgetCommand.Options.Add(newListOption);
+        newWidgetCommand.SetAction(async (parseResult) =>
+        {
+            var templateName = parseResult.GetValue(newTemplateArgument);
+            var name = parseResult.GetValue(newNameOption);
+            var outputFile = parseResult.GetValue(newOutputOption);
+            var listTemplates = parseResult.GetValue(newListOption);
             var exitCode = await Commands.Cli.NewWidgetCommandCli.ExecuteAsync(templateName, name, outputFile, listTemplates);
             Environment.ExitCode = exitCode;
-        }, newTemplateArgument, newNameOption, newOutputOption, newListOption);
-        rootCommand.AddCommand(newWidgetCommand);
+        });
+        rootCommand.Subcommands.Add(newWidgetCommand);
 
         // completion command - generate shell completion scripts
         var completionCommand = new Command("completion", "Generate shell completion scripts");
-        var completionShellArgument = new Argument<string>(
-            name: "shell",
-            description: "Shell type: bash, zsh, or fish");
-        completionCommand.AddArgument(completionShellArgument);
-        completionCommand.SetHandler((string shell) =>
+        var completionShellArgument = new Argument<string>("shell")
         {
-            var exitCode = Commands.Cli.CompletionCommand.Execute(shell);
+            Description = "Shell type: bash, zsh, or fish"
+        };
+        completionCommand.Arguments.Add(completionShellArgument);
+        completionCommand.SetAction((parseResult) =>
+        {
+            var shell = parseResult.GetValue(completionShellArgument);
+            var exitCode = Commands.Cli.CompletionCommand.Execute(shell!);
             Environment.ExitCode = exitCode;
-        }, completionShellArgument);
-        rootCommand.AddCommand(completionCommand);
+        });
+        rootCommand.Subcommands.Add(completionCommand);
 
-        return await rootCommand.InvokeAsync(args);
+        var parseResult = rootCommand.Parse(args);
+        return await parseResult.InvokeAsync();
     }
 
     /// <summary>
