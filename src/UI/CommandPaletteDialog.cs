@@ -36,7 +36,7 @@ public static class CommandPaletteDialog
             .Borderless()
             .Resizable(false)
             .Movable(false)
-            .WithColors(Color.Grey15, Color.Grey93)
+            .WithColors(Color.Grey93, Color.Grey15)
             .Build();
 
         // Header
@@ -68,9 +68,9 @@ public static class CommandPaletteDialog
         var commandList = Controls.List()
             .WithAlignment(HorizontalAlignment.Stretch)
             .WithVerticalAlignment(VerticalAlignment.Fill)
-            .WithColors(Color.Grey15, Color.Grey93)
-            .WithFocusedColors(Color.Grey15, Color.Grey93)
-            .WithHighlightColors(Color.Grey35, Color.White)
+            .WithColors(Color.Grey93, Color.Grey15)
+            .WithFocusedColors(Color.Grey93, Color.Grey15)
+            .WithHighlightColors(Color.White, Color.Grey35)
             .SimpleMode()
             .WithDoubleClickActivation(true)
             .Build();

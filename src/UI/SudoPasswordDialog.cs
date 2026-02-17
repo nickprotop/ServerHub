@@ -72,7 +72,7 @@ public static class SudoPasswordDialog
             .Movable(false)
             .Minimizable(false)
             .Maximizable(false)
-            .WithColors(Color.Grey11, Color.Grey93)
+            .WithColors(Color.Grey93, Color.Grey11)
             .Build();
 
         // Mark dialog as open to prevent widget refresh during password entry

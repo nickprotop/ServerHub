@@ -78,7 +78,7 @@ public static class MarketplaceBrowserDialog
             .Movable(true)
             .Minimizable(false)
             .Maximizable(true)
-            .WithColors(Color.Grey15, Color.Grey93)
+            .WithColors(Color.Grey93, Color.Grey15)
             .Build();
 
         // Build UI
@@ -257,9 +257,9 @@ public static class MarketplaceBrowserDialog
             .WithName("widget_list")
             .WithTitle("")
             .SimpleMode()
-            .WithColors(Color.Grey19, Color.Grey93)
-            .WithFocusedColors(Color.Grey19, Color.Grey93)
-            .WithHighlightColors(Color.Grey35, Color.White)
+            .WithColors(Color.Grey93, Color.Grey19)
+            .WithFocusedColors(Color.Grey93, Color.Grey19)
+            .WithHighlightColors(Color.White, Color.Grey35)
             .WithMargin(1, 1, 1, 0)
             .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Stretch)
             .WithVerticalAlignment(SharpConsoleUI.Layout.VerticalAlignment.Fill)
@@ -779,7 +779,7 @@ public static class MarketplaceBrowserDialog
             .Movable(false)
             .Minimizable(false)
             .Maximizable(false)
-            .WithColors(Color.Grey15, Color.Grey93)
+            .WithColors(Color.Grey93, Color.Grey15)
             .WithParent(_dialogWindow!)
             .Build();
 
@@ -886,7 +886,7 @@ public static class MarketplaceBrowserDialog
             .Movable(false)
             .Minimizable(false)
             .Maximizable(false)
-            .WithColors(Color.Grey15, Color.Grey93);
+            .WithColors(Color.Grey93, Color.Grey15);
 
         if (parentWindow != null)
         {

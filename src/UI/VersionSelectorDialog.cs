@@ -43,7 +43,7 @@ public static class VersionSelectorDialog
             .Movable(false)
             .Minimizable(false)
             .Maximizable(false)
-            .WithColors(Color.Grey15, Color.Grey93);
+            .WithColors(Color.Grey93, Color.Grey15);
 
         if (parentWindow != null)
         {
@@ -65,9 +65,9 @@ public static class VersionSelectorDialog
             .WithName("version_list")
             .WithTitle("")
             .SimpleMode()
-            .WithColors(Color.Grey19, Color.Grey93)
-            .WithFocusedColors(Color.Grey19, Color.Grey93)
-            .WithHighlightColors(Color.Grey35, Color.White)
+            .WithColors(Color.Grey93, Color.Grey19)
+            .WithFocusedColors(Color.Grey93, Color.Grey19)
+            .WithHighlightColors(Color.White, Color.Grey35)
             .WithMargin(1, 0, 1, 0)
             .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Stretch)
             .WithVerticalAlignment(SharpConsoleUI.Layout.VerticalAlignment.Fill)

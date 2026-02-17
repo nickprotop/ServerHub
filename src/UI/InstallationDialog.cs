@@ -55,7 +55,7 @@ public static class InstallationDialog
             .Movable(false)
             .Minimizable(false)
             .Maximizable(false)
-            .WithColors(Color.Grey15, Color.Grey93);
+            .WithColors(Color.Grey93, Color.Grey15);
 
         if (parentWindow != null)
         {

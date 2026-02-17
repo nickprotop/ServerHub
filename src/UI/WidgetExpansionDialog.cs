@@ -58,7 +58,7 @@ public static class WidgetExpansionDialog
             .Movable(true)                      // User can drag
             .Minimizable(false)                 // No minimize button
             .Maximizable(true)                  // User can maximize
-            .WithColors(Color.Grey15, Color.Grey93)  // Dark bg, light text
+            .WithColors(Color.Grey93, Color.Grey15)  // Light text, dark bg
             .Build();
 
         // Get refresh interval from service
@@ -214,9 +214,9 @@ public static class WidgetExpansionDialog
             .WithName("actions_list")
             .WithTitle("")  // Remove default "List" title - we have markup header above
             .SimpleMode()
-            .WithColors(Color.Grey19, Color.Grey93)
-            .WithFocusedColors(Color.Grey19, Color.Grey93)  // AgentStudio pattern
-            .WithHighlightColors(Color.Grey35, Color.White)  // Subtle gray highlight
+            .WithColors(Color.Grey93, Color.Grey19)
+            .WithFocusedColors(Color.Grey93, Color.Grey19)  // AgentStudio pattern
+            .WithHighlightColors(Color.White, Color.Grey35)  // Subtle gray highlight
             .WithDoubleClickActivation(true)
             .WithMargin(1, 0, 1, 0)
             .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Stretch)

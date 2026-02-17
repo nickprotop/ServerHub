@@ -55,7 +55,7 @@ public static class SourceViewerDialog
             .Movable(true)
             .Minimizable(false)
             .Maximizable(true)
-            .WithColors(Color.Grey15, Color.Grey93);
+            .WithColors(Color.Grey93, Color.Grey15);
 
         if (parentWindow != null)
             builder = builder.WithParent(parentWindow);
@@ -182,7 +182,7 @@ public static class SourceViewerDialog
             .Movable(true)
             .Minimizable(false)
             .Maximizable(true)
-            .WithColors(Color.Grey15, Color.Grey93);
+            .WithColors(Color.Grey93, Color.Grey15);
 
         if (parentWindow != null)
             builder = builder.WithParent(parentWindow);

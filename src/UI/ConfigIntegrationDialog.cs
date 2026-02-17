@@ -40,7 +40,7 @@ public static class ConfigIntegrationDialog
             .Movable(false)
             .Minimizable(false)
             .Maximizable(false)
-            .WithColors(Color.Grey15, Color.Grey93);
+            .WithColors(Color.Grey93, Color.Grey15);
 
         if (parentWindow != null)
         {
@@ -296,7 +296,7 @@ public static class ConfigIntegrationDialog
             .AsModal()
             .WithBorderStyle(BorderStyle.Single)
             .WithBorderColor(Color.Cyan1)
-            .WithColors(Color.Grey15, Color.Grey93)
+            .WithColors(Color.Grey93, Color.Grey15)
             .Build();
 
         var widgetFileName = System.IO.Path.GetFileName(result.InstalledPath) ?? "";
