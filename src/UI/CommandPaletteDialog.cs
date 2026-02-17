@@ -71,7 +71,6 @@ public static class CommandPaletteDialog
             .WithColors(Color.Grey93, Color.Grey15)
             .WithFocusedColors(Color.Grey93, Color.Grey15)
             .WithHighlightColors(Color.White, Color.Grey35)
-            .SimpleMode()
             .WithDoubleClickActivation(true)
             .Build();
 

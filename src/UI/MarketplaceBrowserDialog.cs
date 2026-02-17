@@ -256,7 +256,6 @@ public static class MarketplaceBrowserDialog
             .List()
             .WithName("widget_list")
             .WithTitle("")
-            .SimpleMode()
             .WithColors(Color.Grey93, Color.Grey19)
             .WithFocusedColors(Color.Grey93, Color.Grey19)
             .WithHighlightColors(Color.White, Color.Grey35)

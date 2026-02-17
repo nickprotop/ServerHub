@@ -213,7 +213,6 @@ public static class WidgetExpansionDialog
         var actionsList = Controls.List()
             .WithName("actions_list")
             .WithTitle("")  // Remove default "List" title - we have markup header above
-            .SimpleMode()
             .WithColors(Color.Grey93, Color.Grey19)
             .WithFocusedColors(Color.Grey93, Color.Grey19)  // AgentStudio pattern
             .WithHighlightColors(Color.White, Color.Grey35)  // Subtle gray highlight

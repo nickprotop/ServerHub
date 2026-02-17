@@ -64,7 +64,6 @@ public static class VersionSelectorDialog
             .List()
             .WithName("version_list")
             .WithTitle("")
-            .SimpleMode()
             .WithColors(Color.Grey93, Color.Grey19)
             .WithFocusedColors(Color.Grey93, Color.Grey19)
             .WithHighlightColors(Color.White, Color.Grey35)
