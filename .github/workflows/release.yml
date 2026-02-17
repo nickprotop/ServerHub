@@ -18,7 +18,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '9.0.x'
+          dotnet-version: '10.0.x'
 
       - name: Extract version from tag
         id: version
@@ -26,7 +26,7 @@ jobs:
 
       - name: Build self-contained binary for linux-x64
         run: |
-          dotnet publish -c Release \
+          dotnet publish ServerHub.csproj -c Release \
             -r linux-x64 \
             --self-contained true \
             -p:PublishSingleFile=true \
@@ -35,7 +35,7 @@ jobs:
 
       - name: Build self-contained binary for linux-arm64
         run: |
-          dotnet publish -c Release \
+          dotnet publish ServerHub.csproj -c Release \
             -r linux-arm64 \
             --self-contained true \
             -p:PublishSingleFile=true \
