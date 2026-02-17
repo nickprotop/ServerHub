@@ -32,7 +32,7 @@
 
   <!-- Production/CI: use NuGet package -->
   <ItemGroup Condition="!Exists('../../../ConsoleEx/SharpConsoleUI/SharpConsoleUI.csproj')">
-    <PackageReference Include="SharpConsoleUI" Version="2.4.11" />
+    <PackageReference Include="SharpConsoleUI" Version="2.4.26" />
   </ItemGroup>
 
 </Project>
