@@ -182,14 +182,8 @@ public class WidgetProtocolParser
             }
             else if (trimmedLine.StartsWith("datastore:", StringComparison.OrdinalIgnoreCase))
             {
-                // Finalize table if we hit a datastore directive
-                if (currentTable != null)
-                {
-                    data.Rows.Insert(tableStartIndex, new WidgetRow { Table = currentTable });
-                    currentTable = null;
-                    tableStartIndex = -1;
-                }
-
+                // Don't finalize table - datastore directives are metadata that can
+                // appear between [table:] and [tablerow:] lines in widget output
                 var datastoreContent = trimmedLine.Substring(10).Trim();
                 var directive = ParseDatastoreDirective(datastoreContent);
                 if (directive != null)
