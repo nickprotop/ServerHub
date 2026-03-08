@@ -7,7 +7,7 @@ using SharpConsoleUI;
 using SharpConsoleUI.Builders;
 using SharpConsoleUI.Controls;
 using SharpConsoleUI.Core;
-using Spectre.Console;
+using SharpConsoleUI.Parsing;
 
 namespace ServerHub.UI;
 
@@ -306,7 +306,7 @@ public static class ConfigIntegrationDialog
             .WithMargin(1, 1, 1, 0)
             .AddLine("[cyan1 bold]Manual Configuration Instructions[/]")
             .AddLine("")
-            .AddLine($"[grey70]Add the following to {Markup.Escape(configPath)}:[/]")
+            .AddLine($"[grey70]Add the following to {MarkupParser.Escape(configPath)}:[/]")
             .AddLine("")
             .WithBackgroundColor(Color.Grey19);
 

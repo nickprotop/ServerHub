@@ -5,7 +5,7 @@ using SharpConsoleUI;
 using SharpConsoleUI.Builders;
 using SharpConsoleUI.Controls;
 using SharpConsoleUI.Core;
-using Spectre.Console;
+using SharpConsoleUI.Parsing;
 
 namespace ServerHub.UI;
 
@@ -65,7 +65,7 @@ public static class SourceViewerDialog
         // Header
         var header = Controls
             .Markup()
-            .AddLine($"[grey70]Source: {Markup.Escape(url)}[/]")
+            .AddLine($"[grey70]Source: {MarkupParser.Escape(url)}[/]")
             .WithMargin(1, 1, 1, 0)
             .Build();
         modal.AddControl(header);
@@ -151,7 +151,7 @@ public static class SourceViewerDialog
                 {
                     "",
                     "[red]Failed to fetch source code:[/]",
-                    $"[red]{Markup.Escape(ex.Message)}[/]",
+                    $"[red]{MarkupParser.Escape(ex.Message)}[/]",
                     ""
                 });
             }
@@ -192,7 +192,7 @@ public static class SourceViewerDialog
         // Header
         var header = Controls
             .Markup()
-            .AddLine($"[grey70]{Markup.Escape(subtitle)}[/]")
+            .AddLine($"[grey70]{MarkupParser.Escape(subtitle)}[/]")
             .WithMargin(1, 1, 1, 0)
             .Build();
         modal.AddControl(header);
@@ -256,7 +256,7 @@ public static class SourceViewerDialog
 
         foreach (var line in lines)
         {
-            var escapedLine = Markup.Escape(line.TrimEnd('\r'));
+            var escapedLine = MarkupParser.Escape(line.TrimEnd('\r'));
             result.Add($"[grey50]{lineNum,4}[/] {escapedLine}");
             lineNum++;
         }

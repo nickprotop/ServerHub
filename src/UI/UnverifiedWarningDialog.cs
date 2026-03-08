@@ -6,7 +6,6 @@ using ServerHub.Services;
 using SharpConsoleUI;
 using SharpConsoleUI.Builders;
 using SharpConsoleUI.Controls;
-using Spectre.Console;
 using System.Diagnostics;
 
 namespace ServerHub.UI;

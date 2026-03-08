@@ -6,7 +6,6 @@ using ServerHub.Services;
 using SharpConsoleUI;
 using SharpConsoleUI.Builders;
 using SharpConsoleUI.Controls;
-using Spectre.Console;
 using Point = System.Drawing.Point;
 
 namespace ServerHub.UI;

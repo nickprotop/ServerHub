@@ -5,7 +5,6 @@ using ServerHub.Marketplace.Models;
 using SharpConsoleUI;
 using SharpConsoleUI.Builders;
 using SharpConsoleUI.Controls;
-using Spectre.Console;
 
 namespace ServerHub.UI;
 

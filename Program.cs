@@ -870,8 +870,8 @@ public class Program
             .WithName("HelpOverlay")
             .WithBounds(dialogX, dialogY, dialogWidth, dialogHeight)
             .WithBorderStyle(BorderStyle.Rounded)
-            .WithBorderColor(Color.Grey35)
-            .WithColors(Color.Grey93, Color.Grey15)
+            .WithBorderColor(SharpConsoleUI.Color.Grey35)
+            .WithColors(SharpConsoleUI.Color.Grey93, SharpConsoleUI.Color.Grey15)
             .HideTitle()
             .AsModal()
             .Minimizable(false)
@@ -927,7 +927,7 @@ public class Program
 
         var helpBuilder = Controls
             .Markup()
-            .WithBackgroundColor(Color.Grey15)
+            .WithBackgroundColor(SharpConsoleUI.Color.Grey15)
             .WithMargin(2, 1, 2, 1);
 
         // Split content into lines and add them
@@ -958,7 +958,7 @@ public class Program
             .HideTitle()
             .WithSize(60, 16)
             .Centered()
-            .WithBackgroundColor(Color.Grey11)
+            .WithBackgroundColor(SharpConsoleUI.Color.Grey11)
             .WithBorderStyle(BorderStyle.Single)
             .AsModal()
             .Minimizable(false)
@@ -970,7 +970,7 @@ public class Program
 
         var contentBuilder = Controls
             .Markup()
-            .WithBackgroundColor(Color.Grey11)
+            .WithBackgroundColor(SharpConsoleUI.Color.Grey11)
             .WithMargin(2, 1, 2, 1);
 
         contentBuilder.AddLine("");

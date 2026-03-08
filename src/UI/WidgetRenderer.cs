@@ -2,11 +2,12 @@
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
 using System.Text;
+using SharpConsoleUI;
 using SharpConsoleUI.Builders;
 using SharpConsoleUI.Controls;
-using Spectre.Console;
 using ServerHub.Models;
 using ServerHub.Utils;
+using SharpConsoleUI.Parsing;
 
 namespace ServerHub.UI;
 
@@ -346,7 +347,7 @@ public class WidgetRenderer
                 // Update column width based on each line
                 foreach (var line in cellLines)
                 {
-                    var plainText = Markup.Remove(line);
+                    var plainText = MarkupParser.Remove(line);
                     columnWidths[col] = Math.Max(columnWidths[col], plainText.Length);
                 }
             }
@@ -410,7 +411,7 @@ public class WidgetRenderer
                         cellLine = "";
                     }
 
-                    var plainText = Markup.Remove(cellLine);
+                    var plainText = MarkupParser.Remove(cellLine);
                     var padding = columnWidths[col] - plainText.Length;
 
                     lineBuilder.Append(cellLine);

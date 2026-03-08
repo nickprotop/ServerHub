@@ -7,8 +7,8 @@ using SharpConsoleUI;
 using SharpConsoleUI.Builders;
 using SharpConsoleUI.Controls;
 using SharpConsoleUI.Core;
-using Spectre.Console;
 using Point = System.Drawing.Point;
+using SharpConsoleUI.Parsing;
 
 namespace ServerHub.UI;
 
@@ -105,7 +105,7 @@ public static class ActionExecutionDialog
         modal.AddControl(Controls.Markup()
             .WithName("dialog_status")
             .AddLine("[grey70]Command to execute:[/]")
-            .AddLine($"[cyan1]{Markup.Escape(action.Command)}[/]")
+            .AddLine($"[cyan1]{MarkupParser.Escape(action.Command)}[/]")
             .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Left)
             .WithMargin(1, 0, 1, 0)
             .Build());
@@ -733,7 +733,7 @@ public static class ActionExecutionDialog
     private static void AppendToOutput(Window modal, string line, bool isError)
     {
         // Format line (escape any markup in the actual output)
-        var escapedLine = Markup.Escape(line);
+        var escapedLine = MarkupParser.Escape(line);
         var formattedLine = isError ? $"[red]{escapedLine}[/]" : escapedLine;
 
         var scrollPanel = modal.FindControl<ScrollablePanelControl>("dialog_output_panel");

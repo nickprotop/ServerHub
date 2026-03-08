@@ -7,7 +7,7 @@ using ServerHub.Services;
 using SharpConsoleUI;
 using SharpConsoleUI.Builders;
 using SharpConsoleUI.Controls;
-using Spectre.Console;
+using SharpConsoleUI.Parsing;
 
 namespace ServerHub.UI;
 
@@ -261,7 +261,7 @@ public static class InstallationDialog
             detailsControl.SetContent(new List<string>
             {
                 "[red bold]Error:[/]",
-                $"[red]{Markup.Escape(errorMessage)}[/]"
+                $"[red]{MarkupParser.Escape(errorMessage)}[/]"
             });
         }
 

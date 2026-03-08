@@ -7,7 +7,7 @@ using SharpConsoleUI;
 using SharpConsoleUI.Builders;
 using SharpConsoleUI.Controls;
 using SharpConsoleUI.Core;
-using Spectre.Console;
+using SharpConsoleUI.Parsing;
 
 namespace ServerHub.UI;
 
@@ -94,10 +94,10 @@ public static class SudoPasswordDialog
             .WithName("command_info")
             .AddLine("")
             .AddLine("[grey70]Action:[/]")
-            .AddLine($"[white]{Markup.Escape(action.Label)}[/]")
+            .AddLine($"[white]{MarkupParser.Escape(action.Label)}[/]")
             .AddLine("")
             .AddLine("[grey70]Command:[/]")
-            .AddLine($"[grey58]{Markup.Escape(action.Command)}[/]")
+            .AddLine($"[grey58]{MarkupParser.Escape(action.Command)}[/]")
             .WithAlignment(SharpConsoleUI.Layout.HorizontalAlignment.Center)
             .Build());
 

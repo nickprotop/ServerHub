@@ -9,7 +9,7 @@ using SharpConsoleUI;
 using SharpConsoleUI.Builders;
 using SharpConsoleUI.Controls;
 using SharpConsoleUI.Core;
-using Spectre.Console;
+using SharpConsoleUI.Parsing;
 namespace ServerHub.UI;
 
 /// <summary>
@@ -530,7 +530,7 @@ public static class MarketplaceBrowserDialog
 
         foreach (var line in metadata.Description.Split('\n'))
         {
-            descriptionBuilder.AddLine($"  {Markup.Escape(line)}");
+            descriptionBuilder.AddLine($"  {MarkupParser.Escape(line)}");
         }
 
         _detailPanel.AddControl(descriptionBuilder.Build());
@@ -1031,7 +1031,7 @@ public static class MarketplaceBrowserDialog
             return;
 
         _widgetList.ClearItems();
-        _widgetList.AddItem(new ListItem($"[red]Error: {Markup.Escape(message)}[/]") { IsEnabled = false });
+        _widgetList.AddItem(new ListItem($"[red]Error: {MarkupParser.Escape(message)}[/]") { IsEnabled = false });
     }
 
     private static string GetVerificationBadge(VerificationLevel level)

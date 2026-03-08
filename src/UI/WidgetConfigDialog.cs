@@ -9,7 +9,7 @@ using ServerHub.Utils;
 using SharpConsoleUI;
 using SharpConsoleUI.Builders;
 using SharpConsoleUI.Controls;
-using Spectre.Console;
+using SharpConsoleUI.Parsing;
 
 namespace ServerHub.UI;
 
@@ -1583,7 +1583,7 @@ public static class WidgetConfigDialog
             Controls
                 .Markup()
                 .AddLine("")
-                .AddLine($"  [red]{Markup.Escape(message)}[/]")
+                .AddLine($"  [red]{MarkupParser.Escape(message)}[/]")
                 .AddLine("")
                 .Build()
         );
@@ -1620,7 +1620,7 @@ public static class WidgetConfigDialog
             .Markup()
             .AddLine("")
             .AddLine($"[yellow bold]Problem:[/]")
-            .AddLine($"  {Markup.Escape(ex.Problem)}")
+            .AddLine($"  {MarkupParser.Escape(ex.Problem)}")
             .AddLine("")
             .WithMargin(1, 0, 1, 0)
             .Build();
@@ -1634,9 +1634,9 @@ public static class WidgetConfigDialog
             foreach (var info in ex.AdditionalInfo.Take(8))
             {
                 if (info.EndsWith(":"))
-                    infoBuilder.AddLine($"[cyan]{Markup.Escape(info)}[/]");
+                    infoBuilder.AddLine($"[cyan]{MarkupParser.Escape(info)}[/]");
                 else
-                    infoBuilder.AddLine($"[grey70]{Markup.Escape(info)}[/]");
+                    infoBuilder.AddLine($"[grey70]{MarkupParser.Escape(info)}[/]");
             }
 
             if (ex.AdditionalInfo.Count > 8)
@@ -1652,7 +1652,7 @@ public static class WidgetConfigDialog
         var fixPanel = Controls
             .Markup()
             .AddLine($"[green bold]How to fix:[/]")
-            .AddLine($"  {Markup.Escape(ex.HowToFix)}")
+            .AddLine($"  {MarkupParser.Escape(ex.HowToFix)}")
             .AddLine("")
             .WithMargin(1, 0, 1, 0)
             .Build();
@@ -1663,7 +1663,7 @@ public static class WidgetConfigDialog
         {
             var pathPanel = Controls
                 .Markup()
-                .AddLine($"[grey70]Config: {Markup.Escape(ex.ConfigPath)}[/]")
+                .AddLine($"[grey70]Config: {MarkupParser.Escape(ex.ConfigPath)}[/]")
                 .WithMargin(1, 0, 1, 0)
                 .Build();
             errorDialog.AddControl(pathPanel);
