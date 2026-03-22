@@ -71,6 +71,7 @@ public class WidgetRenderer
             .StretchHorizontal()
             .FillVertical()
             .WithMargin(0, 0, 0, 0)  // No margins - panels touch each other
+            .WordWrap(false)          // Graphs/progress bars must not wrap
             .Build();
 
         // Wire up click and double-click callbacks if provided
@@ -432,7 +433,7 @@ public class WidgetRenderer
     /// </summary>
     private string CreateGraph(WidgetGraph graph)
     {
-        return InlineElementRenderer.RenderGraph(graph.Values, 4, graph.Color, graph.Label, true, graph.MinValue, graph.MaxValue, graph.Width);
+        return InlineElementRenderer.RenderLineGraph(graph.Values, graph.Width, 4, "braille", graph.Color, null, graph.Label, graph.MinValue, graph.MaxValue);
     }
 
     /// <summary>
@@ -462,15 +463,16 @@ public class WidgetRenderer
             return "[grey50]No data[/]";
         }
 
-        return InlineElementRenderer.RenderGraph(
+        return InlineElementRenderer.RenderLineGraph(
             historyGraph.Values,
-            4, // height
+            historyGraph.Width,
+            4,
+            "braille",
             historyGraph.Color,
+            null,
             historyGraph.Label,
-            true, // showBackground
             historyGraph.MinValue,
-            historyGraph.MaxValue,
-            historyGraph.Width);
+            historyGraph.MaxValue);
     }
 
     /// <summary>

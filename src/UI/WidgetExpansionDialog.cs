@@ -138,6 +138,7 @@ public static class WidgetExpansionDialog
             .WithBackgroundColor(Color.Grey15)
             .WithPadding(1, 0, 1, 0)  // Left and right padding
             .NoBorder()  // No border (dialog already has border)
+            .WordWrap(false)  // Graphs/progress bars must not wrap
             .Build();
 
         // Populate with initial content
