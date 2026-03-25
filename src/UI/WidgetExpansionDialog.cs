@@ -455,7 +455,7 @@ public static class WidgetExpansionDialog
         // Show modal
         windowSystem.AddWindow(modal);
         windowSystem.SetActiveWindow(modal);
-        scrollPanel.SetFocus(true, FocusReason.Programmatic);
+        modal.FocusManager.SetFocus(scrollPanel, FocusReason.Programmatic);
     }
 
     /// <summary>

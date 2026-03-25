@@ -273,7 +273,7 @@ public static class InstallationDialog
         if (closeButton != null)
         {
             closeButton.Visible = true;
-            closeButton.SetFocus(true, FocusReason.Programmatic);
+            modal.FocusManager.SetFocus(closeButton, FocusReason.Programmatic);
         }
     }
 
@@ -316,7 +316,7 @@ public static class InstallationDialog
         if (closeButton != null)
         {
             closeButton.Visible = true;
-            closeButton.SetFocus(true, FocusReason.Programmatic);
+            modal.FocusManager.SetFocus(closeButton, FocusReason.Programmatic);
         }
     }
 }

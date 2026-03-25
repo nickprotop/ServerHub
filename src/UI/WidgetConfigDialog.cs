@@ -139,7 +139,7 @@ public static class WidgetConfigDialog
         // Show modal
         windowSystem.AddWindow(_dialogWindow);
         windowSystem.SetActiveWindow(_dialogWindow);
-        _widgetList?.SetFocus(true, FocusReason.Programmatic);
+        if (_widgetList != null) _dialogWindow?.FocusManager.SetFocus(_widgetList, FocusReason.Programmatic);
     }
 
     private static void BuildUI(Window dialog, int width, int height, Action? onConfigChanged)

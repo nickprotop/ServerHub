@@ -163,6 +163,6 @@ public static class VersionSelectorDialog
 
         windowSystem.AddWindow(modal);
         windowSystem.SetActiveWindow(modal);
-        versionList.SetFocus(true, FocusReason.Programmatic);
+        modal.FocusManager.SetFocus(versionList, FocusReason.Programmatic);
     }
 }

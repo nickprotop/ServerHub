@@ -481,7 +481,7 @@ public static class ActionExecutionDialog
         // Show modal
         windowSystem.AddWindow(modal);
         windowSystem.SetActiveWindow(modal);
-        executeButton.SetFocus(true, FocusReason.Programmatic);
+        modal.FocusManager.SetFocus(executeButton, FocusReason.Programmatic);
     }
 
     /// <summary>
@@ -606,7 +606,7 @@ public static class ActionExecutionDialog
         {
             terminateButton.Visible = true;
             terminateButton.IsEnabled = true;
-            terminateButton.SetFocus(true, FocusReason.Programmatic);
+            modal.FocusManager.SetFocus(terminateButton, FocusReason.Programmatic);
         }
 
         // Update footer
@@ -933,7 +933,7 @@ public static class ActionExecutionDialog
         if (retryButton != null)
         {
             retryButton.Visible = true;
-            retryButton.SetFocus(true, FocusReason.Programmatic);
+            modal.FocusManager.SetFocus(retryButton, FocusReason.Programmatic);
         }
 
         var closeButton = modal.FindControl<ButtonControl>("btn_close");

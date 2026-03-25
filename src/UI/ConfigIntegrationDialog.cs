@@ -264,12 +264,12 @@ public static class ConfigIntegrationDialog
         if (alreadyExists)
         {
             // Focus OK button
-            okButton?.SetFocus(true, FocusReason.Programmatic);
+            if (okButton != null) modal.FocusManager.SetFocus(okButton, FocusReason.Programmatic);
         }
         else
         {
             // Focus refresh interval input
-            refreshInput?.SetFocus(true, FocusReason.Programmatic);
+            if (refreshInput != null) modal.FocusManager.SetFocus(refreshInput, FocusReason.Programmatic);
         }
     }
 

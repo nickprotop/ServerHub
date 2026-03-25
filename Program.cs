@@ -6,6 +6,7 @@ using ServerHub.Config;
 using ServerHub.Models;
 using ServerHub.Services;
 using ServerHub.UI;
+using FocusManager = ServerHub.Services.FocusManager;
 using ServerHub.Utils;
 using ServerHub.Exceptions;
 using ServerHub.Commands;

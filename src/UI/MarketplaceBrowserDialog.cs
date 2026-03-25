@@ -100,7 +100,7 @@ public static class MarketplaceBrowserDialog
             else if ((e.KeyInfo.Key == ConsoleKey.F && e.KeyInfo.Modifiers.HasFlag(ConsoleModifiers.Control)) ||
                      e.KeyInfo.Key == ConsoleKey.Divide)
             {
-                _searchInput?.SetFocus(true, FocusReason.Programmatic);
+                if (_searchInput != null) _dialogWindow?.FocusManager.SetFocus(_searchInput, FocusReason.Programmatic);
                 e.Handled = true;
             }
         };

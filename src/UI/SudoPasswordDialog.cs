@@ -227,7 +227,7 @@ public static class SudoPasswordDialog
         // Show and focus
         windowSystem.AddWindow(modal);
         windowSystem.SetActiveWindow(modal);
-        passwordPrompt.SetFocus(true, FocusReason.Programmatic);
+        modal.FocusManager.SetFocus(passwordPrompt, FocusReason.Programmatic);
     }
 
 }

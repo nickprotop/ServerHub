@@ -123,7 +123,7 @@ public static class CommandPaletteDialog
                 // If search has focus and list has items, move to first item and select
                 if (searchInput.HasFocus && commandList.Items.Count > 0)
                 {
-                    commandList.SetFocus(true, FocusReason.Keyboard);
+                    modal.FocusManager.SetFocus(commandList, FocusReason.Keyboard);
                     e.Handled = true;
                 }
                 // If list has focus, execute selected command
@@ -149,7 +149,7 @@ public static class CommandPaletteDialog
                 // Move from search to list
                 if (searchInput.HasFocus && commandList.Items.Count > 0)
                 {
-                    commandList.SetFocus(true, FocusReason.Keyboard);
+                    modal.FocusManager.SetFocus(commandList, FocusReason.Keyboard);
                     e.Handled = true;
                 }
             }
@@ -158,7 +158,7 @@ public static class CommandPaletteDialog
                 // Move from list back to search if at top
                 if (commandList.HasFocus && commandList.SelectedIndex <= 0)
                 {
-                    searchInput.SetFocus(true, FocusReason.Keyboard);
+                    modal.FocusManager.SetFocus(searchInput, FocusReason.Keyboard);
                     e.Handled = true;
                 }
             }
@@ -169,7 +169,7 @@ public static class CommandPaletteDialog
         windowSystem.SetActiveWindow(modal);
 
         // Start with focus on search input
-        searchInput.SetFocus(true, FocusReason.Programmatic);
+        modal.FocusManager.SetFocus(searchInput, FocusReason.Programmatic);
     }
 
     /// <summary>

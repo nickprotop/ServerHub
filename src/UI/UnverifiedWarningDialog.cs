@@ -143,7 +143,7 @@ public static class UnverifiedWarningDialog
 
         windowSystem.AddWindow(modal);
         windowSystem.SetActiveWindow(modal);
-        cancelButton.SetFocus(true, FocusReason.Programmatic); // Default to Cancel
+        modal.FocusManager.SetFocus(cancelButton, FocusReason.Programmatic); // Default to Cancel
     }
 
     private static void OpenBrowser(string url)

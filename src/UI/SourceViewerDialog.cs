@@ -143,7 +143,7 @@ public static class SourceViewerDialog
                 scrollPanel.AddControl(contentBuilder.Build());
 
                 scrollPanel.Visible = true;
-                scrollPanel.SetFocus(true, FocusReason.Programmatic);
+                modal.FocusManager.SetFocus(scrollPanel, FocusReason.Programmatic);
             }
             catch (Exception ex)
             {
@@ -243,7 +243,7 @@ public static class SourceViewerDialog
 
         windowSystem.AddWindow(modal);
         windowSystem.SetActiveWindow(modal);
-        scrollPanel.SetFocus(true, FocusReason.Programmatic);
+        modal.FocusManager.SetFocus(scrollPanel, FocusReason.Programmatic);
     }
 
     /// <summary>
