@@ -1,7 +1,7 @@
 // Copyright (c) Nikolaos Protopapas. All rights reserved.
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
-using SharpConsoleUI.Core;
+using SharpConsoleUI.Panel;
 
 namespace ServerHub.Services;
 
@@ -10,23 +10,25 @@ namespace ServerHub.Services;
 /// </summary>
 public class StatusBarManager
 {
-    private readonly StatusBarStateService _statusBarService;
+    private readonly StatusTextElement _topStatus;
+    private readonly StatusTextElement _bottomStatus;
     private readonly string _defaultBottomStatus;
     private bool _devMode;
     private CancellationTokenSource? _restoreCts;
 
-    public StatusBarManager(StatusBarStateService statusBarService, bool devMode = false)
+    public StatusBarManager(StatusTextElement topStatus, StatusTextElement bottomStatus, bool devMode = false)
     {
-        _statusBarService = statusBarService;
+        _topStatus = topStatus;
+        _bottomStatus = bottomStatus;
         _devMode = devMode;
         _defaultBottomStatus = "[dim]F1[/] Help  [dim]F2[/] Config  [dim]F3[/] Marketplace  [dim]Ctrl+P[/] Commands  [dim]F5[/] Refresh  [dim]Space[/] Pause  [dim]Ctrl+Q[/] Quit";
 
         // Set initial bottom status (shortcuts)
-        _statusBarService.BottomStatus = _defaultBottomStatus;
+        _bottomStatus.Text = _defaultBottomStatus;
 
         // Set initial top status (dev mode prefix will be added by UpdateDashboardStatus)
         var initialStatus = "ServerHub - Initializing...";
-        _statusBarService.TopStatus = devMode
+        _topStatus.Text = devMode
             ? $"[yellow bold]DEV MODE[/] | {initialStatus}"
             : initialStatus;
     }
@@ -53,7 +55,7 @@ public class StatusBarManager
             topStatus = $"[yellow bold]DEV MODE[/] | {topStatus}";
         }
 
-        _statusBarService.TopStatus = topStatus;
+        _topStatus.Text = topStatus;
     }
 
     /// <summary>
@@ -65,14 +67,14 @@ public class StatusBarManager
         _restoreCts?.Cancel();
         _restoreCts = new CancellationTokenSource();
 
-        _statusBarService.BottomStatus = message;
+        _bottomStatus.Text = message;
 
         // Schedule restore
         Task.Delay(durationMs, _restoreCts.Token).ContinueWith(_ =>
         {
             if (!_.IsCanceled)
             {
-                _statusBarService.BottomStatus = _defaultBottomStatus;
+                _bottomStatus.Text = _defaultBottomStatus;
             }
         });
     }
@@ -115,6 +117,6 @@ public class StatusBarManager
     public void RestoreDefaultStatus()
     {
         _restoreCts?.Cancel();
-        _statusBarService.BottomStatus = _defaultBottomStatus;
+        _bottomStatus.Text = _defaultBottomStatus;
     }
 }

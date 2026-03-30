@@ -16,6 +16,7 @@ using SharpConsoleUI.Configuration;
 using SharpConsoleUI.Controls;
 using SharpConsoleUI.Core;
 using SharpConsoleUI.Drivers;
+using SharpConsoleUI.Panel;
 using Spectre.Console;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
@@ -445,13 +446,13 @@ public class Program
             RegisterCommandPaletteCallbacks();
 
             // Initialize ConsoleEx window system
+            var topStatusElement = new StatusTextElement("");
+            var bottomStatusElement = new StatusTextElement("");
             _windowSystem = new ConsoleWindowSystem(
                 new NetConsoleDriver(RenderMode.Buffer),
                 options: new ConsoleWindowSystemOptions(
-                    StatusBarOptions: new StatusBarOptions(
-                        ShowTaskBar: false,
-                        ShowBottomStatus: true
-                    )
+                    TopPanelConfig: panel => panel.Left(topStatusElement),
+                    BottomPanelConfig: panel => panel.Left(bottomStatusElement)
                 ));
 
             // Initialize logger with SharpConsoleUI's LogService
@@ -461,7 +462,7 @@ public class Program
             Utils.Logger.Debug($"Storage enabled: {_config.Storage?.Enabled}, widgets count: {_config.Widgets.Count}", "Startup");
 
             // Initialize StatusBarManager
-            _statusBarManager = new StatusBarManager(_windowSystem.StatusBarStateService, devMode: _devMode);
+            _statusBarManager = new StatusBarManager(topStatusElement, bottomStatusElement, devMode: _devMode);
 
             // Setup graceful shutdown
             Console.CancelKeyPress += (sender, e) =>
