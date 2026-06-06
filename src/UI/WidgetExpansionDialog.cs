@@ -264,6 +264,7 @@ public static class WidgetExpansionDialog
         // Create update context to share state with refresh loop
         var updateContext = new ModalUpdateContext
         {
+            WindowSystem = windowSystem,
             HeaderControl = headerControl,
             LoadingPanel = loadingPanel,
             MainGrid = mainGrid,
@@ -463,6 +464,7 @@ public static class WidgetExpansionDialog
     /// </summary>
     private class ModalUpdateContext
     {
+        public ConsoleWindowSystem? WindowSystem { get; init; }
         public MarkupControl? HeaderControl { get; init; }
         public MarkupControl? LoadingPanel { get; init; }
         public HorizontalGridControl? MainGrid { get; init; }
@@ -710,31 +712,47 @@ public static class WidgetExpansionDialog
         if (context.HeaderControl == null)
             return;
 
-        var title = showSpinner
-            ? $"[cyan1 bold]{context.CurrentTitle} {SpinnerFrames[spinnerFrame % 4]}[/]"
-            : $"[cyan1 bold]{context.CurrentTitle}[/]";
-
-        // Build header line 2 from cached values
-        var headerLine2 = $"[grey50]Last updated: {context.LastUpdated:yyyy-MM-dd HH:mm:ss}  •  Refresh: {context.RefreshInterval}s";
-        if (context.ActionCount > 0)
+        // Invoked from the spinner background task; marshal control mutations.
+        MarshalToUIThread(context, () =>
         {
-            var actionText = context.ActionCount == 1 ? "action" : "actions";
-            headerLine2 += $"  •  {context.ActionCount} {actionText}";
-        }
-        headerLine2 += "[/]";
+            var title = showSpinner
+                ? $"[cyan1 bold]{context.CurrentTitle} {SpinnerFrames[spinnerFrame % 4]}[/]"
+                : $"[cyan1 bold]{context.CurrentTitle}[/]";
 
-        context.HeaderControl.SetContent(new List<string>
-        {
-            title,
-            headerLine2
+            // Build header line 2 from cached values
+            var headerLine2 = $"[grey50]Last updated: {context.LastUpdated:yyyy-MM-dd HH:mm:ss}  •  Refresh: {context.RefreshInterval}s";
+            if (context.ActionCount > 0)
+            {
+                var actionText = context.ActionCount == 1 ? "action" : "actions";
+                headerLine2 += $"  •  {context.ActionCount} {actionText}";
+            }
+            headerLine2 += "[/]";
+
+            context.HeaderControl.SetContent(new List<string>
+            {
+                title,
+                headerLine2
+            });
+
+            // Update refresh button state
+            if (context.RefreshButton != null)
+            {
+                context.RefreshButton.IsEnabled = !showSpinner;
+                context.RefreshButton.Text = showSpinner ? " Wait " : " ↻  Refresh ";
+            }
         });
+    }
 
-        // Update refresh button state
-        if (context.RefreshButton != null)
-        {
-            context.RefreshButton.IsEnabled = !showSpinner;
-            context.RefreshButton.Text = showSpinner ? " Wait " : " ↻  Refresh ";
-        }
+    /// <summary>
+    /// Runs the given UI mutation on the window system's UI thread. Executes
+    /// inline when the window system is unavailable or already on the UI thread.
+    /// </summary>
+    private static void MarshalToUIThread(ModalUpdateContext context, Action uiWork)
+    {
+        if (context.WindowSystem != null)
+            context.WindowSystem.EnqueueOnUIThread(uiWork);
+        else
+            uiWork();
     }
 
     /// <summary>
@@ -773,42 +791,46 @@ public static class WidgetExpansionDialog
         if (context.HeaderControl == null || context.Renderer == null)
             return;
 
-        // Update context tracking fields
-        context.CurrentTitle = newData.Title;
-        context.LastUpdated = newData.Timestamp;
-        context.ActionCount = newData.Actions.Count;
-
-        // Update header
-        UpdateHeader(context, newData, false, 0);
-
-        // Update widget content
-        if (context.WidgetPanel != null && context.WidgetPanel is PanelControl panel)
+        // Invoked from background refresh tasks/timers; marshal control mutations.
+        MarshalToUIThread(context, () =>
         {
-            UpdateWidgetContent(panel, newData, context.Renderer!);
-        }
+            // Update context tracking fields
+            context.CurrentTitle = newData.Title;
+            context.LastUpdated = newData.Timestamp;
+            context.ActionCount = newData.Actions.Count;
 
-        // Update actions list only if actions changed
-        if (context.ActionsList != null)
-        {
-            var actionsChanged = HasActionsChanged(context.ActionsList, newData.Actions);
+            // Update header
+            UpdateHeader(context, newData, false, 0);
 
-            if (actionsChanged)
+            // Update widget content
+            if (context.WidgetPanel != null && context.WidgetPanel is PanelControl panel)
             {
-                context.ActionsList.ClearItems();
-                PopulateActionsList(context.ActionsList, newData.Actions);
-
-                // Update visibility of actions section
-                if (context.SeparatorColumn != null)
-                    context.SeparatorColumn.Visible = newData.HasActions;
-                if (context.ActionsSeparator != null)
-                    context.ActionsSeparator.Visible = newData.HasActions;
-                if (context.ActionsColumn != null)
-                    context.ActionsColumn.Visible = newData.HasActions;
-                if (context.ActionsHeader != null)
-                    context.ActionsHeader.Visible = newData.HasActions;
-                context.ActionsList.Visible = newData.HasActions;
+                UpdateWidgetContent(panel, newData, context.Renderer!);
             }
-        }
+
+            // Update actions list only if actions changed
+            if (context.ActionsList != null)
+            {
+                var actionsChanged = HasActionsChanged(context.ActionsList, newData.Actions);
+
+                if (actionsChanged)
+                {
+                    context.ActionsList.ClearItems();
+                    PopulateActionsList(context.ActionsList, newData.Actions);
+
+                    // Update visibility of actions section
+                    if (context.SeparatorColumn != null)
+                        context.SeparatorColumn.Visible = newData.HasActions;
+                    if (context.ActionsSeparator != null)
+                        context.ActionsSeparator.Visible = newData.HasActions;
+                    if (context.ActionsColumn != null)
+                        context.ActionsColumn.Visible = newData.HasActions;
+                    if (context.ActionsHeader != null)
+                        context.ActionsHeader.Visible = newData.HasActions;
+                    context.ActionsList.Visible = newData.HasActions;
+                }
+            }
+        });
     }
 
     /// <summary>

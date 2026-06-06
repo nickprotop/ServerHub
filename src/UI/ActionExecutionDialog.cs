@@ -297,11 +297,14 @@ public static class ActionExecutionDialog
                 sudoPassword: sudoPassword,
                 stdinInput: null,
                 timeoutSeconds: effectiveTimeout,
-                onProgressUpdate: (elapsedSeconds) => UpdateProgress(modal, elapsedSeconds, effectiveTimeout),
-                onOutputReceived: (line) => AppendOutput(modal, line),
-                onErrorReceived: (line) => AppendError(modal, line),
-                onGracefulTerminate: () => ShowTerminating(modal),
-                onForceKill: () => ShowForceKilling(modal));
+                // These callbacks fire on background threads (System.Timers.Timer
+                // Elapsed, Process Output/ErrorDataReceived, termination tasks), so
+                // marshal their control mutations onto the UI thread.
+                onProgressUpdate: (elapsedSeconds) => windowSystem.EnqueueOnUIThread(() => UpdateProgress(modal, elapsedSeconds, effectiveTimeout)),
+                onOutputReceived: (line) => windowSystem.EnqueueOnUIThread(() => AppendOutput(modal, line)),
+                onErrorReceived: (line) => windowSystem.EnqueueOnUIThread(() => AppendError(modal, line)),
+                onGracefulTerminate: () => windowSystem.EnqueueOnUIThread(() => ShowTerminating(modal)),
+                onForceKill: () => windowSystem.EnqueueOnUIThread(() => ShowForceKilling(modal)));
 
             // Clear password after execution
             sudoPassword = null;

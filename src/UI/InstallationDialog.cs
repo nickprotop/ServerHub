@@ -138,60 +138,71 @@ public static class InstallationDialog
         // Start installation
         _ = Task.Run(async () =>
         {
+            // This runs on a background thread. Keep the async installation work
+            // off-thread, but marshal every dialog control mutation onto the UI thread.
             try
             {
                 // State: Downloading
-                UpdateState(modal, InstallState.Downloading, "Downloading widget from marketplace...");
+                windowSystem.EnqueueOnUIThread(() => UpdateState(modal, InstallState.Downloading, "Downloading widget from marketplace..."));
                 await Task.Delay(100); // Allow UI to update
 
                 var result = await manager.InstallWidgetAsync(widget.Id, version);
 
                 if (!result.Success)
                 {
-                    UpdateState(modal, InstallState.Failed, "Installation failed");
-                    ShowError(modal, result.ErrorMessage ?? "Unknown error");
+                    windowSystem.EnqueueOnUIThread(() =>
+                    {
+                        UpdateState(modal, InstallState.Failed, "Installation failed");
+                        ShowError(modal, result.ErrorMessage ?? "Unknown error");
+                    });
                     return;
                 }
 
                 // State: Verifying
-                UpdateState(modal, InstallState.Verifying, "Verifying SHA256 checksum...");
+                windowSystem.EnqueueOnUIThread(() => UpdateState(modal, InstallState.Verifying, "Verifying SHA256 checksum..."));
                 await Task.Delay(500);
 
                 // State: Installing
-                UpdateState(modal, InstallState.Installing, $"Installing to {result.InstalledPath}");
+                windowSystem.EnqueueOnUIThread(() => UpdateState(modal, InstallState.Installing, $"Installing to {result.InstalledPath}"));
                 await Task.Delay(500);
 
                 // State: Configuring (show config dialog)
-                UpdateState(modal, InstallState.Configuring, "Installation complete");
+                windowSystem.EnqueueOnUIThread(() =>
+                {
+                    UpdateState(modal, InstallState.Configuring, "Installation complete");
 
-                // Show config integration dialog
-                if (configPath != null)
-                {
-                    ConfigIntegrationDialog.Show(
-                        windowSystem,
-                        result,
-                        manifest,
-                        configPath,
-                        modal,
-                        (addedToConfig) =>
-                        {
-                            success = true;
-                            UpdateState(modal, InstallState.Complete, "Widget installed successfully");
-                            ShowComplete(modal, result, addedToConfig);
-                        }
-                    );
-                }
-                else
-                {
-                    success = true;
-                    UpdateState(modal, InstallState.Complete, "Widget installed successfully");
-                    ShowComplete(modal, result, false);
-                }
+                    // Show config integration dialog
+                    if (configPath != null)
+                    {
+                        ConfigIntegrationDialog.Show(
+                            windowSystem,
+                            result,
+                            manifest,
+                            configPath,
+                            modal,
+                            (addedToConfig) =>
+                            {
+                                success = true;
+                                UpdateState(modal, InstallState.Complete, "Widget installed successfully");
+                                ShowComplete(modal, result, addedToConfig);
+                            }
+                        );
+                    }
+                    else
+                    {
+                        success = true;
+                        UpdateState(modal, InstallState.Complete, "Widget installed successfully");
+                        ShowComplete(modal, result, false);
+                    }
+                });
             }
             catch (Exception ex)
             {
-                UpdateState(modal, InstallState.Failed, "Installation failed");
-                ShowError(modal, ex.Message);
+                windowSystem.EnqueueOnUIThread(() =>
+                {
+                    UpdateState(modal, InstallState.Failed, "Installation failed");
+                    ShowError(modal, ex.Message);
+                });
             }
         });
 

@@ -132,27 +132,34 @@ public static class SourceViewerDialog
 
                 var sourceCode = await httpClient.GetStringAsync(url);
 
-                loadingControl.Visible = false;
-
+                // Build content off-thread, then marshal the control mutations.
                 var highlightedLines = ApplySyntaxHighlighting(sourceCode.Split('\n'));
                 var contentBuilder = Controls.Markup().WithBackgroundColor(Color.Grey19);
                 foreach (var line in highlightedLines)
                 {
                     contentBuilder.AddLine(line);
                 }
-                scrollPanel.AddControl(contentBuilder.Build());
+                var contentControl = contentBuilder.Build();
 
-                scrollPanel.Visible = true;
-                modal.FocusManager.SetFocus(scrollPanel, FocusReason.Programmatic);
+                windowSystem.EnqueueOnUIThread(() =>
+                {
+                    loadingControl.Visible = false;
+                    scrollPanel.AddControl(contentControl);
+                    scrollPanel.Visible = true;
+                    modal.FocusManager.SetFocus(scrollPanel, FocusReason.Programmatic);
+                });
             }
             catch (Exception ex)
             {
-                loadingControl.SetContent(new List<string>
+                windowSystem.EnqueueOnUIThread(() =>
                 {
-                    "",
-                    "[red]Failed to fetch source code:[/]",
-                    $"[red]{MarkupParser.Escape(ex.Message)}[/]",
-                    ""
+                    loadingControl.SetContent(new List<string>
+                    {
+                        "",
+                        "[red]Failed to fetch source code:[/]",
+                        $"[red]{MarkupParser.Escape(ex.Message)}[/]",
+                        ""
+                    });
                 });
             }
         });

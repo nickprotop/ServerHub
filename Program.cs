@@ -452,7 +452,8 @@ public class Program
                 new NetConsoleDriver(RenderMode.Buffer),
                 options: new ConsoleWindowSystemOptions(
                     TopPanelConfig: panel => panel.Left(topStatusElement),
-                    BottomPanelConfig: panel => panel.Left(bottomStatusElement)
+                    BottomPanelConfig: panel => panel.Left(bottomStatusElement),
+                    InstallSynchronizationContext: true
                 ));
 
             // Initialize logger with SharpConsoleUI's LogService
@@ -462,7 +463,7 @@ public class Program
             Utils.Logger.Debug($"Storage enabled: {_config.Storage?.Enabled}, widgets count: {_config.Widgets.Count}", "Startup");
 
             // Initialize StatusBarManager
-            _statusBarManager = new StatusBarManager(topStatusElement, bottomStatusElement, devMode: _devMode);
+            _statusBarManager = new StatusBarManager(topStatusElement, bottomStatusElement, devMode: _devMode, windowSystem: _windowSystem);
 
             // Setup graceful shutdown
             Console.CancelKeyPress += (sender, e) =>
@@ -794,22 +795,27 @@ public class Program
                 // Rotate spinner frame
                 _spinnerFrame++;
 
-                // Update widgets that are currently refreshing to animate spinner
-                foreach (
-                    var widgetId in _isRefreshing
-                        .Where(kvp => kvp.Value)
-                        .Select(kvp => kvp.Key)
-                        .ToList()
-                )
-                {
-                    if (_widgetDataCache.TryGetValue(widgetId, out var widgetData))
-                    {
-                        UpdateWidgetUI(widgetId, widgetData);
-                    }
-                }
+                // Snapshot the widgets that are currently refreshing (data read off-thread)
+                var refreshingWidgets = _isRefreshing
+                    .Where(kvp => kvp.Value)
+                    .Select(kvp => kvp.Key)
+                    .ToList();
 
-                // Update status bar with widget counts and system stats
-                UpdateStatusBar();
+                // Marshal all UI mutations to the UI thread
+                _windowSystem?.EnqueueOnUIThread(() =>
+                {
+                    // Update widgets that are currently refreshing to animate spinner
+                    foreach (var widgetId in refreshingWidgets)
+                    {
+                        if (_widgetDataCache.TryGetValue(widgetId, out var widgetData))
+                        {
+                            UpdateWidgetUI(widgetId, widgetData);
+                        }
+                    }
+
+                    // Update status bar with widget counts and system stats
+                    UpdateStatusBar();
+                });
 
                 await Task.Delay(250, ct);  // Faster spinner animation
             }
@@ -1792,33 +1798,47 @@ public class Program
         if (_config?.Widgets.ContainsKey(widgetId) == false)
             return;
 
-        // Create a display copy with spinner if currently refreshing
-        var displayData = widgetData;
-        if (_isRefreshing.TryGetValue(widgetId, out var isRefreshing) && isRefreshing)
+        // Marshal the UI mutations to the UI thread. This method is invoked from
+        // background widget-refresh tasks (Task.Run + PeriodicTimer) as well as the
+        // dashboard async-window thread, so the control writes below must not run
+        // off-thread. EnqueueOnUIThread executes inline when already on the UI thread.
+        _windowSystem?.EnqueueOnUIThread(() =>
         {
-            // Create a temporary copy for display only (HasError is computed from Error)
-            displayData = new WidgetData
+            if (_mainWindow == null || _renderer == null)
+                return;
+
+            // Re-check existence inside the marshalled callback (reload race)
+            if (_config?.Widgets.ContainsKey(widgetId) == false)
+                return;
+
+            // Create a display copy with spinner if currently refreshing
+            var displayData = widgetData;
+            if (_isRefreshing.TryGetValue(widgetId, out var isRefreshing) && isRefreshing)
             {
-                Title = widgetData.Title,
-                Rows = widgetData.Rows,
-                Error = widgetData.Error,
-                Timestamp = widgetData.Timestamp,
-            };
-        }
+                // Create a temporary copy for display only (HasError is computed from Error)
+                displayData = new WidgetData
+                {
+                    Title = widgetData.Title,
+                    Rows = widgetData.Rows,
+                    Error = widgetData.Error,
+                    Timestamp = widgetData.Timestamp,
+                };
+            }
 
-        var control = _mainWindow.FindControl<IWindowControl>($"widget_{widgetId}");
-        if (control != null)
-        {
-            // Get max lines: widget-specific > global > default 20
-            var widgetConfig = _config?.Widgets.GetValueOrDefault(widgetId);
-            int maxLines = widgetConfig?.MaxLines ?? _config?.MaxLinesPerWidget ?? 20;
-            bool showIndicator = _config?.ShowTruncationIndicator ?? true;
+            var control = _mainWindow.FindControl<IWindowControl>($"widget_{widgetId}");
+            if (control != null)
+            {
+                // Get max lines: widget-specific > global > default 20
+                var widgetConfig = _config?.Widgets.GetValueOrDefault(widgetId);
+                int maxLines = widgetConfig?.MaxLines ?? _config?.MaxLinesPerWidget ?? 20;
+                bool showIndicator = _config?.ShowTruncationIndicator ?? true;
 
-            _renderer.UpdateWidgetPanel(control, displayData, maxLines, showIndicator);
+                _renderer.UpdateWidgetPanel(control, displayData, maxLines, showIndicator);
 
-            // Update full widget data for expansion dialog (use original data, not spinner version)
-            _fullWidgetData[widgetId] = widgetData;
-        }
+                // Update full widget data for expansion dialog (use original data, not spinner version)
+                _fullWidgetData[widgetId] = widgetData;
+            }
+        });
     }
 
     /// <summary>

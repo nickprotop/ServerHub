@@ -1,6 +1,7 @@
 // Copyright (c) Nikolaos Protopapas. All rights reserved.
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
+using SharpConsoleUI;
 using SharpConsoleUI.Panel;
 
 namespace ServerHub.Services;
@@ -15,12 +16,14 @@ public class StatusBarManager
     private readonly string _defaultBottomStatus;
     private bool _devMode;
     private CancellationTokenSource? _restoreCts;
+    private readonly ConsoleWindowSystem? _windowSystem;
 
-    public StatusBarManager(StatusTextElement topStatus, StatusTextElement bottomStatus, bool devMode = false)
+    public StatusBarManager(StatusTextElement topStatus, StatusTextElement bottomStatus, bool devMode = false, ConsoleWindowSystem? windowSystem = null)
     {
         _topStatus = topStatus;
         _bottomStatus = bottomStatus;
         _devMode = devMode;
+        _windowSystem = windowSystem;
         _defaultBottomStatus = "[dim]F1[/] Help  [dim]F2[/] Config  [dim]F3[/] Marketplace  [dim]Ctrl+P[/] Commands  [dim]F5[/] Refresh  [dim]Space[/] Pause  [dim]Ctrl+Q[/] Quit";
 
         // Set initial bottom status (shortcuts)
@@ -69,12 +72,16 @@ public class StatusBarManager
 
         _bottomStatus.Text = message;
 
-        // Schedule restore
+        // Schedule restore. The continuation runs on the threadpool, so marshal
+        // the status-element write onto the UI thread.
         Task.Delay(durationMs, _restoreCts.Token).ContinueWith(_ =>
         {
             if (!_.IsCanceled)
             {
-                _bottomStatus.Text = _defaultBottomStatus;
+                if (_windowSystem != null)
+                    _windowSystem.EnqueueOnUIThread(() => _bottomStatus.Text = _defaultBottomStatus);
+                else
+                    _bottomStatus.Text = _defaultBottomStatus;
             }
         });
     }

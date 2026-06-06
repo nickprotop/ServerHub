@@ -940,8 +940,13 @@ public static class MarketplaceBrowserDialog
         _searchDebounceTimer = new System.Timers.Timer(SearchDebounceMs);
         _searchDebounceTimer.Elapsed += (s, e) =>
         {
+            // Elapsed fires on a background threadpool thread; marshal the
+            // marketplace list UI mutations onto the UI thread.
             _searchDebounceTimer.Stop();
-            ApplyFilters();
+            if (_windowSystem != null)
+                _windowSystem.EnqueueOnUIThread(ApplyFilters);
+            else
+                ApplyFilters();
         };
         _searchDebounceTimer.AutoReset = false;
         _searchDebounceTimer.Start();
