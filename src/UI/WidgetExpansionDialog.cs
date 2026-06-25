@@ -430,13 +430,13 @@ public static class WidgetExpansionDialog
             int centerY = (size.Height - newModalHeight) / 2;
             modal.SetPosition(new Point(centerX, centerY));
         };
-        windowSystem.ConsoleDriver.ScreenResized += resizeHandler;
+        windowSystem.WindowResized += resizeHandler;
 
         // Handle modal close
         modal.OnClosed += (s, e) =>
         {
             // Unsubscribe from resize event to prevent memory leaks
-            windowSystem.ConsoleDriver.ScreenResized -= resizeHandler;
+            windowSystem.WindowResized -= resizeHandler;
 
             cts.Cancel();
             onClose?.Invoke();

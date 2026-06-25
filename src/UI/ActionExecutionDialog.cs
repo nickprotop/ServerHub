@@ -453,13 +453,13 @@ public static class ActionExecutionDialog
             int centerY = (size.Height - newModalHeight) / 2;
             modal.SetPosition(new Point(centerX, centerY));
         };
-        windowSystem.ConsoleDriver.ScreenResized += resizeHandler;
+        windowSystem.WindowResized += resizeHandler;
 
         // Handle modal close - cleanup and callbacks
         modal.OnClosed += (s, e) =>
         {
             // Unsubscribe from resize event to prevent memory leaks
-            windowSystem.ConsoleDriver.ScreenResized -= resizeHandler;
+            windowSystem.WindowResized -= resizeHandler;
 
             // Mark as disposed to prevent orphaned callbacks
             _disposedDialogs.Add(modal);

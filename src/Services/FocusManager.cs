@@ -529,13 +529,11 @@ public class FocusManager
         {
             panelControl.BackgroundColor = _focusedBackgroundColor;
             panelControl.BorderColor = _focusedBorderColor;
-            panelControl.Invalidate();
         }
         // Fallback: Set on the MarkupControl (for legacy support)
         else if (control is MarkupControl markupControl)
         {
             markupControl.BackgroundColor = _focusedBackgroundColor;
-            markupControl.Invalidate();
         }
 
         // 2. Set on the container (HorizontalGrid column) for full height coverage
@@ -543,7 +541,6 @@ public class FocusManager
         if (container != null)
         {
             container.BackgroundColor = _focusedBackgroundColor;
-            container.Invalidate(true);
         }
 
         // Also try to scroll the focused widget into view
@@ -572,13 +569,11 @@ public class FocusManager
                     panelControl.BorderColor = originalBorderColor;
                 }
 
-                panelControl.Invalidate();
             }
             // Fallback: Restore on the MarkupControl (for legacy support)
             else if (control is MarkupControl markupControl)
             {
                 markupControl.BackgroundColor = originalBgColor;
-                markupControl.Invalidate();
             }
 
             // 2. Restore on the container (HorizontalGrid column)
@@ -586,7 +581,6 @@ public class FocusManager
             if (container != null)
             {
                 container.BackgroundColor = originalBgColor;
-                container.Invalidate(true);
             }
         }
     }

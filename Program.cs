@@ -476,7 +476,7 @@ public class Program
             CreateMainWindow();
 
             // Subscribe to terminal resize events
-            _windowSystem.ConsoleDriver.ScreenResized += OnTerminalResized;
+            _windowSystem.WindowResized += OnTerminalResized;
 
             // Check for unconfigured scripts and show warning
             CheckForUnconfiguredWidgets();
