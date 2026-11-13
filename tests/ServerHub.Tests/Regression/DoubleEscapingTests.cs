@@ -3,7 +3,6 @@
 
 using Xunit;
 using ServerHub.Utils;
-using SharpConsoleUI.Helpers;
 using Spectre.Console;
 
 namespace ServerHub.Tests.Regression;
@@ -14,58 +13,13 @@ namespace ServerHub.Tests.Regression;
 /// </summary>
 public class DoubleEscapingTests
 {
-    #region AnsiConsoleHelper Integration
-
-    [Fact]
-    public void AnsiConsoleHelper_WithOverflowFalse_DoesNotDoubleEscape()
-    {
-        // Arrange - content already sanitized by ContentSanitizer
-        var rawInput = "[kworker/0:1]";
-        var sanitized = ContentSanitizer.Sanitize(rawInput);
-        Assert.Equal("[[kworker/0:1]]", sanitized);
-
-        // Act - convert to ANSI with overflow=false
-        var result = AnsiConsoleHelper.ConvertSpectreMarkupToAnsi(
-            sanitized,
-            width: 80,
-            height: null,
-            overflow: false,
-            backgroundColor: null,
-            foregroundColor: null
-        );
-
-        // Assert - should render correctly (Spectre.Console converts [[ to [)
-        var rendered = string.Join("", result);
-        Assert.Contains("[kworker/0:1]", rendered);
-        Assert.DoesNotContain("[[[[", rendered); // No quadruple brackets
-    }
-
-    [Fact]
-    public void AnsiConsoleHelper_WithOverflowTrue_DoesNotDoubleEscape_AfterFix()
-    {
-        // Arrange - content already sanitized
-        var sanitized = "[[kworker/0:1]]";
-
-        // Act - This used to cause double-escaping before the fix
-        // The EscapeInvalidMarkupTags call is now commented out in AnsiConsoleHelper
-        var result = AnsiConsoleHelper.ConvertSpectreMarkupToAnsi(
-            sanitized,
-            width: 80,
-            height: null,
-            overflow: true,
-            backgroundColor: null,
-            foregroundColor: null
-        );
-
-        // Assert - should not throw and produce output
-        Assert.NotNull(result);
-        Assert.NotEmpty(result);
-
-        // The rendering works correctly - that's the key test
-        // (The actual output format is ANSI codes which we don't need to validate in detail)
-    }
-
-    #endregion
+    // The two AnsiConsoleHelper tests that lived here are gone. They called
+    // SharpConsoleUI's AnsiConsoleHelper.ConvertSpectreMarkupToAnsi, a helper the
+    // library deleted in v2.4.41 when rendering moved to the cell-level pipeline and
+    // the legacy ANSI paths went with it. ServerHub never calls it, and what these
+    // tests were really protecting -- that sanitized content is not escaped twice --
+    // is covered by ContentSanitizerTests, RenderingPipelineTests and the idempotency
+    // tests below.
 
     #region Documentation Tests
 
